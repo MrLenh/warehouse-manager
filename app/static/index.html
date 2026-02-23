@@ -40,6 +40,10 @@ tr:hover{background:#f8f9ff}
 .badge-shipped,.badge-in_transit{background:#d1ecf1;color:#0c5460}
 .badge-delivered{background:#28a745;color:#fff}
 .badge-cancelled{background:#f8d7da;color:#721c24}
+.badge-draft{background:#e2e3e5;color:#383d41}
+.badge-approved{background:#d4edda;color:#155724}
+.badge-receiving{background:#cce5ff;color:#004085}
+.badge-completed{background:#28a745;color:#fff}
 .stock-low{color:#dc3545;font-weight:700}
 .stock-ok{color:#28a745;font-weight:600}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
@@ -93,6 +97,7 @@ tr:hover{background:#f8f9ff}
 <div class="tabs">
   <div class="tab active" data-tab="products">San pham</div>
   <div class="tab" data-tab="orders">Don hang</div>
+  <div class="tab" data-tab="inventory">Kho hang</div>
   <div class="tab" data-tab="reports">Bao cao</div>
 </div>
 
@@ -141,6 +146,53 @@ tr:hover{background:#f8f9ff}
       <thead><tr><th>Ma DH</th><th>Khach hang</th><th>SP</th><th>Tong tien</th><th>Trang thai</th><th>Tracking</th><th>Ngay tao</th><th>Thao tac</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
+  </div>
+
+  <!-- INVENTORY PANEL -->
+  <div class="panel" id="panel-inventory">
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e8e8e8">
+      <div class="inv-tab active" data-inv="overview" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('overview')">Tong quan kho</div>
+      <div class="inv-tab" data-inv="stock-requests" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('stock-requests')">Phieu nhap kho</div>
+    </div>
+
+    <!-- Inventory Overview -->
+    <div id="inv-overview" class="inv-panel">
+      <div class="toolbar">
+        <input type="text" class="search" id="search-inventory" placeholder="Tim kiem theo SKU hoac ten...">
+        <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Lam moi</button>
+      </div>
+      <table>
+        <thead><tr><th>SKU</th><th>Ten</th><th>Variant</th><th>Yeu cau nhap</th><th>Thuc nhan</th><th>Da ban</th><th>Dieu chinh</th><th>Ton kho</th><th>Vi tri</th></tr></thead>
+        <tbody id="inv-overview-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Stock Requests -->
+    <div id="inv-stock-requests" class="inv-panel" style="display:none">
+      <div class="toolbar">
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="text" class="search" id="search-sr" placeholder="Tim phieu nhap...">
+          <select id="filter-sr-status" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+            <option value="">Tat ca trang thai</option>
+            <option value="draft">Draft</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="receiving">Receiving</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div>
+          <button class="btn btn-outline btn-sm" onclick="loadStockRequests()">Lam moi</button>
+          <button class="btn btn-primary" onclick="openStockRequestModal()">+ Tao phieu nhap</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Ma phieu</th><th>NCC</th><th>SP</th><th>Tong SL yeu cau</th><th>Tong SL nhan</th><th>Trang thai</th><th>Ngay tao</th><th>Thao tac</th></tr></thead>
+        <tbody id="sr-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- REPORTS PANEL -->
@@ -310,6 +362,41 @@ tr:hover{background:#f8f9ff}
   </div>
 </div>
 
+<!-- STOCK REQUEST CREATE MODAL -->
+<div class="modal-overlay" id="sr-create-modal">
+  <div class="modal" style="width:700px">
+    <div class="modal-header">
+      <h2>Tao phieu nhap kho</h2>
+      <button class="modal-close" onclick="closeModal('sr-create-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Nha cung cap</label><input type="text" id="sr-supplier" placeholder="Ten NCC"></div>
+        <div class="form-group"><label>Ghi chu</label><input type="text" id="sr-notes" placeholder="Ghi chu"></div>
+      </div>
+      <h3 style="margin:12px 0 8px;font-size:15px">San pham nhap</h3>
+      <div class="order-items-list" id="sr-items-list"></div>
+      <button class="btn btn-outline btn-sm" onclick="addSrItemRow()">+ Them san pham</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('sr-create-modal')">Huy</button>
+      <button class="btn btn-primary" onclick="saveStockRequest()">Tao phieu</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK REQUEST DETAIL MODAL -->
+<div class="modal-overlay" id="sr-detail-modal">
+  <div class="modal" style="width:800px">
+    <div class="modal-header">
+      <h2 id="sr-detail-title">Chi tiet phieu nhap</h2>
+      <button class="modal-close" onclick="closeModal('sr-detail-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="sr-detail-body"></div>
+    <div class="modal-footer" id="sr-detail-footer"></div>
+  </div>
+</div>
+
 <script>
 const API = '/api/v1';
 let allProducts = [];
@@ -323,6 +410,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'reports') loadReports();
+    if (tab.dataset.tab === 'inventory') { loadInventoryOverview(); loadStockRequests(); }
   });
 });
 
@@ -763,6 +851,238 @@ async function buyLabel(orderId) {
     const e = await res.json();
     toast(e.detail || 'Loi mua label', 'error');
   }
+}
+
+// === INVENTORY TAB ===
+
+function switchInvTab(tab) {
+  document.querySelectorAll('.inv-tab').forEach(t => { t.classList.remove('active'); t.style.borderBottomColor = 'transparent'; t.style.color = '#666'; });
+  document.querySelectorAll('.inv-panel').forEach(p => p.style.display = 'none');
+  const el = document.querySelector(`.inv-tab[data-inv="${tab}"]`);
+  if (el) { el.classList.add('active'); el.style.borderBottomColor = '#667eea'; el.style.color = '#667eea'; }
+  document.getElementById(tab === 'overview' ? 'inv-overview' : 'inv-stock-requests').style.display = '';
+}
+// init first tab style
+document.querySelector('.inv-tab.active').style.borderBottomColor = '#667eea';
+document.querySelector('.inv-tab.active').style.color = '#667eea';
+
+// --- Inventory Overview ---
+let invOverviewData = [];
+
+async function loadInventoryOverview() {
+  const res = await fetch(API + '/reports/inventory-overview');
+  invOverviewData = await res.json();
+  renderInventoryOverview(invOverviewData);
+}
+
+function renderInventoryOverview(data) {
+  const q = (document.getElementById('search-inventory').value || '').toLowerCase();
+  const filtered = data.filter(r => !q || r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q) || (r.variant_sku && r.variant_sku.toLowerCase().includes(q)));
+  document.getElementById('inv-overview-body').innerHTML = filtered.length === 0
+    ? '<tr><td colspan="9" class="empty">Khong co du lieu</td></tr>'
+    : filtered.map(r => {
+      const diff = r.requested - r.received;
+      const diffClass = diff > 0 ? 'stock-low' : '';
+      return `<tr>
+        <td><strong>${esc(r.variant_sku || r.sku)}</strong></td>
+        <td>${esc(r.name)}</td>
+        <td>${r.variant_label ? esc(r.variant_label) : '-'}</td>
+        <td>${r.requested}</td>
+        <td>${r.received}${diff > 0 ? ' <span class="stock-low" style="font-size:11px">(thieu ' + diff + ')</span>' : ''}</td>
+        <td>${r.sold}</td>
+        <td>${r.adjusted}</td>
+        <td class="${r.current_stock <= 5 ? 'stock-low' : 'stock-ok'}">${r.current_stock}</td>
+        <td>${esc(r.location)}</td>
+      </tr>`;
+    }).join('');
+}
+
+document.getElementById('search-inventory').addEventListener('input', () => renderInventoryOverview(invOverviewData));
+
+// --- Stock Requests ---
+let allStockRequests = [];
+
+async function loadStockRequests() {
+  const status = document.getElementById('filter-sr-status').value;
+  const url = status ? API + '/stock-requests?status=' + status : API + '/stock-requests';
+  const res = await fetch(url);
+  allStockRequests = await res.json();
+  renderStockRequests(allStockRequests);
+}
+
+function renderStockRequests(list) {
+  const q = (document.getElementById('search-sr').value || '').toLowerCase();
+  const filtered = list.filter(sr => !q || sr.request_number.toLowerCase().includes(q) || sr.supplier.toLowerCase().includes(q));
+  document.getElementById('sr-body').innerHTML = filtered.length === 0
+    ? '<tr><td colspan="8" class="empty">Khong co phieu nhap nao</td></tr>'
+    : filtered.map(sr => {
+      const totalReq = sr.items.reduce((s, i) => s + i.quantity_requested, 0);
+      const totalRcv = sr.items.reduce((s, i) => s + i.quantity_received, 0);
+      return `<tr>
+        <td><strong>${esc(sr.request_number)}</strong></td>
+        <td>${esc(sr.supplier) || '-'}</td>
+        <td>${sr.items.length}</td>
+        <td>${totalReq}</td>
+        <td>${totalRcv}</td>
+        <td><span class="badge badge-${sr.status}">${sr.status}</span></td>
+        <td>${new Date(sr.created_at).toLocaleDateString('vi-VN')}</td>
+        <td class="actions-cell">
+          <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">Xem</button>
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+document.getElementById('search-sr').addEventListener('input', () => renderStockRequests(allStockRequests));
+document.getElementById('filter-sr-status').addEventListener('change', loadStockRequests);
+
+function openStockRequestModal() {
+  document.getElementById('sr-supplier').value = '';
+  document.getElementById('sr-notes').value = '';
+  document.getElementById('sr-items-list').innerHTML = '';
+  addSrItemRow();
+  document.getElementById('sr-create-modal').classList.add('show');
+}
+
+function addSrItemRow() {
+  const div = document.createElement('div');
+  div.className = 'order-item-row';
+  div.style.flexWrap = 'wrap';
+  div.innerHTML = `
+    <select class="sri-product" onchange="onSrProductSelect(this)">${allProducts.map(p => `<option value="${p.id}" data-variants='${JSON.stringify((p.variants||[]).map(v=>({id:v.id,sku:v.variant_sku,attrs:v.attributes})))}'>${esc(p.sku)} - ${esc(p.name)}</option>`).join('')}</select>
+    <select class="sri-variant" style="display:none"></select>
+    <input type="number" class="sri-qty" value="1" min="1" style="max-width:80px" placeholder="SL">
+    <input type="number" class="sri-cost" value="0" step="0.01" style="max-width:100px" placeholder="Gia nhap">
+    <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">X</button>
+  `;
+  document.getElementById('sr-items-list').appendChild(div);
+  onSrProductSelect(div.querySelector('.sri-product'));
+}
+
+function onSrProductSelect(sel) {
+  const row = sel.closest('.order-item-row');
+  const variantSel = row.querySelector('.sri-variant');
+  const opt = sel.options[sel.selectedIndex];
+  const variants = JSON.parse(opt.dataset.variants || '[]');
+  if (variants.length > 0) {
+    variantSel.style.display = '';
+    variantSel.innerHTML = variants.map(v => {
+      const attrs = typeof v.attrs === 'string' ? JSON.parse(v.attrs) : (v.attrs || {});
+      const label = Object.values(attrs).join(' / ') || v.sku;
+      return `<option value="${v.id}">${esc(v.sku)} - ${label}</option>`;
+    }).join('');
+  } else {
+    variantSel.style.display = 'none';
+    variantSel.innerHTML = '';
+  }
+}
+
+async function saveStockRequest() {
+  const rows = document.querySelectorAll('#sr-items-list .order-item-row');
+  const items = Array.from(rows).map(r => {
+    const item = {
+      product_id: r.querySelector('.sri-product').value,
+      quantity_requested: parseInt(r.querySelector('.sri-qty').value) || 1,
+      unit_cost: parseFloat(r.querySelector('.sri-cost').value) || 0,
+    };
+    const variantSel = r.querySelector('.sri-variant');
+    if (variantSel && variantSel.style.display !== 'none' && variantSel.value) {
+      item.variant_id = variantSel.value;
+    }
+    return item;
+  });
+  if (items.length === 0) { toast('Chua chon san pham', 'error'); return; }
+  const body = {
+    supplier: document.getElementById('sr-supplier').value,
+    notes: document.getElementById('sr-notes').value,
+    items,
+  };
+  const res = await fetch(API + '/stock-requests', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) { toast('Da tao phieu nhap kho'); closeModal('sr-create-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+async function viewStockRequest(id) {
+  const res = await fetch(API + '/stock-requests/' + id);
+  const sr = await res.json();
+  document.getElementById('sr-detail-title').textContent = 'Phieu nhap ' + sr.request_number;
+
+  const isReceiving = sr.status === 'approved' || sr.status === 'receiving';
+
+  let itemsHtml = sr.items.map(i => {
+    const diff = i.quantity_requested - i.quantity_received;
+    return `<tr>
+      <td>${esc(i.sku)}</td>
+      <td>${esc(i.product_name)}</td>
+      <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
+      <td>${i.quantity_requested}</td>
+      <td>${isReceiving
+        ? '<input type="number" class="rcv-qty" data-item-id="'+i.id+'" value="'+i.quantity_received+'" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
+        : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(thieu ' + diff + ')</span>' : '')}</td>
+      <td>$${i.unit_cost.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('sr-detail-body').innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item"><div class="label">NCC</div><div class="value">${esc(sr.supplier) || '-'}</div></div>
+      <div class="detail-item"><div class="label">Trang thai</div><div class="value"><span class="badge badge-${sr.status}">${sr.status}</span></div></div>
+      <div class="detail-item"><div class="label">Ngay tao</div><div class="value">${new Date(sr.created_at).toLocaleString('vi-VN')}</div></div>
+      <div class="detail-item"><div class="label">Ghi chu</div><div class="value">${esc(sr.notes) || '-'}</div></div>
+    </div>
+    <h3 style="margin:16px 0 8px;font-size:15px">Danh sach san pham</h3>
+    <table>
+      <thead><tr><th>SKU</th><th>Ten</th><th>Variant</th><th>SL yeu cau</th><th>SL thuc nhan</th><th>Gia nhap</th></tr></thead>
+      <tbody>${itemsHtml}</tbody>
+    </table>
+  `;
+
+  let footerHtml = '';
+  if (sr.status === 'pending') {
+    footerHtml += `<button class="btn btn-success" onclick="approveStockRequest('${sr.id}')">Duyet phieu</button>`;
+    footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Huy phieu</button>`;
+  } else if (sr.status === 'approved' || sr.status === 'receiving') {
+    footerHtml += `<button class="btn btn-primary" onclick="receiveStockRequest('${sr.id}')">Luu so luong nhan</button>`;
+    if (sr.status === 'receiving') {
+      footerHtml += `<button class="btn btn-success" onclick="completeStockRequest('${sr.id}')">Hoan thanh</button>`;
+    }
+    footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Huy phieu</button>`;
+  }
+  document.getElementById('sr-detail-footer').innerHTML = footerHtml;
+  document.getElementById('sr-detail-modal').classList.add('show');
+}
+
+async function approveStockRequest(id) {
+  const res = await fetch(API + '/stock-requests/' + id + '/approve', { method: 'POST' });
+  if (res.ok) { toast('Da duyet phieu nhap'); closeModal('sr-detail-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+async function receiveStockRequest(id) {
+  const inputs = document.querySelectorAll('.rcv-qty');
+  const items = Array.from(inputs).map(inp => ({
+    item_id: inp.dataset.itemId,
+    quantity_received: parseInt(inp.value) || 0,
+  }));
+  const res = await fetch(API + '/stock-requests/' + id + '/receive', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ items }),
+  });
+  if (res.ok) { toast('Da cap nhat so luong nhan'); closeModal('sr-detail-modal'); loadStockRequests(); loadInventoryOverview(); loadProducts(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+async function completeStockRequest(id) {
+  const res = await fetch(API + '/stock-requests/' + id + '/complete', { method: 'POST' });
+  if (res.ok) { toast('Da hoan thanh phieu nhap'); closeModal('sr-detail-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+async function cancelStockRequest(id) {
+  if (!confirm('Huy phieu nhap nay?')) return;
+  const res = await fetch(API + '/stock-requests/' + id + '/cancel', { method: 'POST' });
+  if (res.ok) { toast('Da huy phieu nhap'); closeModal('sr-detail-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
 }
 
 // REPORTS

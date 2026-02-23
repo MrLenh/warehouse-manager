@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.models.inventory_log import InventoryLog
 from app.models.order import Order, OrderItem, OrderStatus
-from app.models.product import Product
+from app.models.product import Product, Variant
+from app.models.stock_request import StockRequestItem
 
 
 def inventory_summary(db: Session) -> dict:
@@ -100,6 +101,108 @@ def top_products(db: Session, limit: int = 10) -> list[dict]:
         }
         for r in results
     ]
+
+
+def inventory_overview(db: Session) -> list[dict]:
+    """Per-product/variant breakdown: requested, received, sold, adjustments, current stock."""
+    products = db.query(Product).all()
+    result = []
+
+    for p in products:
+        has_variants = len(p.variants) > 0
+
+        if has_variants:
+            for v in p.variants:
+                # Total requested from stock requests
+                requested = (
+                    db.query(func.coalesce(func.sum(StockRequestItem.quantity_requested), 0))
+                    .filter(StockRequestItem.variant_id == v.id)
+                    .scalar()
+                )
+                # Total received from stock requests
+                received = (
+                    db.query(func.coalesce(func.sum(StockRequestItem.quantity_received), 0))
+                    .filter(StockRequestItem.variant_id == v.id)
+                    .scalar()
+                )
+                # Total sold (negative inventory logs with reason='order')
+                sold = abs(
+                    db.query(func.coalesce(func.sum(InventoryLog.change), 0))
+                    .filter(
+                        InventoryLog.product_id == p.id,
+                        InventoryLog.reason == "order",
+                        InventoryLog.note.like(f"%{v.variant_sku}%"),
+                    )
+                    .scalar()
+                )
+                # Total adjustments
+                adjusted = (
+                    db.query(func.coalesce(func.sum(InventoryLog.change), 0))
+                    .filter(
+                        InventoryLog.product_id == p.id,
+                        InventoryLog.reason == "adjustment",
+                        InventoryLog.note.like(f"%{v.variant_sku}%"),
+                    )
+                    .scalar()
+                )
+
+                import json
+                attrs = json.loads(v.attributes) if isinstance(v.attributes, str) else v.attributes
+                variant_label = " / ".join(attrs.values()) if attrs else ""
+
+                result.append({
+                    "product_id": p.id,
+                    "variant_id": v.id,
+                    "sku": p.sku,
+                    "variant_sku": v.variant_sku,
+                    "name": p.name,
+                    "variant_label": variant_label,
+                    "requested": int(requested),
+                    "received": int(received),
+                    "sold": int(sold),
+                    "adjusted": int(adjusted),
+                    "current_stock": v.quantity,
+                    "location": v.location or p.location,
+                })
+        else:
+            # Product without variants
+            requested = (
+                db.query(func.coalesce(func.sum(StockRequestItem.quantity_requested), 0))
+                .filter(StockRequestItem.product_id == p.id, StockRequestItem.variant_id == "")
+                .scalar()
+            )
+            received = (
+                db.query(func.coalesce(func.sum(StockRequestItem.quantity_received), 0))
+                .filter(StockRequestItem.product_id == p.id, StockRequestItem.variant_id == "")
+                .scalar()
+            )
+            sold = abs(
+                db.query(func.coalesce(func.sum(InventoryLog.change), 0))
+                .filter(InventoryLog.product_id == p.id, InventoryLog.reason == "order")
+                .scalar()
+            )
+            adjusted = (
+                db.query(func.coalesce(func.sum(InventoryLog.change), 0))
+                .filter(InventoryLog.product_id == p.id, InventoryLog.reason == "adjustment")
+                .scalar()
+            )
+
+            result.append({
+                "product_id": p.id,
+                "variant_id": "",
+                "sku": p.sku,
+                "variant_sku": "",
+                "name": p.name,
+                "variant_label": "",
+                "requested": int(requested),
+                "received": int(received),
+                "sold": int(sold),
+                "adjusted": int(adjusted),
+                "current_stock": p.quantity,
+                "location": p.location,
+            })
+
+    return result
 
 
 def inventory_movement(db: Session, product_id: str | None = None, limit: int = 50) -> list[dict]:

@@ -28,6 +28,11 @@ def top_products_report(limit: int = 10, db: Session = Depends(get_db)):
     return report_service.top_products(db, limit=limit)
 
 
+@router.get("/inventory-overview")
+def inventory_overview_report(db: Session = Depends(get_db)):
+    return report_service.inventory_overview(db)
+
+
 @router.get("/inventory-movement")
 def inventory_movement_report(
     product_id: str | None = None,

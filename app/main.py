@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import orders, products, reports, webhooks
+from app.api import orders, products, reports, stock_requests, webhooks
 from app.database import init_db
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -27,6 +27,7 @@ app = FastAPI(
 app.include_router(products.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
+app.include_router(stock_requests.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
 
 
