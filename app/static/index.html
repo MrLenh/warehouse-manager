@@ -286,6 +286,18 @@ tr:hover{background:#f8f9ff}
         <div class="form-group"><label>Zip *</label><input type="text" id="o-zip" placeholder="10001"></div>
       </div>
 
+      <h3 style="margin:16px 0 8px;font-size:15px">Van chuyen</h3>
+      <div class="form-row">
+        <div class="form-group"><label>Carrier</label>
+          <select id="o-carrier" onchange="updateServiceOptions('o-carrier','o-service')">
+            <option value="USPS">USPS</option><option value="UPS">UPS</option><option value="FedEx">FedEx</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Service</label>
+          <select id="o-service"></select>
+        </div>
+      </div>
+
       <h3 style="margin:16px 0 8px;font-size:15px">San pham</h3>
       <div class="order-items-list" id="order-items-list"></div>
       <button class="btn btn-outline btn-sm" onclick="addOrderItemRow()">+ Them san pham</button>
@@ -480,6 +492,20 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (gia g
 const API = '/api/v1';
 let allProducts = [];
 let allOrders = [];
+
+// Shipping carriers & services
+const CARRIERS = {
+  'USPS': ['First', 'Priority', 'Express', 'ParcelSelect', 'LibraryMail', 'MediaMail', 'GroundAdvantage'],
+  'UPS': ['Ground', 'NextDayAir', 'NextDayAirSaver', '2ndDayAir', '2ndDayAirAM', '3DaySelect', 'NextDayAirEarlyAM'],
+  'FedEx': ['GROUND_HOME_DELIVERY', 'FEDEX_GROUND', 'FEDEX_EXPRESS_SAVER', 'FEDEX_2_DAY', 'STANDARD_OVERNIGHT', 'PRIORITY_OVERNIGHT', 'FIRST_OVERNIGHT'],
+};
+let defaultCarrier = 'USPS';
+let defaultService = 'First';
+
+// Load config defaults
+fetch(API + '/shipping/defaults').then(r => r.ok ? r.json() : null).then(d => {
+  if (d) { defaultCarrier = d.carrier; defaultService = d.service; }
+}).catch(() => {});
 
 // Tabs
 document.querySelectorAll('.tab').forEach(tab => {
@@ -895,6 +921,14 @@ function renderOrders(list) {
 document.getElementById('search-orders').addEventListener('input', () => renderOrders(allOrders));
 document.getElementById('filter-status').addEventListener('change', loadOrders);
 
+function updateServiceOptions(carrierSelId, serviceSelId, selectedService) {
+  const carrier = document.getElementById(carrierSelId).value;
+  const serviceSel = document.getElementById(serviceSelId);
+  const services = CARRIERS[carrier] || [];
+  const target = selectedService || (carrier === defaultCarrier ? defaultService : services[0] || '');
+  serviceSel.innerHTML = services.map(s => `<option value="${s}" ${s === target ? 'selected' : ''}>${s}</option>`).join('');
+}
+
 function openOrderModal() {
   document.getElementById('o-order-name').value = '';
   document.getElementById('o-name').value = '';
@@ -907,6 +941,8 @@ function openOrderModal() {
   document.getElementById('o-state').value = '';
   document.getElementById('o-zip').value = '';
   document.getElementById('o-notes').value = '';
+  document.getElementById('o-carrier').value = defaultCarrier;
+  updateServiceOptions('o-carrier', 'o-service');
   document.getElementById('order-items-list').innerHTML = '';
   addOrderItemRow();
   document.getElementById('order-modal').classList.add('show');
@@ -973,6 +1009,8 @@ async function saveOrder() {
       zip: document.getElementById('o-zip').value,
     },
     items: items,
+    carrier: document.getElementById('o-carrier').value,
+    service: document.getElementById('o-service').value,
     notes: document.getElementById('o-notes').value,
   };
   const res = await fetch(API + '/orders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -990,6 +1028,7 @@ async function viewOrder(id) {
       <div class="detail-item"><div class="label">Khach hang</div><div class="value">${esc(o.customer_name)}</div></div>
       <div class="detail-item"><div class="label">Email</div><div class="value">${esc(o.customer_email) || '-'}</div></div>
       <div class="detail-item"><div class="label">Trang thai</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>
+      <div class="detail-item"><div class="label">Van chuyen</div><div class="value">${esc(o.carrier || 'USPS')} - ${esc(o.service || 'First')}</div></div>
       <div class="detail-item"><div class="label">Tong tien</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
       <div class="detail-item"><div class="label">Phi ship</div><div class="value">$${o.shipping_cost.toFixed(2)}</div></div>
       <div class="detail-item"><div class="label">Tracking</div><div class="value">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : 'Chua co'}</div></div>
@@ -1012,9 +1051,17 @@ async function viewOrder(id) {
   const curIdx = statusFlow.indexOf(o.status);
   let footerHtml = '';
   if (o.status !== 'cancelled' && o.status !== 'delivered') {
-    // Buy label button - available before label_purchased
+    // Buy label - carrier/service selector + button
     if (!o.label_url && curIdx < 4) {
-      footerHtml += `<button class="btn btn-primary" onclick="buyLabel('${o.id}')">Mua tracking / label</button>`;
+      const oCarrier = o.carrier || defaultCarrier;
+      const oService = o.service || defaultService;
+      const carrierOpts = Object.keys(CARRIERS).map(c => `<option value="${c}" ${c===oCarrier?'selected':''}>${c}</option>`).join('');
+      const serviceOpts = (CARRIERS[oCarrier]||[]).map(s => `<option value="${s}" ${s===oService?'selected':''}>${s}</option>`).join('');
+      footerHtml += `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="bl-carrier" onchange="updateServiceOptions('bl-carrier','bl-service')" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${carrierOpts}</select>
+        <select id="bl-service" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${serviceOpts}</select>
+        <button class="btn btn-primary" onclick="buyLabel('${o.id}')">Mua label</button>
+      </div>`;
     }
     if (curIdx < statusFlow.length - 1) {
       const next = statusFlow[curIdx + 1];
@@ -1041,20 +1088,24 @@ async function cancelOrder(id) {
 
 // BUY LABEL
 async function buyLabel(orderId) {
-  if (!confirm('Mua shipping label cho don hang nay? He thong se tu dong tinh kich thuoc va can nang tu san pham.')) return;
+  const carrierEl = document.getElementById('bl-carrier');
+  const serviceEl = document.getElementById('bl-service');
+  const carrier = carrierEl ? carrierEl.value : defaultCarrier;
+  const service = serviceEl ? serviceEl.value : defaultService;
+  if (!confirm(`Mua label: ${carrier} ${service}?\nHe thong se tu dong tinh kich thuoc va can nang tu san pham.`)) return;
   toast('Dang mua label...', 'success');
   const res = await fetch(API + '/orders/' + orderId + '/buy-label', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({carrier: 'USPS', service: 'Priority'}),
+    body: JSON.stringify({carrier, service}),
   });
   if (res.ok) {
-    toast('Da mua label thanh cong!');
+    toast(`Da mua label ${carrier} ${service} thanh cong!`);
     closeModal('order-detail-modal');
     loadOrders();
   } else {
-    const e = await res.json();
-    toast(e.detail || 'Loi mua label', 'error');
+    try { const e = await res.json(); toast(e.detail || 'Loi mua label', 'error'); }
+    catch { toast('Loi mua label', 'error'); }
   }
 }
 

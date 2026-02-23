@@ -58,6 +58,10 @@ class Order(Base):
     processing_fee: Mapped[float] = mapped_column(Float, default=0.0)
     total_price: Mapped[float] = mapped_column(Float, default=0.0)
 
+    # Shipping carrier & service
+    carrier: Mapped[str] = mapped_column(String, default="USPS")
+    service: Mapped[str] = mapped_column(String, default="First")
+
     # EasyPost
     easypost_shipment_id: Mapped[str] = mapped_column(String, default="")
     tracking_number: Mapped[str] = mapped_column(String, default="")

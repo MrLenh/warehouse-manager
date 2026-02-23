@@ -18,6 +18,7 @@ ORDER_CSV_COLUMNS = [
     "order_name", "customer_name", "customer_email", "customer_phone",
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
+    "carrier", "service",
     "sku", "item_name", "quantity", "notes",
 ]
 
@@ -48,22 +49,25 @@ def download_order_import_template():
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(ORDER_CSV_COLUMNS)
-    # Order 1: single item using product SKU (no variants)
+    # Order 1: single item, USPS First (default)
     writer.writerow([
         "Don hang A", "Nguyen Van A", "a@email.com", "0901234567",
-        "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "VN",
+        "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",
+        "", "",
         "SP-001", "San pham A", "2", "Giao buoi sang",
     ])
-    # Order 2: multiple items - first row has full info
+    # Order 2: multiple items, UPS Ground
     writer.writerow([
         "Don hang B", "Tran Thi B", "b@email.com", "0912345678",
-        "Tran Thi B", "456 Hai Ba Trung", "Phong 302", "Ha Noi", "HN", "10000", "VN",
+        "Tran Thi B", "456 Hai Ba Trung", "Phong 302", "Ha Noi", "HN", "10000", "US",
+        "UPS", "Ground",
         "SP-002-RED-M", "San pham B - Red M", "1", "Can boc qua",
     ])
     # Order 2: additional item row - only needs sku + quantity (same order_name)
     writer.writerow([
         "Don hang B", "", "", "",
         "", "", "", "", "", "", "",
+        "", "",
         "SP-003", "San pham C", "3", "",
     ])
     buf.seek(0)
@@ -132,8 +136,10 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
                 "ship_to_state": (row.get("ship_to_state") or "").strip(),
                 "ship_to_zip": (row.get("ship_to_zip") or "").strip(),
                 "ship_to_country": (row.get("ship_to_country") or "").strip() or "US",
+                "carrier": (row.get("carrier") or "").strip(),
+                "service": (row.get("service") or "").strip(),
                 "notes": (row.get("notes") or "").strip(),
-                "display_order_name": (row.get("order_name") or "").strip(),  # original name (empty if auto)
+                "display_order_name": (row.get("order_name") or "").strip(),
                 "items": [],
             }
             group_order.append(order_name)
@@ -238,6 +244,8 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
                 )
                 for ri in resolved_items
             ],
+            carrier=group["carrier"],
+            service=group["service"],
             notes=group["notes"],
         )
 

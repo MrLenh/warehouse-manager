@@ -69,6 +69,13 @@ def get_config():
     return {"base_url": settings.BASE_URL.rstrip("/")}
 
 
+@app.get("/api/v1/shipping/defaults")
+def get_shipping_defaults():
+    """Return default carrier & service from config."""
+    from app.config import settings
+    return {"carrier": settings.DEFAULT_CARRIER, "service": settings.DEFAULT_SERVICE}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

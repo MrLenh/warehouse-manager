@@ -30,6 +30,8 @@ class OrderCreate(BaseModel):
     ship_to: AddressInput
     ship_from: AddressInput | None = None
     items: list[OrderItemCreate]
+    carrier: str = ""  # empty = use config default
+    service: str = ""  # empty = use config default
     webhook_url: str = ""
     notes: str = ""
 
@@ -60,6 +62,8 @@ class OrderOut(BaseModel):
     customer_name: str
     customer_email: str
     status: str
+    carrier: str = "USPS"
+    service: str = "First"
     items: list[OrderItemOut]
     shipping_cost: float
     processing_fee: float
@@ -79,7 +83,17 @@ class OrderOut(BaseModel):
     def qr_code_path_default(cls, v):
         return v or ""
 
+    @field_validator("carrier", mode="before")
+    @classmethod
+    def carrier_default(cls, v):
+        return v or "USPS"
+
+    @field_validator("service", mode="before")
+    @classmethod
+    def service_default(cls, v):
+        return v or "First"
+
 
 class BuyLabelRequest(BaseModel):
-    carrier: str = "USPS"
-    service: str = "Priority"
+    carrier: str = ""  # empty = use order's carrier or config default
+    service: str = ""  # empty = use order's service or config default

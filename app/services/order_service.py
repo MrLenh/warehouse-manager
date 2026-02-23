@@ -41,6 +41,8 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         ship_to_state=data.ship_to.state,
         ship_to_zip=data.ship_to.zip,
         ship_to_country=data.ship_to.country,
+        carrier=data.carrier or settings.DEFAULT_CARRIER,
+        service=data.service or settings.DEFAULT_SERVICE,
         webhook_url=data.webhook_url,
         notes=data.notes,
         status=OrderStatus.PENDING,

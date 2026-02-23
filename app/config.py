@@ -9,6 +9,10 @@ class Settings(BaseSettings):
 
     PROCESSING_FEE_PER_ITEM: float = 0.5
 
+    # Default shipping carrier & service
+    DEFAULT_CARRIER: str = "USPS"
+    DEFAULT_SERVICE: str = "First"
+
     # Webhook: list of customer callback URLs (comma-separated)
     WEBHOOK_URLS: str = ""
 

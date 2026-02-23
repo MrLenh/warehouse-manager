@@ -41,12 +41,16 @@ def _calc_parcel(order: Order, db: Session) -> dict:
     return parcel
 
 
-def buy_label(db: Session, order_id: str, carrier: str = "USPS", service: str = "Priority") -> Order:
+def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") -> Order:
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise ValueError("Order not found")
     if order.easypost_shipment_id and order.label_url:
         raise ValueError("Label already purchased for this order")
+
+    # Resolve carrier/service: request param > order setting > config default
+    carrier = carrier or order.carrier or settings.DEFAULT_CARRIER
+    service = service or order.service or settings.DEFAULT_SERVICE
 
     client = _get_client()
     parcel = _calc_parcel(order, db)
@@ -84,6 +88,8 @@ def buy_label(db: Session, order_id: str, carrier: str = "USPS", service: str = 
 
     bought = client.shipment.buy(shipment.id, rate=selected_rate)
 
+    order.carrier = carrier
+    order.service = service
     order.easypost_shipment_id = bought.id
     order.tracking_number = bought.tracking_code or ""
     order.tracking_url = bought.tracker.public_url if bought.tracker else ""
