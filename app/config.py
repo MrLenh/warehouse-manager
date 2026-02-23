@@ -14,11 +14,11 @@ class Settings(BaseSettings):
     DEFAULT_SERVICE: str = "GroundAdvantage"
 
     # Default warehouse (ship-from) address
-    WAREHOUSE_NAME: str = "Warehouse"
-    WAREHOUSE_STREET1: str = ""
-    WAREHOUSE_CITY: str = ""
-    WAREHOUSE_STATE: str = ""
-    WAREHOUSE_ZIP: str = ""
+    WAREHOUSE_NAME: str = "Expeditee LLC"
+    WAREHOUSE_STREET1: str = "6125 W Sam Houston Pkwy N"
+    WAREHOUSE_CITY: str = "Houston"
+    WAREHOUSE_STATE: str = "TX"
+    WAREHOUSE_ZIP: str = "77041"
     WAREHOUSE_COUNTRY: str = "US"
 
     # Webhook: list of customer callback URLs (comma-separated)
