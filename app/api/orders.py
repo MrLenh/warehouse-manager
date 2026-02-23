@@ -3,7 +3,7 @@ import csv
 import io
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -83,14 +83,16 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
     content = file.file.read().decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(content))
 
-    # Group rows by order_name
+    # Group rows by order key (order_name or auto-generated)
     order_groups: dict[str, dict] = {}
     group_order: list[str] = []  # preserve insertion order
     errors = []
+    auto_order_counter = 0
 
     for row_num, row in enumerate(reader, start=2):
         order_name = (row.get("order_name") or "").strip()
         customer_name = (row.get("customer_name") or "").strip()
+        ship_to_name = (row.get("ship_to_name") or "").strip()
         sku = (row.get("sku") or "").strip()
 
         if not sku:
@@ -101,19 +103,26 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
         if quantity < 1:
             quantity = 1
 
+        # Auto-generate order_name if empty (each row without order_name = new order)
         if not order_name:
-            errors.append({"row": row_num, "error": "order_name is required"})
-            continue
+            auto_order_counter += 1
+            order_name = f"__auto_{auto_order_counter}_row{row_num}"
+
+        # customer_name & ship_to_name default to each other
+        if not customer_name and ship_to_name:
+            customer_name = ship_to_name
+        if not ship_to_name and customer_name:
+            ship_to_name = customer_name
 
         if order_name not in order_groups:
             if not customer_name:
-                errors.append({"row": row_num, "error": f"First row of order '{order_name}' must have customer_name"})
+                errors.append({"row": row_num, "error": "customer_name or ship_to_name is required"})
                 continue
             order_groups[order_name] = {
                 "customer_name": customer_name,
                 "customer_email": (row.get("customer_email") or "").strip(),
                 "customer_phone": (row.get("customer_phone") or "").strip(),
-                "ship_to_name": (row.get("ship_to_name") or "").strip(),
+                "ship_to_name": ship_to_name or customer_name,
                 "ship_to_street1": (row.get("ship_to_street1") or "").strip(),
                 "ship_to_street2": (row.get("ship_to_street2") or "").strip(),
                 "ship_to_city": (row.get("ship_to_city") or "").strip(),
@@ -121,6 +130,7 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
                 "ship_to_zip": (row.get("ship_to_zip") or "").strip(),
                 "ship_to_country": (row.get("ship_to_country") or "").strip() or "US",
                 "notes": (row.get("notes") or "").strip(),
+                "display_order_name": (row.get("order_name") or "").strip(),  # original name (empty if auto)
                 "items": [],
             }
             group_order.append(order_name)
@@ -203,8 +213,9 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
         # Build OrderCreate
         from app.schemas.order import AddressInput, OrderCreate, OrderItemCreate
 
+        display_name = group["display_order_name"]
         order_data = OrderCreate(
-            order_name=order_name,
+            order_name=display_name,
             customer_name=group["customer_name"],
             customer_email=group["customer_email"],
             customer_phone=group["customer_phone"],
@@ -231,7 +242,7 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
             order_service.create_order(db, order_data)
             created += 1
             created_details.append({
-                "order_name": order_name,
+                "order_name": display_name or order_name,
                 "items": [
                     {"sku": ri["sku"], "item_name": ri["resolved_name"], "quantity": ri["quantity"]}
                     for ri in resolved_items
@@ -333,3 +344,14 @@ def price_breakdown(order_id: str, db: Session = Depends(get_db)):
         "shipping_cost": order.shipping_cost,
         "total_price": order.total_price,
     }
+
+
+@router.get("/{order_id}/qrcode")
+def get_order_qrcode(order_id: str, db: Session = Depends(get_db)):
+    """Get QR code label for an order (for picking/packing)."""
+    order = order_service.get_order(db, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    from app.services.qr_service import generate_order_qr
+    img_bytes = generate_order_qr(order)
+    return Response(content=img_bytes, media_type="image/png")

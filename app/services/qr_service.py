@@ -142,6 +142,65 @@ def generate_variant_qr(variant, product) -> bytes:
     )
 
 
+def generate_order_qr(order) -> bytes:
+    """Generate a QR code label for an order (for picking/packing). Returns PNG bytes."""
+    base = settings.BASE_URL.rstrip("/")
+    qr_data = f"{base}/order/{order.id}"
+
+    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    qr_img = qr_img.resize((QR_SIZE, QR_SIZE), Image.NEAREST)
+
+    font_big = _get_font(22)
+    font_med = _get_font(16)
+    font_sm = _get_font(13)
+
+    lines = []
+    lines.append(("sku", order.order_number))
+    if order.order_name:
+        display_name = order.order_name if len(order.order_name) <= 30 else order.order_name[:27] + "..."
+        lines.append(("name", display_name))
+    lines.append(("variant", order.customer_name))
+    lines.append(("location", f"Items: {len(order.items)}"))
+    lines.append(("price", order.status.upper() if isinstance(order.status, str) else order.status.value.upper()))
+
+    line_height = {"sku": 28, "name": 22, "variant": 20, "location": 18, "price": 18}
+    text_height = sum(line_height.get(t, 20) for t, _ in lines) + PADDING
+
+    total_height = QR_SIZE + text_height + PADDING * 2
+    img = Image.new("RGB", (LABEL_WIDTH, total_height), "white")
+
+    qr_x = (LABEL_WIDTH - QR_SIZE) // 2
+    img.paste(qr_img, (qr_x, PADDING))
+
+    draw = ImageDraw.Draw(img)
+    y = QR_SIZE + PADDING + 8
+
+    for line_type, text in lines:
+        if line_type == "sku":
+            font = font_big
+        elif line_type == "name":
+            font = font_med
+        else:
+            font = font_sm
+
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        x = (LABEL_WIDTH - tw) // 2
+        color = "#333333" if line_type != "price" else "#667eea"
+        draw.text((x, y), text, fill=color, font=font)
+        y += line_height.get(line_type, 20)
+
+    draw.rectangle([(0, 0), (LABEL_WIDTH - 1, total_height - 1)], outline="#cccccc", width=1)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def generate_bulk_qr_page(product, variants: list) -> bytes:
     """Generate a printable page with QR labels for product + all variants.
     Returns PNG bytes of a multi-label sheet.

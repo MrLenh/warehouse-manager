@@ -26,18 +26,29 @@ def get_db():
 def _migrate_add_columns():
     """Add missing columns to existing tables (for SQLite without Alembic)."""
     inspector = inspect(engine)
-    if "variants" not in inspector.get_table_names():
-        return
-    existing = {col["name"] for col in inspector.get_columns("variants")}
-    new_cols = {
-        "length_in_override": "FLOAT DEFAULT 0.0",
-        "width_in_override": "FLOAT DEFAULT 0.0",
-        "height_in_override": "FLOAT DEFAULT 0.0",
-    }
-    with engine.begin() as conn:
-        for col_name, col_type in new_cols.items():
-            if col_name not in existing:
-                conn.execute(text(f"ALTER TABLE variants ADD COLUMN {col_name} {col_type}"))
+    tables = inspector.get_table_names()
+
+    if "variants" in tables:
+        existing = {col["name"] for col in inspector.get_columns("variants")}
+        new_cols = {
+            "length_in_override": "FLOAT DEFAULT 0.0",
+            "width_in_override": "FLOAT DEFAULT 0.0",
+            "height_in_override": "FLOAT DEFAULT 0.0",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE variants ADD COLUMN {col_name} {col_type}"))
+
+    if "orders" in tables:
+        existing = {col["name"] for col in inspector.get_columns("orders")}
+        new_cols = {
+            "qr_code_path": "VARCHAR DEFAULT ''",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE orders ADD COLUMN {col_name} {col_type}"))
 
 
 def init_db():

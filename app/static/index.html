@@ -993,6 +993,11 @@ async function viewOrder(id) {
     </table>
     ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">Xem nhan van chuyen</a></div>' : ''}
     ${o.notes ? '<div style="margin-top:12px"><strong>Ghi chu:</strong> '+esc(o.notes)+'</div>' : ''}
+    <div style="margin-top:16px;text-align:center">
+      <h4 style="margin:0 0 8px;font-size:14px">QR Code (Picking / Packing)</h4>
+      <img src="${API}/orders/${o.id}/qrcode" alt="QR ${esc(o.order_number)}" style="max-width:280px;border-radius:8px">
+      <div><a href="${API}/orders/${o.id}/qrcode" download="order-${o.order_number}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Tai QR</a></div>
+    </div>
   `;
 
   const statusFlow = ['pending','confirmed','processing','packed','label_purchased','shipped','in_transit','delivered'];

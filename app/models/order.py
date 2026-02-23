@@ -68,6 +68,7 @@ class Order(Base):
     webhook_url: Mapped[str] = mapped_column(String, default="")
 
     notes: Mapped[str] = mapped_column(Text, default="")
+    qr_code_path: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

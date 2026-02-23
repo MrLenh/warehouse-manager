@@ -66,6 +66,7 @@ class OrderOut(BaseModel):
     tracking_number: str
     tracking_url: str
     label_url: str
+    qr_code_path: str = ""
     notes: str
     created_at: datetime
     updated_at: datetime
