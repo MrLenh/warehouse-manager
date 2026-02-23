@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.models.order import OrderStatus
 
@@ -66,12 +67,17 @@ class OrderOut(BaseModel):
     tracking_number: str
     tracking_url: str
     label_url: str
-    qr_code_path: str = ""
+    qr_code_path: Optional[str] = ""
     notes: str
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("qr_code_path", mode="before")
+    @classmethod
+    def qr_code_path_default(cls, v):
+        return v or ""
 
 
 class BuyLabelRequest(BaseModel):

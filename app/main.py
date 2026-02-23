@@ -1,9 +1,13 @@
+import logging
 import pathlib
+import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger(__name__)
 
 from app.api import orders, products, reports, stock_requests, webhooks
 from app.database import init_db
@@ -24,6 +28,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Return JSON for unhandled exceptions so frontend can parse error."""
+    logger.error("Unhandled error: %s\n%s", exc, traceback.format_exc())
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
 app.include_router(products.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
@@ -43,6 +54,12 @@ def root():
 def product_detail_page(product_id: str):
     """Product detail page - landing for QR code scans."""
     return FileResponse(STATIC_DIR / "product.html")
+
+
+@app.get("/order/{order_id}")
+def order_detail_page(order_id: str):
+    """Order detail page - landing for QR code scans."""
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/api/v1/config")

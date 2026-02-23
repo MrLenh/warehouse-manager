@@ -129,15 +129,23 @@ def create_order(db: Session, data: OrderCreate) -> Order:
 
     _add_status_history(order, OrderStatus.PENDING, "Order created")
 
+    # Flush items so order.items relationship is available for QR generation
+    db.flush()
+
     # Generate QR code for picking/packing
-    from app.services.qr_service import generate_order_qr
-    import os
-    qr_bytes = generate_order_qr(order)
-    os.makedirs(settings.QR_CODE_DIR, exist_ok=True)
-    qr_path = os.path.join(settings.QR_CODE_DIR, f"order-{order.order_number}.png")
-    with open(qr_path, "wb") as f:
-        f.write(qr_bytes)
-    order.qr_code_path = qr_path
+    try:
+        import os
+
+        from app.services.qr_service import generate_order_qr
+
+        qr_bytes = generate_order_qr(order)
+        os.makedirs(settings.QR_CODE_DIR, exist_ok=True)
+        qr_path = os.path.join(settings.QR_CODE_DIR, f"order-{order.order_number}.png")
+        with open(qr_path, "wb") as f:
+            f.write(qr_bytes)
+        order.qr_code_path = qr_path
+    except Exception:
+        pass  # QR generation is non-critical, don't block order creation
 
     db.commit()
     db.refresh(order)

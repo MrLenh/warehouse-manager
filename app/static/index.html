@@ -637,9 +637,16 @@ async function importOrderCSV(input) {
   if (!file) return;
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(API + '/orders/import', { method: 'POST', body: formData });
-  const result = await res.json();
-  if (res.ok) {
+  try {
+    const res = await fetch(API + '/orders/import', { method: 'POST', body: formData });
+    if (!res.ok) {
+      let errMsg;
+      try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
+      toast((errMsg || 'Loi import don hang').slice(0,200), 'error');
+      input.value = '';
+      return;
+    }
+    const result = await res.json();
     let msg = `Import: ${result.created} don hang moi`;
     if (result.errors && result.errors.length > 0) msg += `, ${result.errors.length} loi`;
     toast(msg);
@@ -655,9 +662,7 @@ async function importOrderCSV(input) {
       toast('Xem Console (F12) de biet chi tiet loi', 'error');
     }
     loadOrders();
-  } else {
-    toast(result.detail || 'Loi import don hang', 'error');
-  }
+  } catch(e) { toast('Loi ket noi: ' + e.message, 'error'); }
   input.value = '';
 }
 
@@ -858,10 +863,13 @@ async function saveInventory() {
 async function loadOrders() {
   const status = document.getElementById('filter-status').value;
   const url = status ? API + '/orders?status=' + status : API + '/orders';
-  const res = await fetch(url);
-  allOrders = await res.json();
-  renderOrders(allOrders);
-  document.getElementById('stat-orders').textContent = allOrders.length + ' DH';
+  try {
+    const res = await fetch(url);
+    if (!res.ok) { const txt = await res.text(); toast(txt.slice(0,100) || 'Loi tai don hang', 'error'); return; }
+    allOrders = await res.json();
+    renderOrders(allOrders);
+    document.getElementById('stat-orders').textContent = allOrders.length + ' DH';
+  } catch(e) { toast('Loi ket noi server: ' + e.message, 'error'); }
 }
 
 function renderOrders(list) {

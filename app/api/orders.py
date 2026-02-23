@@ -80,7 +80,10 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(400, "Only CSV files are supported")
 
-    content = file.file.read().decode("utf-8-sig")
+    try:
+        content = file.file.read().decode("utf-8-sig")
+    except Exception as e:
+        raise HTTPException(400, f"Cannot read CSV file: {e}")
     reader = csv.DictReader(io.StringIO(content))
 
     # Group rows by order key (order_name or auto-generated)
