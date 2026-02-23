@@ -45,6 +45,13 @@ def product_detail_page(product_id: str):
     return FileResponse(STATIC_DIR / "product.html")
 
 
+@app.get("/api/v1/config")
+def get_config():
+    """Expose public config (BASE_URL) for frontend."""
+    from app.config import settings
+    return {"base_url": settings.BASE_URL.rstrip("/")}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

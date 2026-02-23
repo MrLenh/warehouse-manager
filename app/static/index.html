@@ -144,7 +144,7 @@ tr:hover{background:#f8f9ff}
       </div>
     </div>
     <table>
-      <thead><tr><th>Ma DH</th><th>Khach hang</th><th>SP</th><th>Tong tien</th><th>Trang thai</th><th>Tracking</th><th>Ngay tao</th><th>Thao tac</th></tr></thead>
+      <thead><tr><th>Ma DH</th><th>Ten DH</th><th>Khach hang</th><th>SP</th><th>Tong tien</th><th>Trang thai</th><th>Tracking</th><th>Ngay tao</th><th>Thao tac</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
   </div>
@@ -267,6 +267,7 @@ tr:hover{background:#f8f9ff}
       <button class="modal-close" onclick="closeModal('order-modal')">&times;</button>
     </div>
     <div class="modal-body">
+      <div class="form-group"><label>Ten don hang</label><input type="text" id="o-order-name" placeholder="VD: Don hang #1, Don Shopee 2/2025..."></div>
       <div class="form-row">
         <div class="form-group"><label>Ten khach hang *</label><input type="text" id="o-name" placeholder="Nguyen Van A"></div>
         <div class="form-group"><label>Email</label><input type="email" id="o-email" placeholder="email@example.com"></div>
@@ -834,11 +835,12 @@ async function loadOrders() {
 
 function renderOrders(list) {
   const q = document.getElementById('search-orders').value.toLowerCase();
-  const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q));
+  const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || (o.order_name || '').toLowerCase().includes(q));
   document.getElementById('orders-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="8" class="empty">Khong co don hang nao</td></tr>'
+    ? '<tr><td colspan="9" class="empty">Khong co don hang nao</td></tr>'
     : filtered.map(o => `<tr>
         <td><strong>${esc(o.order_number)}</strong></td>
+        <td>${esc(o.order_name || '-')}</td>
         <td>${esc(o.customer_name)}</td>
         <td>${o.items.length} SP</td>
         <td>$${o.total_price.toFixed(2)}</td>
@@ -855,6 +857,7 @@ document.getElementById('search-orders').addEventListener('input', () => renderO
 document.getElementById('filter-status').addEventListener('change', loadOrders);
 
 function openOrderModal() {
+  document.getElementById('o-order-name').value = '';
   document.getElementById('o-name').value = '';
   document.getElementById('o-email').value = '';
   document.getElementById('o-phone').value = '';
@@ -918,6 +921,7 @@ async function saveOrder() {
   });
   if (items.length === 0) { toast('Chua chon san pham', 'error'); return; }
   const body = {
+    order_name: document.getElementById('o-order-name').value,
     customer_name: document.getElementById('o-name').value,
     customer_email: document.getElementById('o-email').value,
     customer_phone: document.getElementById('o-phone').value,
@@ -943,6 +947,7 @@ async function viewOrder(id) {
   document.getElementById('order-detail-title').textContent = 'Don hang ' + o.order_number;
   document.getElementById('order-detail-body').innerHTML = `
     <div class="detail-grid">
+      ${o.order_name ? '<div class="detail-item"><div class="label">Ten don hang</div><div class="value"><strong>' + esc(o.order_name) + '</strong></div></div>' : ''}
       <div class="detail-item"><div class="label">Khach hang</div><div class="value">${esc(o.customer_name)}</div></div>
       <div class="detail-item"><div class="label">Email</div><div class="value">${esc(o.customer_email) || '-'}</div></div>
       <div class="detail-item"><div class="label">Trang thai</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>

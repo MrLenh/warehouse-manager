@@ -30,6 +30,7 @@ def _add_status_history(order: Order, status: str, note: str = "") -> None:
 def create_order(db: Session, data: OrderCreate) -> Order:
     order = Order(
         order_number=_generate_order_number(),
+        order_name=data.order_name,
         customer_name=data.customer_name,
         customer_email=data.customer_email,
         customer_phone=data.customer_phone,

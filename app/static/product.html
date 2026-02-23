@@ -6,50 +6,149 @@
 <title>San pham - Warehouse Manager</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
-.header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between}
-.header h1{font-size:20px;font-weight:600}
-.header a{color:#fff;text-decoration:none;font-size:14px;background:rgba(255,255,255,.2);padding:6px 16px;border-radius:20px}
-.header a:hover{background:rgba(255,255,255,.35)}
-.container{max-width:900px;margin:24px auto;padding:0 20px}
-.card{background:#fff;border-radius:16px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:20px}
-.card h2{font-size:22px;margin-bottom:4px}
-.sku{font-size:15px;color:#667eea;font-weight:600;margin-bottom:16px}
-.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px}
-.info-item .label{font-size:12px;color:#888;margin-bottom:2px}
-.info-item .value{font-size:16px;font-weight:600}
-.stock-low{color:#dc3545}.stock-ok{color:#28a745}
-.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
-.variant-highlight{background:#667eea;color:#fff;padding:12px 20px;border-radius:10px;margin-bottom:20px;font-size:15px}
-table{width:100%;border-collapse:collapse;margin-top:12px}
-th{padding:10px 14px;text-align:left;font-weight:600;font-size:13px;color:#555;background:#f8f9fa;border-bottom:2px solid #e8e8e8}
-td{padding:10px 14px;border-bottom:1px solid #f0f0f0;font-size:14px}
-tr:hover{background:#f8f9ff}
-.qr-section{text-align:center;margin-top:16px}
-.qr-section img{max-width:250px;border-radius:8px;border:1px solid #e8e8e8}
-.loading{text-align:center;padding:80px 20px;color:#888;font-size:16px}
-.error{text-align:center;padding:80px 20px;color:#dc3545;font-size:16px}
+body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f6f6f7;color:#1a1a1a;line-height:1.6}
+
+/* Header */
+.header{background:#fff;border-bottom:1px solid #e3e3e3;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header h1{font-size:18px;font-weight:600;color:#1a1a1a}
+.header a{color:#2c6ecb;text-decoration:none;font-size:14px;font-weight:500}
+.header a:hover{text-decoration:underline}
+
+/* Breadcrumb */
+.breadcrumb{max-width:1200px;margin:16px auto 0;padding:0 24px;font-size:13px;color:#6d7175}
+.breadcrumb a{color:#2c6ecb;text-decoration:none}
+.breadcrumb a:hover{text-decoration:underline}
+.breadcrumb span{margin:0 8px;color:#c9cccf}
+
+/* Main layout */
+.container{max-width:1200px;margin:16px auto 40px;padding:0 24px}
+.product-layout{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
+
+/* Left column - QR & media */
+.media-section{position:sticky;top:80px}
+.media-main{background:#fff;border:1px solid #e3e3e3;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:40px;aspect-ratio:1;margin-bottom:12px}
+.media-main img{max-width:100%;max-height:100%;object-fit:contain}
+
+/* Right column - Product info */
+.product-info{padding:8px 0}
+.product-vendor{font-size:13px;color:#6d7175;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.product-title{font-size:28px;font-weight:600;line-height:1.3;margin-bottom:8px;color:#1a1a1a}
+.product-sku{font-size:14px;color:#6d7175;margin-bottom:16px}
+.product-price{font-size:28px;font-weight:600;color:#1a1a1a;margin-bottom:4px}
+.product-price .compare{font-size:16px;color:#999;text-decoration:line-through;margin-left:8px;font-weight:400}
+.product-stock{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:4px 10px;border-radius:20px;margin-bottom:20px}
+.stock-in{background:#e4f3e5;color:#1a7d2f}
+.stock-low{background:#fff3cd;color:#856404}
+.stock-out{background:#fce4e4;color:#c62828}
+.stock-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.stock-in .stock-dot{background:#1a7d2f}
+.stock-low .stock-dot{background:#856404}
+.stock-out .stock-dot{background:#c62828}
+
+/* Divider */
+.divider{border:none;border-top:1px solid #e3e3e3;margin:20px 0}
+
+/* Variant options (Shopify style) */
+.option-group{margin-bottom:20px}
+.option-label{font-size:14px;font-weight:600;margin-bottom:8px;color:#1a1a1a}
+.option-label span{font-weight:400;color:#6d7175}
+.option-values{display:flex;flex-wrap:wrap;gap:8px}
+.option-btn{border:1px solid #c9cccf;background:#fff;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer;transition:all .15s;color:#1a1a1a;font-family:inherit;min-width:44px;text-align:center}
+.option-btn:hover{border-color:#1a1a1a}
+.option-btn.active{border-color:#1a1a1a;background:#1a1a1a;color:#fff;box-shadow:0 0 0 1px #1a1a1a}
+.option-btn.unavailable{opacity:.4;text-decoration:line-through;cursor:not-allowed}
+
+/* Product description */
+.product-description{font-size:14px;color:#6d7175;line-height:1.7;margin-bottom:20px}
+
+/* Info cards */
+.info-section{margin-top:4px}
+.info-section h3{font-size:15px;font-weight:600;margin-bottom:12px;color:#1a1a1a}
+.info-table{width:100%;border-collapse:collapse}
+.info-table tr{border-bottom:1px solid #f0f0f0}
+.info-table tr:last-child{border-bottom:none}
+.info-table td{padding:10px 0;font-size:14px;vertical-align:top}
+.info-table td:first-child{color:#6d7175;width:140px;font-weight:500}
+.info-table td:last-child{color:#1a1a1a;font-weight:400}
+
+/* QR link & copy */
+.qr-link-box{background:#f6f6f7;border:1px solid #e3e3e3;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:13px;color:#6d7175;word-break:break-all}
+.qr-link-box a{color:#2c6ecb;text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis}
+.qr-link-box a:hover{text-decoration:underline}
+.copy-btn{background:#fff;border:1px solid #c9cccf;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap;font-family:inherit;color:#1a1a1a;transition:all .15s}
+.copy-btn:hover{background:#f0f0f0;border-color:#999}
+.copy-btn.copied{background:#e4f3e5;border-color:#1a7d2f;color:#1a7d2f}
+
+/* Collapsible sections */
+.collapse-section{border:1px solid #e3e3e3;border-radius:12px;background:#fff;margin-bottom:12px;overflow:hidden}
+.collapse-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;cursor:pointer;font-size:15px;font-weight:600;color:#1a1a1a;background:none;border:none;width:100%;text-align:left;font-family:inherit}
+.collapse-header:hover{background:#fafafa}
+.collapse-header .arrow{font-size:12px;transition:transform .2s;color:#6d7175}
+.collapse-header .arrow.open{transform:rotate(180deg)}
+.collapse-body{padding:0 20px 16px;display:none}
+.collapse-body.open{display:block}
+
+/* Variants table inside collapsible */
+.variants-table{width:100%;border-collapse:collapse}
+.variants-table th{padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#6d7175;text-transform:uppercase;letter-spacing:.5px;background:#fafafa;border-bottom:1px solid #e3e3e3}
+.variants-table td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f0f0f0}
+.variants-table tr:last-child td{border-bottom:none}
+.variants-table tr:hover{background:#f9fafb}
+.variants-table a{color:#2c6ecb;text-decoration:none;font-weight:500}
+.variants-table a:hover{text-decoration:underline}
+.variant-row-active{background:#f0f4ff !important}
+
+/* Loading & error states */
+.loading{text-align:center;padding:120px 20px;color:#6d7175;font-size:16px}
+.loading-spinner{display:inline-block;width:32px;height:32px;border:3px solid #e3e3e3;border-top-color:#2c6ecb;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error{text-align:center;padding:120px 20px;color:#c62828;font-size:16px}
+
+/* Responsive */
+@media(max-width:768px){
+  .product-layout{grid-template-columns:1fr;gap:20px}
+  .media-section{position:static}
+  .media-main{aspect-ratio:auto;padding:24px}
+  .product-title{font-size:22px}
+  .product-price{font-size:24px}
+  .container{padding:0 16px}
+  .breadcrumb{padding:0 16px}
+  .header{padding:12px 16px}
+}
 </style>
 </head>
 <body>
 
 <div class="header">
   <h1>Warehouse Manager</h1>
+  <a href="/">&larr; Dashboard</a>
+</div>
+
+<div class="breadcrumb" id="breadcrumb">
   <a href="/">Dashboard</a>
+  <span>/</span>
+  <span>San pham</span>
 </div>
 
 <div class="container">
-  <div id="content"><div class="loading">Dang tai thong tin san pham...</div></div>
+  <div id="content">
+    <div class="loading">
+      <div class="loading-spinner"></div>
+      <div>Dang tai thong tin san pham...</div>
+    </div>
+  </div>
 </div>
 
 <script>
 const API = '/api/v1';
-
-// Parse product ID from URL path: /product/{id}
 const pathParts = window.location.pathname.split('/');
 const productId = pathParts[2] || '';
 const urlParams = new URLSearchParams(window.location.search);
 const variantId = urlParams.get('variant') || '';
+
+let productData = null;
+let selectedOptions = {};
+let baseDomain = '';
 
 async function load() {
   if (!productId) {
@@ -58,92 +157,255 @@ async function load() {
   }
 
   try {
-    const res = await fetch(API + '/products/' + productId);
+    // Fetch config and product data in parallel
+    const [configRes, res] = await Promise.all([
+      fetch(API + '/config'),
+      fetch(API + '/products/' + productId)
+    ]);
+    if (configRes.ok) {
+      const config = await configRes.json();
+      baseDomain = config.base_url || '';
+    }
     if (!res.ok) throw new Error('Product not found');
-    const p = await res.json();
+    productData = await res.json();
+    document.title = productData.name + ' - Warehouse Manager';
 
-    document.title = p.name + ' - Warehouse Manager';
+    // Update breadcrumb
+    document.getElementById('breadcrumb').innerHTML =
+      '<a href="/">Dashboard</a><span>/</span>' +
+      (productData.category ? '<a href="/?category=' + encodeURIComponent(productData.category) + '">' + esc(productData.category) + '</a><span>/</span>' : '') +
+      '<span>' + esc(productData.name) + '</span>';
 
-    // Find variant if specified
-    let selectedVariant = null;
-    if (variantId && p.variants) {
-      selectedVariant = p.variants.find(v => v.id === variantId);
-    }
-
-    let html = '<div class="card">';
-
-    // Variant highlight
-    if (selectedVariant) {
-      const attrs = typeof selectedVariant.attributes === 'string'
-        ? JSON.parse(selectedVariant.attributes) : (selectedVariant.attributes || {});
-      const attrStr = Object.entries(attrs).map(([k,v]) => `<strong>${esc(k)}:</strong> ${esc(v)}`).join(' &nbsp;|&nbsp; ');
-      html += `<div class="variant-highlight">Variant: ${esc(selectedVariant.variant_sku)} &nbsp;—&nbsp; ${attrStr}</div>`;
-    }
-
-    html += `<h2>${esc(p.name)}</h2>`;
-    html += `<div class="sku">${esc(selectedVariant ? selectedVariant.variant_sku : p.sku)}</div>`;
-
-    if (p.description) {
-      html += `<p style="color:#666;margin-bottom:16px">${esc(p.description)}</p>`;
-    }
-
-    // Info grid
-    const displayPrice = selectedVariant && selectedVariant.price_override > 0
-      ? selectedVariant.price_override : p.price;
-    const displayQty = selectedVariant ? selectedVariant.quantity : p.quantity;
-    const displayLoc = selectedVariant ? (selectedVariant.location || p.location) : p.location;
-
-    html += '<div class="info-grid">';
-    html += `<div class="info-item"><div class="label">Gia</div><div class="value" style="color:#667eea">$${displayPrice.toFixed(2)}</div></div>`;
-    html += `<div class="info-item"><div class="label">Ton kho</div><div class="value ${displayQty <= 5 ? 'stock-low' : 'stock-ok'}">${displayQty}</div></div>`;
-    html += `<div class="info-item"><div class="label">Vi tri</div><div class="value">${esc(displayLoc) || '-'}</div></div>`;
-    html += `<div class="info-item"><div class="label">Danh muc</div><div class="value">${esc(p.category) || '-'}</div></div>`;
-    if (p.weight_oz) {
-      html += `<div class="info-item"><div class="label">Can nang</div><div class="value">${p.weight_oz} oz</div></div>`;
-    }
-    if (p.length_in && p.width_in && p.height_in) {
-      html += `<div class="info-item"><div class="label">Kich thuoc</div><div class="value">${p.length_in} x ${p.width_in} x ${p.height_in} in</div></div>`;
-    }
-    html += '</div>';
-
-    // QR code
-    const qrUrl = selectedVariant
-      ? API + '/products/variants/' + selectedVariant.id + '/qrcode'
-      : API + '/products/' + p.id + '/qrcode';
-    html += `<div class="qr-section"><img src="${qrUrl}" alt="QR Code"></div>`;
-
-    html += '</div>';
-
-    // Variants table (if product has variants)
-    if (p.variants && p.variants.length > 0) {
-      html += '<div class="card">';
-      html += `<h3 style="font-size:16px;margin-bottom:12px">Tat ca variants (${p.variants.length})</h3>`;
-      html += '<table><thead><tr><th>Variant SKU</th><th>Thuoc tinh</th><th>Gia</th><th>Ton kho</th><th>Vi tri</th></tr></thead><tbody>';
-      for (const v of p.variants) {
-        const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
-        const attrStr = Object.entries(attrs).map(([k,val]) => `${k}: ${val}`).join(', ');
-        const isSelected = v.id === variantId;
-        const rowStyle = isSelected ? 'background:#f0f2ff;font-weight:600' : '';
-        const vPrice = v.price_override > 0 ? '$' + v.price_override.toFixed(2) : 'Gia goc';
-        html += `<tr style="${rowStyle}">
-          <td><a href="/product/${p.id}?variant=${v.id}" style="color:#667eea;text-decoration:none;font-weight:600">${esc(v.variant_sku)}</a></td>
-          <td>${esc(attrStr)}</td>
-          <td>${vPrice}</td>
-          <td class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${v.quantity}</td>
-          <td>${esc(v.location || p.location)}</td>
-        </tr>`;
+    // Pre-select variant from URL
+    if (variantId && productData.variants) {
+      const sv = productData.variants.find(v => v.id === variantId);
+      if (sv) {
+        const attrs = parseAttrs(sv.attributes);
+        Object.assign(selectedOptions, attrs);
       }
-      html += '</tbody></table></div>';
     }
 
-    document.getElementById('content').innerHTML = html;
-
+    render();
   } catch (err) {
     document.getElementById('content').innerHTML = '<div class="error">Khong tim thay san pham: ' + esc(err.message) + '</div>';
   }
 }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function parseAttrs(a) {
+  return typeof a === 'string' ? JSON.parse(a) : (a || {});
+}
+
+function getSelectedVariant() {
+  if (!productData.variants || productData.variants.length === 0) return null;
+  return productData.variants.find(v => {
+    const attrs = parseAttrs(v.attributes);
+    return Object.entries(selectedOptions).every(([k, val]) => attrs[k] === val);
+  }) || null;
+}
+
+function getOptionGroups() {
+  const groups = {};
+  if (!productData.variants) return groups;
+
+  // Parse option_types
+  let optionTypes = productData.option_types || [];
+  if (typeof optionTypes === 'string') optionTypes = JSON.parse(optionTypes);
+
+  for (const v of productData.variants) {
+    const attrs = parseAttrs(v.attributes);
+    for (const [key, val] of Object.entries(attrs)) {
+      if (!groups[key]) groups[key] = new Set();
+      groups[key].add(val);
+    }
+  }
+
+  // Sort by option_types order
+  const sorted = {};
+  for (const t of optionTypes) {
+    if (groups[t]) { sorted[t] = [...groups[t]]; delete groups[t]; }
+  }
+  for (const [k, v] of Object.entries(groups)) {
+    sorted[k] = [...v];
+  }
+  return sorted;
+}
+
+function render() {
+  const p = productData;
+  const sv = getSelectedVariant();
+  const optionGroups = getOptionGroups();
+  const hasVariants = p.variants && p.variants.length > 0;
+
+  const displayPrice = sv && sv.price_override > 0 ? sv.price_override : p.price;
+  const displayQty = sv ? sv.quantity : p.quantity;
+  const displayLoc = sv ? (sv.location || p.location) : p.location;
+  const displaySku = sv ? sv.variant_sku : p.sku;
+
+  // Stock status
+  let stockClass, stockText;
+  if (displayQty <= 0) { stockClass = 'stock-out'; stockText = 'Het hang'; }
+  else if (displayQty <= 5) { stockClass = 'stock-low'; stockText = 'Sap het (' + displayQty + ' con lai)'; }
+  else { stockClass = 'stock-in'; stockText = 'Con hang (' + displayQty + ')'; }
+
+  // QR code image URL (relative, for displaying on page)
+  const qrImgUrl = sv
+    ? API + '/products/variants/' + sv.id + '/qrcode'
+    : API + '/products/' + p.id + '/qrcode';
+
+  // Full scannable URL (what the QR code encodes)
+  let scanUrl = baseDomain + '/product/' + p.id;
+  if (sv) scanUrl += '?variant=' + sv.id;
+
+  let html = '<div class="product-layout">';
+
+  // ---- Left column: QR / Media ----
+  html += '<div class="media-section">';
+  html += '<div class="media-main"><img src="' + qrImgUrl + '" alt="QR Code - ' + esc(displaySku) + '"></div>';
+  if (baseDomain) {
+    html += '<div class="qr-link-box">';
+    html += '<a href="' + esc(scanUrl) + '" target="_blank">' + esc(scanUrl) + '</a>';
+    html += '<button class="copy-btn" onclick="copyLink(\'' + escAttr(scanUrl) + '\', this)">Copy</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // ---- Right column: Product info ----
+  html += '<div class="product-info">';
+
+  // Category / vendor
+  if (p.category) {
+    html += '<div class="product-vendor">' + esc(p.category) + '</div>';
+  }
+
+  // Title
+  html += '<h1 class="product-title">' + esc(p.name) + '</h1>';
+  html += '<div class="product-sku">SKU: ' + esc(displaySku) + '</div>';
+
+  // Price
+  html += '<div class="product-price">$' + displayPrice.toFixed(2);
+  if (sv && sv.price_override > 0 && sv.price_override !== p.price) {
+    html += '<span class="compare">$' + p.price.toFixed(2) + '</span>';
+  }
+  html += '</div>';
+
+  // Stock badge
+  html += '<div class="product-stock ' + stockClass + '"><span class="stock-dot"></span>' + stockText + '</div>';
+
+  // Variant selectors
+  if (hasVariants && Object.keys(optionGroups).length > 0) {
+    html += '<hr class="divider">';
+    for (const [optName, values] of Object.entries(optionGroups)) {
+      const current = selectedOptions[optName] || '';
+      html += '<div class="option-group">';
+      html += '<div class="option-label">' + esc(optName.charAt(0).toUpperCase() + optName.slice(1));
+      if (current) html += ' <span>— ' + esc(current) + '</span>';
+      html += '</div>';
+      html += '<div class="option-values">';
+      for (const val of values) {
+        const active = current === val ? ' active' : '';
+        html += '<button class="option-btn' + active + '" onclick="selectOption(\'' + escAttr(optName) + '\',\'' + escAttr(val) + '\')">' + esc(val) + '</button>';
+      }
+      html += '</div></div>';
+    }
+  }
+
+  html += '<hr class="divider">';
+
+  // Description
+  if (p.description) {
+    html += '<div class="product-description">' + esc(p.description) + '</div>';
+  }
+
+  // Collapsible: Chi tiet san pham
+  html += '<div class="collapse-section">';
+  html += '<button class="collapse-header" onclick="toggleCollapse(this)">Chi tiet san pham <span class="arrow open">&#9660;</span></button>';
+  html += '<div class="collapse-body open">';
+  html += '<table class="info-table">';
+  html += '<tr><td>Vi tri</td><td>' + (esc(displayLoc) || '—') + '</td></tr>';
+  if (p.weight_oz) html += '<tr><td>Can nang</td><td>' + p.weight_oz + ' oz</td></tr>';
+  if (p.length_in && p.width_in && p.height_in) {
+    html += '<tr><td>Kich thuoc</td><td>' + p.length_in + ' × ' + p.width_in + ' × ' + p.height_in + ' in</td></tr>';
+  }
+  html += '<tr><td>Ton kho</td><td>' + displayQty + '</td></tr>';
+  html += '</table>';
+  html += '</div></div>';
+
+  // Collapsible: Tat ca variants
+  if (hasVariants) {
+    html += '<div class="collapse-section">';
+    html += '<button class="collapse-header" onclick="toggleCollapse(this)">Tat ca variants (' + p.variants.length + ') <span class="arrow">&#9660;</span></button>';
+    html += '<div class="collapse-body">';
+    html += '<table class="variants-table"><thead><tr><th>SKU</th><th>Thuoc tinh</th><th>Gia</th><th>Ton kho</th><th>Vi tri</th></tr></thead><tbody>';
+    for (const v of p.variants) {
+      const attrs = parseAttrs(v.attributes);
+      const attrStr = Object.entries(attrs).map(([k, val]) => k + ': ' + val).join(', ');
+      const isActive = sv && sv.id === v.id;
+      const vPrice = v.price_override > 0 ? '$' + v.price_override.toFixed(2) : '$' + p.price.toFixed(2);
+      const rowClass = isActive ? ' class="variant-row-active"' : '';
+      html += '<tr' + rowClass + '>';
+      html += '<td><a href="/product/' + p.id + '?variant=' + v.id + '">' + esc(v.variant_sku) + '</a></td>';
+      html += '<td>' + esc(attrStr) + '</td>';
+      html += '<td>' + vPrice + '</td>';
+      html += '<td class="' + (v.quantity <= 5 ? (v.quantity <= 0 ? 'stock-out' : 'stock-low') : '') + '" style="color:' + (v.quantity <= 0 ? '#c62828' : v.quantity <= 5 ? '#856404' : '#1a7d2f') + ';font-weight:500">' + v.quantity + '</td>';
+      html += '<td>' + esc(v.location || p.location) + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    html += '</div></div>';
+  }
+
+  html += '</div>'; // product-info
+  html += '</div>'; // product-layout
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function selectOption(optName, optValue) {
+  if (selectedOptions[optName] === optValue) {
+    delete selectedOptions[optName];
+  } else {
+    selectedOptions[optName] = optValue;
+  }
+
+  // Find matching variant and update URL
+  const sv = getSelectedVariant();
+  if (sv) {
+    const url = new URL(window.location);
+    url.searchParams.set('variant', sv.id);
+    window.history.replaceState({}, '', url);
+  } else {
+    const url = new URL(window.location);
+    url.searchParams.delete('variant');
+    window.history.replaceState({}, '', url);
+  }
+
+  render();
+}
+
+function toggleCollapse(btn) {
+  const body = btn.nextElementSibling;
+  const arrow = btn.querySelector('.arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+function escAttr(s) {
+  return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function copyLink(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
 
 load();
 </script>

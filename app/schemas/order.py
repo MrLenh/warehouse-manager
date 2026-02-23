@@ -22,6 +22,7 @@ class AddressInput(BaseModel):
 
 
 class OrderCreate(BaseModel):
+    order_name: str = ""
     customer_name: str
     customer_email: str = ""
     customer_phone: str = ""
@@ -54,6 +55,7 @@ class OrderItemOut(BaseModel):
 class OrderOut(BaseModel):
     id: str
     order_number: str
+    order_name: str
     customer_name: str
     customer_email: str
     status: str
