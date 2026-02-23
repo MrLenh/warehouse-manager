@@ -39,6 +39,12 @@ def root():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/product/{product_id}")
+def product_detail_page(product_id: str):
+    """Product detail page - landing for QR code scans."""
+    return FileResponse(STATIC_DIR / "product.html")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

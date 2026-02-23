@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>San pham - Warehouse Manager</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
+.header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:20px;font-weight:600}
+.header a{color:#fff;text-decoration:none;font-size:14px;background:rgba(255,255,255,.2);padding:6px 16px;border-radius:20px}
+.header a:hover{background:rgba(255,255,255,.35)}
+.container{max-width:900px;margin:24px auto;padding:0 20px}
+.card{background:#fff;border-radius:16px;padding:28px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:20px}
+.card h2{font-size:22px;margin-bottom:4px}
+.sku{font-size:15px;color:#667eea;font-weight:600;margin-bottom:16px}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px}
+.info-item .label{font-size:12px;color:#888;margin-bottom:2px}
+.info-item .value{font-size:16px;font-weight:600}
+.stock-low{color:#dc3545}.stock-ok{color:#28a745}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
+.variant-highlight{background:#667eea;color:#fff;padding:12px 20px;border-radius:10px;margin-bottom:20px;font-size:15px}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th{padding:10px 14px;text-align:left;font-weight:600;font-size:13px;color:#555;background:#f8f9fa;border-bottom:2px solid #e8e8e8}
+td{padding:10px 14px;border-bottom:1px solid #f0f0f0;font-size:14px}
+tr:hover{background:#f8f9ff}
+.qr-section{text-align:center;margin-top:16px}
+.qr-section img{max-width:250px;border-radius:8px;border:1px solid #e8e8e8}
+.loading{text-align:center;padding:80px 20px;color:#888;font-size:16px}
+.error{text-align:center;padding:80px 20px;color:#dc3545;font-size:16px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Warehouse Manager</h1>
+  <a href="/">Dashboard</a>
+</div>
+
+<div class="container">
+  <div id="content"><div class="loading">Dang tai thong tin san pham...</div></div>
+</div>
+
+<script>
+const API = '/api/v1';
+
+// Parse product ID from URL path: /product/{id}
+const pathParts = window.location.pathname.split('/');
+const productId = pathParts[2] || '';
+const urlParams = new URLSearchParams(window.location.search);
+const variantId = urlParams.get('variant') || '';
+
+async function load() {
+  if (!productId) {
+    document.getElementById('content').innerHTML = '<div class="error">Khong tim thay san pham</div>';
+    return;
+  }
+
+  try {
+    const res = await fetch(API + '/products/' + productId);
+    if (!res.ok) throw new Error('Product not found');
+    const p = await res.json();
+
+    document.title = p.name + ' - Warehouse Manager';
+
+    // Find variant if specified
+    let selectedVariant = null;
+    if (variantId && p.variants) {
+      selectedVariant = p.variants.find(v => v.id === variantId);
+    }
+
+    let html = '<div class="card">';
+
+    // Variant highlight
+    if (selectedVariant) {
+      const attrs = typeof selectedVariant.attributes === 'string'
+        ? JSON.parse(selectedVariant.attributes) : (selectedVariant.attributes || {});
+      const attrStr = Object.entries(attrs).map(([k,v]) => `<strong>${esc(k)}:</strong> ${esc(v)}`).join(' &nbsp;|&nbsp; ');
+      html += `<div class="variant-highlight">Variant: ${esc(selectedVariant.variant_sku)} &nbsp;—&nbsp; ${attrStr}</div>`;
+    }
+
+    html += `<h2>${esc(p.name)}</h2>`;
+    html += `<div class="sku">${esc(selectedVariant ? selectedVariant.variant_sku : p.sku)}</div>`;
+
+    if (p.description) {
+      html += `<p style="color:#666;margin-bottom:16px">${esc(p.description)}</p>`;
+    }
+
+    // Info grid
+    const displayPrice = selectedVariant && selectedVariant.price_override > 0
+      ? selectedVariant.price_override : p.price;
+    const displayQty = selectedVariant ? selectedVariant.quantity : p.quantity;
+    const displayLoc = selectedVariant ? (selectedVariant.location || p.location) : p.location;
+
+    html += '<div class="info-grid">';
+    html += `<div class="info-item"><div class="label">Gia</div><div class="value" style="color:#667eea">$${displayPrice.toFixed(2)}</div></div>`;
+    html += `<div class="info-item"><div class="label">Ton kho</div><div class="value ${displayQty <= 5 ? 'stock-low' : 'stock-ok'}">${displayQty}</div></div>`;
+    html += `<div class="info-item"><div class="label">Vi tri</div><div class="value">${esc(displayLoc) || '-'}</div></div>`;
+    html += `<div class="info-item"><div class="label">Danh muc</div><div class="value">${esc(p.category) || '-'}</div></div>`;
+    if (p.weight_oz) {
+      html += `<div class="info-item"><div class="label">Can nang</div><div class="value">${p.weight_oz} oz</div></div>`;
+    }
+    if (p.length_in && p.width_in && p.height_in) {
+      html += `<div class="info-item"><div class="label">Kich thuoc</div><div class="value">${p.length_in} x ${p.width_in} x ${p.height_in} in</div></div>`;
+    }
+    html += '</div>';
+
+    // QR code
+    const qrUrl = selectedVariant
+      ? API + '/products/variants/' + selectedVariant.id + '/qrcode'
+      : API + '/products/' + p.id + '/qrcode';
+    html += `<div class="qr-section"><img src="${qrUrl}" alt="QR Code"></div>`;
+
+    html += '</div>';
+
+    // Variants table (if product has variants)
+    if (p.variants && p.variants.length > 0) {
+      html += '<div class="card">';
+      html += `<h3 style="font-size:16px;margin-bottom:12px">Tat ca variants (${p.variants.length})</h3>`;
+      html += '<table><thead><tr><th>Variant SKU</th><th>Thuoc tinh</th><th>Gia</th><th>Ton kho</th><th>Vi tri</th></tr></thead><tbody>';
+      for (const v of p.variants) {
+        const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
+        const attrStr = Object.entries(attrs).map(([k,val]) => `${k}: ${val}`).join(', ');
+        const isSelected = v.id === variantId;
+        const rowStyle = isSelected ? 'background:#f0f2ff;font-weight:600' : '';
+        const vPrice = v.price_override > 0 ? '$' + v.price_override.toFixed(2) : 'Gia goc';
+        html += `<tr style="${rowStyle}">
+          <td><a href="/product/${p.id}?variant=${v.id}" style="color:#667eea;text-decoration:none;font-weight:600">${esc(v.variant_sku)}</a></td>
+          <td>${esc(attrStr)}</td>
+          <td>${vPrice}</td>
+          <td class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${v.quantity}</td>
+          <td>${esc(v.location || p.location)}</td>
+        </tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+
+    document.getElementById('content').innerHTML = html;
+
+  } catch (err) {
+    document.getElementById('content').innerHTML = '<div class="error">Khong tim thay san pham: ' + esc(err.message) + '</div>';
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+load();
+</script>
+</body>
+</html>

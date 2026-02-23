@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # QR code storage
     QR_CODE_DIR: str = "./qrcodes"
 
+    # Base URL for QR code links (set to your domain in production)
+    BASE_URL: str = "http://localhost:8000"
+
     model_config = {"env_file": ".env"}
 
 

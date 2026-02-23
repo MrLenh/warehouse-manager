@@ -31,16 +31,18 @@ def generate_qr_label(
     sku: str,
     name: str,
     product_id: str,
+    variant_id: str = "",
     variant_sku: str = "",
     variant_label: str = "",
     location: str = "",
     price: float = 0.0,
 ) -> bytes:
     """Generate a QR code label image with text info below. Returns PNG bytes."""
-    # QR data - structured for scanning
-    qr_data = f"SKU:{variant_sku or sku}|ID:{product_id}"
-    if variant_sku:
-        qr_data += f"|VARIANT:{variant_sku}"
+    # QR data = URL to product detail page
+    base = settings.BASE_URL.rstrip("/")
+    qr_data = f"{base}/product/{product_id}"
+    if variant_id:
+        qr_data += f"?variant={variant_id}"
 
     qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
     qr.add_data(qr_data)
@@ -132,6 +134,7 @@ def generate_variant_qr(variant, product) -> bytes:
         sku=product.sku,
         name=product.name,
         product_id=product.id,
+        variant_id=variant.id,
         variant_sku=variant.variant_sku,
         variant_label=variant_label,
         location=variant.location or product.location,
