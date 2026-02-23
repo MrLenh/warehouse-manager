@@ -24,7 +24,7 @@ def get_db():
 
 
 def _migrate_add_columns():
-    """Add missing columns to existing tables (for SQLite without Alembic)."""
+    """Add missing columns to existing tables (works for both SQLite and PostgreSQL)."""
     inspector = inspect(engine)
     tables = inspector.get_table_names()
 
@@ -43,12 +43,52 @@ def _migrate_add_columns():
     if "orders" in tables:
         existing = {col["name"] for col in inspector.get_columns("orders")}
         new_cols = {
+            "order_name": "VARCHAR DEFAULT ''",
+            "customer_email": "VARCHAR DEFAULT ''",
+            "customer_phone": "VARCHAR DEFAULT ''",
+            "ship_to_name": "VARCHAR DEFAULT ''",
+            "ship_to_street1": "VARCHAR DEFAULT ''",
+            "ship_to_street2": "VARCHAR DEFAULT ''",
+            "ship_to_city": "VARCHAR DEFAULT ''",
+            "ship_to_state": "VARCHAR DEFAULT ''",
+            "ship_to_zip": "VARCHAR DEFAULT ''",
+            "ship_to_country": "VARCHAR DEFAULT 'US'",
+            "ship_from_name": "VARCHAR DEFAULT 'Warehouse'",
+            "ship_from_street1": "VARCHAR DEFAULT ''",
+            "ship_from_city": "VARCHAR DEFAULT ''",
+            "ship_from_state": "VARCHAR DEFAULT ''",
+            "ship_from_zip": "VARCHAR DEFAULT ''",
+            "ship_from_country": "VARCHAR DEFAULT 'US'",
+            "status_history": "TEXT DEFAULT '[]'",
+            "shipping_cost": "FLOAT DEFAULT 0.0",
+            "processing_fee": "FLOAT DEFAULT 0.0",
+            "total_price": "FLOAT DEFAULT 0.0",
+            "easypost_shipment_id": "VARCHAR DEFAULT ''",
+            "tracking_number": "VARCHAR DEFAULT ''",
+            "tracking_url": "VARCHAR DEFAULT ''",
+            "label_url": "VARCHAR DEFAULT ''",
+            "webhook_url": "VARCHAR DEFAULT ''",
+            "notes": "TEXT DEFAULT ''",
             "qr_code_path": "VARCHAR DEFAULT ''",
         }
         with engine.begin() as conn:
             for col_name, col_type in new_cols.items():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE orders ADD COLUMN {col_name} {col_type}"))
+
+    if "order_items" in tables:
+        existing = {col["name"] for col in inspector.get_columns("order_items")}
+        new_cols = {
+            "variant_id": "VARCHAR DEFAULT ''",
+            "variant_sku": "VARCHAR DEFAULT ''",
+            "variant_label": "VARCHAR DEFAULT ''",
+            "product_name": "VARCHAR DEFAULT ''",
+            "unit_price": "FLOAT DEFAULT 0.0",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE order_items ADD COLUMN {col_name} {col_type}"))
 
 
 def init_db():
