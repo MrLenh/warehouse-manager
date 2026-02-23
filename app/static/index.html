@@ -493,14 +493,14 @@ const API = '/api/v1';
 let allProducts = [];
 let allOrders = [];
 
-// Shipping carriers & services
+// Shipping carriers & services (EasyPost service names)
 const CARRIERS = {
-  'USPS': ['First', 'Priority', 'Express', 'ParcelSelect', 'LibraryMail', 'MediaMail', 'GroundAdvantage'],
-  'UPS': ['Ground', 'NextDayAir', 'NextDayAirSaver', '2ndDayAir', '2ndDayAirAM', '3DaySelect', 'NextDayAirEarlyAM'],
+  'USPS': ['GroundAdvantage', 'Priority', 'Express', 'ParcelSelect', 'LibraryMail', 'MediaMail', 'First'],
+  'UPS': ['Ground', '3DaySelect', '2ndDayAir', '2ndDayAirAM', 'NextDayAirSaver', 'NextDayAir', 'NextDayAirEarlyAM'],
   'FedEx': ['GROUND_HOME_DELIVERY', 'FEDEX_GROUND', 'FEDEX_EXPRESS_SAVER', 'FEDEX_2_DAY', 'STANDARD_OVERNIGHT', 'PRIORITY_OVERNIGHT', 'FIRST_OVERNIGHT'],
 };
 let defaultCarrier = 'USPS';
-let defaultService = 'First';
+let defaultService = 'GroundAdvantage';
 
 // Load config defaults
 fetch(API + '/shipping/defaults').then(r => r.ok ? r.json() : null).then(d => {
@@ -1060,8 +1060,10 @@ async function viewOrder(id) {
       footerHtml += `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="bl-carrier" onchange="updateServiceOptions('bl-carrier','bl-service')" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${carrierOpts}</select>
         <select id="bl-service" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${serviceOpts}</select>
+        <button class="btn btn-outline" onclick="getRates('${o.id}')">Xem gia</button>
         <button class="btn btn-primary" onclick="buyLabel('${o.id}')">Mua label</button>
-      </div>`;
+      </div>
+      <div id="rates-list" style="margin-top:8px"></div>`;
     }
     if (curIdx < statusFlow.length - 1) {
       const next = statusFlow[curIdx + 1];
@@ -1084,6 +1086,26 @@ async function cancelOrder(id) {
   const res = await fetch(API + '/orders/' + id + '/cancel', { method: 'POST' });
   if (res.ok) { toast('Da huy don hang'); closeModal('order-detail-modal'); loadOrders(); }
   else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+// GET RATES
+async function getRates(orderId) {
+  const ratesDiv = document.getElementById('rates-list');
+  ratesDiv.innerHTML = '<em>Dang lay gia...</em>';
+  try {
+    const res = await fetch(API + '/orders/' + orderId + '/rates');
+    if (!res.ok) { const e = await res.json(); ratesDiv.innerHTML = '<span style="color:red">' + esc(e.detail || 'Loi') + '</span>'; return; }
+    const data = await res.json();
+    const rates = data.rates || [];
+    if (rates.length === 0) { ratesDiv.innerHTML = '<em>Khong co gia nao</em>'; return; }
+    ratesDiv.innerHTML = '<table style="width:100%;font-size:13px"><thead><tr><th>Carrier</th><th>Service</th><th>Gia</th><th>Ngay</th><th></th></tr></thead><tbody>' +
+      rates.map(r => `<tr>
+        <td>${esc(r.carrier)}</td><td>${esc(r.service)}</td>
+        <td><strong>$${parseFloat(r.rate).toFixed(2)}</strong></td>
+        <td>${r.delivery_days ? r.delivery_days + 'd' : '-'}</td>
+        <td><button class="btn btn-sm btn-primary" onclick="document.getElementById('bl-carrier').value='${esc(r.carrier)}';updateServiceOptions('bl-carrier','bl-service','${esc(r.service)}')">Chon</button></td>
+      </tr>`).join('') + '</tbody></table>';
+  } catch(e) { ratesDiv.innerHTML = '<span style="color:red">Loi: ' + e.message + '</span>'; }
 }
 
 // BUY LABEL

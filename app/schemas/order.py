@@ -63,7 +63,7 @@ class OrderOut(BaseModel):
     customer_email: str
     status: str
     carrier: str = "USPS"
-    service: str = "First"
+    service: str = "GroundAdvantage"
     items: list[OrderItemOut]
     shipping_cost: float
     processing_fee: float
@@ -91,7 +91,7 @@ class OrderOut(BaseModel):
     @field_validator("service", mode="before")
     @classmethod
     def service_default(cls, v):
-        return v or "First"
+        return v or "GroundAdvantage"
 
 
 class BuyLabelRequest(BaseModel):

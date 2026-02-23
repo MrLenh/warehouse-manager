@@ -47,7 +47,7 @@ def _migrate_add_columns():
             "customer_email": "VARCHAR DEFAULT ''",
             "customer_phone": "VARCHAR DEFAULT ''",
             "carrier": "VARCHAR DEFAULT 'USPS'",
-            "service": "VARCHAR DEFAULT 'First'",
+            "service": "VARCHAR DEFAULT 'GroundAdvantage'",
             "ship_to_name": "VARCHAR DEFAULT ''",
             "ship_to_street1": "VARCHAR DEFAULT ''",
             "ship_to_street2": "VARCHAR DEFAULT ''",

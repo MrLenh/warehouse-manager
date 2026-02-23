@@ -60,7 +60,7 @@ class Order(Base):
 
     # Shipping carrier & service
     carrier: Mapped[str] = mapped_column(String, default="USPS")
-    service: Mapped[str] = mapped_column(String, default="First")
+    service: Mapped[str] = mapped_column(String, default="GroundAdvantage")
 
     # EasyPost
     easypost_shipment_id: Mapped[str] = mapped_column(String, default="")

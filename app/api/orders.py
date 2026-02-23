@@ -49,7 +49,7 @@ def download_order_import_template():
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(ORDER_CSV_COLUMNS)
-    # Order 1: single item, USPS First (default)
+    # Order 1: single item, USPS GroundAdvantage (default)
     writer.writerow([
         "Don hang A", "Nguyen Van A", "a@email.com", "0901234567",
         "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",

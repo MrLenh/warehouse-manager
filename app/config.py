@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # Default shipping carrier & service
     DEFAULT_CARRIER: str = "USPS"
-    DEFAULT_SERVICE: str = "First"
+    DEFAULT_SERVICE: str = "GroundAdvantage"
 
     # Webhook: list of customer callback URLs (comma-separated)
     WEBHOOK_URLS: str = ""

@@ -41,21 +41,47 @@ def _calc_parcel(order: Order, db: Session) -> dict:
     return parcel
 
 
-def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") -> Order:
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise ValueError("Order not found")
-    if order.easypost_shipment_id and order.label_url:
-        raise ValueError("Label already purchased for this order")
+def _find_rate(rates, carrier: str, service: str):
+    """Find a matching rate with progressive fallback:
+    1. Exact carrier + service match
+    2. Case-insensitive carrier + service match
+    3. Carrier match + service partial/contains match
+    4. Cheapest rate for the requested carrier
+    5. Overall cheapest rate
+    """
+    if not rates:
+        return None
 
-    # Resolve carrier/service: request param > order setting > config default
-    carrier = carrier or order.carrier or settings.DEFAULT_CARRIER
-    service = service or order.service or settings.DEFAULT_SERVICE
+    # 1. Exact match
+    for r in rates:
+        if r.carrier == carrier and r.service == service:
+            return r
 
-    client = _get_client()
+    # 2. Case-insensitive match
+    c_lower = carrier.lower()
+    s_lower = service.lower()
+    for r in rates:
+        if r.carrier.lower() == c_lower and r.service.lower() == s_lower:
+            return r
+
+    # 3. Carrier match + service contains (e.g. "First" matches "FirstClassPackageInternationalService")
+    for r in rates:
+        if r.carrier.lower() == c_lower and (s_lower in r.service.lower() or r.service.lower() in s_lower):
+            return r
+
+    # 4. Cheapest for requested carrier
+    carrier_rates = [r for r in rates if r.carrier.lower() == c_lower]
+    if carrier_rates:
+        return min(carrier_rates, key=lambda r: float(r.rate))
+
+    # 5. Overall cheapest
+    return min(rates, key=lambda r: float(r.rate))
+
+
+def _create_shipment(client, order: Order, db: Session):
+    """Create EasyPost shipment for an order."""
     parcel = _calc_parcel(order, db)
-
-    shipment = client.shipment.create(
+    return client.shipment.create(
         from_address={
             "name": order.ship_from_name,
             "street1": order.ship_from_street1,
@@ -76,20 +102,33 @@ def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") 
         parcel=parcel,
     )
 
-    # Find matching rate
-    selected_rate = None
-    for rate in shipment.rates:
-        if rate.carrier == carrier and rate.service == service:
-            selected_rate = rate
-            break
 
+def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") -> Order:
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise ValueError("Order not found")
+    if order.easypost_shipment_id and order.label_url:
+        raise ValueError("Label already purchased for this order")
+
+    # Resolve carrier/service: request param > order setting > config default
+    carrier = carrier or order.carrier or settings.DEFAULT_CARRIER
+    service = service or order.service or settings.DEFAULT_SERVICE
+
+    client = _get_client()
+    shipment = _create_shipment(client, order, db)
+
+    if not shipment.rates:
+        raise ValueError("No shipping rates available. Check addresses and parcel dimensions.")
+
+    selected_rate = _find_rate(shipment.rates, carrier, service)
     if not selected_rate:
-        selected_rate = shipment.lowest_rate()
+        available = ", ".join(f"{r.carrier} {r.service} (${r.rate})" for r in shipment.rates)
+        raise ValueError(f"No rate found for {carrier} {service}. Available: {available}")
 
     bought = client.shipment.buy(shipment.id, rate=selected_rate)
 
-    order.carrier = carrier
-    order.service = service
+    order.carrier = selected_rate.carrier
+    order.service = selected_rate.service
     order.easypost_shipment_id = bought.id
     order.tracking_number = bought.tracking_code or ""
     order.tracking_url = bought.tracker.public_url if bought.tracker else ""
@@ -98,7 +137,10 @@ def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") 
     order.total_price = order.processing_fee + order.shipping_cost
     order.status = OrderStatus.LABEL_PURCHASED
 
-    _add_status_history(order, OrderStatus.LABEL_PURCHASED, f"Label purchased via {carrier} {service}")
+    _add_status_history(
+        order, OrderStatus.LABEL_PURCHASED,
+        f"Label purchased via {selected_rate.carrier} {selected_rate.service} (${selected_rate.rate})",
+    )
 
     db.commit()
     db.refresh(order)
@@ -112,36 +154,18 @@ def get_rates(order_id: str, db: Session) -> list[dict]:
         raise ValueError("Order not found")
 
     client = _get_client()
-    parcel = _calc_parcel(order, db)
+    shipment = _create_shipment(client, order, db)
 
-    shipment = client.shipment.create(
-        from_address={
-            "name": order.ship_from_name,
-            "street1": order.ship_from_street1,
-            "city": order.ship_from_city,
-            "state": order.ship_from_state,
-            "zip": order.ship_from_zip,
-            "country": order.ship_from_country,
-        },
-        to_address={
-            "name": order.ship_to_name,
-            "street1": order.ship_to_street1,
-            "street2": order.ship_to_street2,
-            "city": order.ship_to_city,
-            "state": order.ship_to_state,
-            "zip": order.ship_to_zip,
-            "country": order.ship_to_country,
-        },
-        parcel=parcel,
+    return sorted(
+        [
+            {
+                "carrier": r.carrier,
+                "service": r.service,
+                "rate": r.rate,
+                "currency": r.currency,
+                "delivery_days": r.delivery_days,
+            }
+            for r in shipment.rates
+        ],
+        key=lambda x: float(x["rate"]),
     )
-
-    return [
-        {
-            "carrier": r.carrier,
-            "service": r.service,
-            "rate": r.rate,
-            "currency": r.currency,
-            "delivery_days": r.delivery_days,
-        }
-        for r in shipment.rates
-    ]
