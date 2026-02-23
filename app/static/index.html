@@ -138,8 +138,10 @@ tr:hover{background:#f8f9ff}
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
-      <div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Lam moi</button>
+        <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>Tai mau CSV</a>
+        <label class="btn btn-success btn-sm" style="margin:0">Import DH<input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="importOrderCSV(this)"></label>
         <button class="btn btn-primary" onclick="openOrderModal()">+ Tao don hang</button>
       </div>
     </div>
@@ -626,6 +628,28 @@ async function importCSV(input) {
     loadProducts();
   } else {
     toast(result.detail || 'Loi import', 'error');
+  }
+  input.value = '';
+}
+
+async function importOrderCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(API + '/orders/import', { method: 'POST', body: formData });
+  const result = await res.json();
+  if (res.ok) {
+    let msg = `Import: ${result.created} don hang moi`;
+    if (result.errors && result.errors.length > 0) msg += `, ${result.errors.length} loi`;
+    toast(msg);
+    if (result.errors && result.errors.length > 0) {
+      console.log('Import errors:', result.errors);
+      toast('Xem Console (F12) de biet chi tiet loi', 'error');
+    }
+    loadOrders();
+  } else {
+    toast(result.detail || 'Loi import don hang', 'error');
   }
   input.value = '';
 }
