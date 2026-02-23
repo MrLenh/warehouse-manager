@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warehouse Manager</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
+.header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header h1{font-size:20px;font-weight:600}
+.header .stats{display:flex;gap:20px;font-size:13px}
+.header .stats span{background:rgba(255,255,255,.2);padding:4px 12px;border-radius:20px}
+.tabs{display:flex;background:#fff;border-bottom:2px solid #e8e8e8;padding:0 24px;gap:0}
+.tab{padding:14px 24px;cursor:pointer;font-weight:500;color:#666;border-bottom:3px solid transparent;transition:.2s}
+.tab:hover{color:#667eea}
+.tab.active{color:#667eea;border-bottom-color:#667eea}
+.content{max-width:1400px;margin:0 auto;padding:20px}
+.panel{display:none}
+.panel.active{display:block}
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.search{padding:10px 16px;border:1px solid #ddd;border-radius:8px;width:300px;font-size:14px;outline:none;transition:.2s}
+.search:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:#667eea;color:#fff}.btn-primary:hover{background:#5a6fd6}
+.btn-success{background:#28a745;color:#fff}.btn-success:hover{background:#218838}
+.btn-danger{background:#dc3545;color:#fff}.btn-danger:hover{background:#c82333}
+.btn-warning{background:#ffc107;color:#333}.btn-warning:hover{background:#e0a800}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-outline{background:transparent;border:1px solid #667eea;color:#667eea}.btn-outline:hover{background:#667eea;color:#fff}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+thead{background:#f8f9fa}
+th{padding:12px 16px;text-align:left;font-weight:600;font-size:13px;color:#555;border-bottom:2px solid #e8e8e8}
+td{padding:12px 16px;border-bottom:1px solid #f0f0f0;font-size:14px}
+tr:hover{background:#f8f9ff}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase}
+.badge-pending{background:#fff3cd;color:#856404}
+.badge-confirmed,.badge-processing{background:#cce5ff;color:#004085}
+.badge-packed,.badge-label_purchased{background:#d4edda;color:#155724}
+.badge-shipped,.badge-in_transit{background:#d1ecf1;color:#0c5460}
+.badge-delivered{background:#28a745;color:#fff}
+.badge-cancelled{background:#f8d7da;color:#721c24}
+.stock-low{color:#dc3545;font-weight:700}
+.stock-ok{color:#28a745;font-weight:600}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:16px;padding:0;width:600px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-header{padding:20px 24px;border-bottom:1px solid #e8e8e8;display:flex;justify-content:space-between;align-items:center}
+.modal-header h2{font-size:18px}
+.modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#999;padding:0 4px}
+.modal-close:hover{color:#333}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:10px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;margin-bottom:6px;font-weight:500;font-size:13px;color:#555}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;transition:.2s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.order-items-list{margin:12px 0}
+.order-item-row{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.order-item-row select,.order-item-row input{flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px}
+.order-item-row .btn{flex-shrink:0}
+.empty{text-align:center;padding:60px;color:#999;font-size:15px}
+.toast{position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast-success{background:#28a745}
+.toast-error{background:#dc3545}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-item{padding:8px 0}
+.detail-item .label{font-size:12px;color:#888;margin-bottom:2px}
+.detail-item .value{font-size:14px;font-weight:500}
+.actions-cell{display:flex;gap:6px}
+.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px}
+.card h3{margin-bottom:12px;font-size:16px;color:#333}
+.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.report-card{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.report-card .number{font-size:28px;font-weight:700;color:#667eea}
+.report-card .label{font-size:13px;color:#888;margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Warehouse Manager</h1>
+  <div class="stats">
+    <span id="stat-products">0 SP</span>
+    <span id="stat-orders">0 DH</span>
+    <span id="stat-low-stock">0 Low Stock</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="products">San pham</div>
+  <div class="tab" data-tab="orders">Don hang</div>
+  <div class="tab" data-tab="reports">Bao cao</div>
+</div>
+
+<div class="content">
+  <!-- PRODUCTS PANEL -->
+  <div class="panel active" id="panel-products">
+    <div class="toolbar">
+      <input type="text" class="search" id="search-products" placeholder="Tim kiem san pham...">
+      <div>
+        <button class="btn btn-outline btn-sm" onclick="loadProducts()">Lam moi</button>
+        <button class="btn btn-primary" onclick="openProductModal()">+ Them san pham</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>SKU</th><th>Ten</th><th>Danh muc</th><th>Gia</th><th>Ton kho</th><th>Vi tri</th><th>Thao tac</th></tr></thead>
+      <tbody id="products-body"></tbody>
+    </table>
+  </div>
+
+  <!-- ORDERS PANEL -->
+  <div class="panel" id="panel-orders">
+    <div class="toolbar">
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="text" class="search" id="search-orders" placeholder="Tim kiem don hang...">
+        <select id="filter-status" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+          <option value="">Tat ca trang thai</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="processing">Processing</option>
+          <option value="packed">Packed</option>
+          <option value="label_purchased">Label Purchased</option>
+          <option value="shipped">Shipped</option>
+          <option value="in_transit">In Transit</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div>
+        <button class="btn btn-outline btn-sm" onclick="loadOrders()">Lam moi</button>
+        <button class="btn btn-primary" onclick="openOrderModal()">+ Tao don hang</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Ma DH</th><th>Khach hang</th><th>SP</th><th>Tong tien</th><th>Trang thai</th><th>Tracking</th><th>Ngay tao</th><th>Thao tac</th></tr></thead>
+      <tbody id="orders-body"></tbody>
+    </table>
+  </div>
+
+  <!-- REPORTS PANEL -->
+  <div class="panel" id="panel-reports">
+    <div class="report-grid" id="report-cards"></div>
+    <div class="card">
+      <h3>Top san pham ban chay</h3>
+      <table>
+        <thead><tr><th>#</th><th>SKU</th><th>Ten</th><th>SL ban</th><th>Doanh thu</th></tr></thead>
+        <tbody id="top-products-body"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>San pham sap het hang</h3>
+      <table>
+        <thead><tr><th>SKU</th><th>Ten</th><th>Ton kho</th><th>Vi tri</th></tr></thead>
+        <tbody id="low-stock-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PRODUCT MODAL -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="product-modal-title">Them san pham</h2>
+      <button class="modal-close" onclick="closeModal('product-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="product-edit-id">
+      <div class="form-row">
+        <div class="form-group"><label>SKU *</label><input type="text" id="p-sku" placeholder="VD: SP-001"></div>
+        <div class="form-group"><label>Ten san pham *</label><input type="text" id="p-name" placeholder="Ten san pham"></div>
+      </div>
+      <div class="form-group"><label>Mo ta</label><textarea id="p-desc" rows="2" placeholder="Mo ta san pham"></textarea></div>
+      <div class="form-row-3">
+        <div class="form-group"><label>Danh muc</label><input type="text" id="p-category" placeholder="VD: Dien tu"></div>
+        <div class="form-group"><label>Gia (USD)</label><input type="number" step="0.01" id="p-price" placeholder="0.00"></div>
+        <div class="form-group"><label>Can nang (oz)</label><input type="number" step="0.1" id="p-weight" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>So luong</label><input type="number" id="p-qty" placeholder="0"></div>
+        <div class="form-group"><label>Vi tri kho</label><input type="text" id="p-location" placeholder="VD: A-01-03"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('product-modal')">Huy</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Luu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ORDER MODAL -->
+<div class="modal-overlay" id="order-modal">
+  <div class="modal" style="width:700px">
+    <div class="modal-header">
+      <h2>Tao don hang moi</h2>
+      <button class="modal-close" onclick="closeModal('order-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Ten khach hang *</label><input type="text" id="o-name" placeholder="Nguyen Van A"></div>
+        <div class="form-group"><label>Email</label><input type="email" id="o-email" placeholder="email@example.com"></div>
+      </div>
+      <div class="form-group"><label>SDT</label><input type="text" id="o-phone" placeholder="0123456789"></div>
+
+      <h3 style="margin:16px 0 8px;font-size:15px">Dia chi giao hang</h3>
+      <div class="form-group"><label>Ten nguoi nhan *</label><input type="text" id="o-ship-name" placeholder="Nguyen Van A"></div>
+      <div class="form-group"><label>Dia chi 1 *</label><input type="text" id="o-street1" placeholder="123 Main St"></div>
+      <div class="form-group"><label>Dia chi 2</label><input type="text" id="o-street2" placeholder="Apt 4B"></div>
+      <div class="form-row-3">
+        <div class="form-group"><label>Thanh pho *</label><input type="text" id="o-city" placeholder="New York"></div>
+        <div class="form-group"><label>Bang *</label><input type="text" id="o-state" placeholder="NY"></div>
+        <div class="form-group"><label>Zip *</label><input type="text" id="o-zip" placeholder="10001"></div>
+      </div>
+
+      <h3 style="margin:16px 0 8px;font-size:15px">San pham</h3>
+      <div class="order-items-list" id="order-items-list"></div>
+      <button class="btn btn-outline btn-sm" onclick="addOrderItemRow()">+ Them san pham</button>
+
+      <div class="form-group" style="margin-top:16px"><label>Ghi chu</label><textarea id="o-notes" rows="2" placeholder="Ghi chu"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('order-modal')">Huy</button>
+      <button class="btn btn-primary" onclick="saveOrder()">Tao don hang</button>
+    </div>
+  </div>
+</div>
+
+<!-- ORDER DETAIL MODAL -->
+<div class="modal-overlay" id="order-detail-modal">
+  <div class="modal" style="width:700px">
+    <div class="modal-header">
+      <h2 id="order-detail-title">Chi tiet don hang</h2>
+      <button class="modal-close" onclick="closeModal('order-detail-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="order-detail-body"></div>
+    <div class="modal-footer" id="order-detail-footer"></div>
+  </div>
+</div>
+
+<!-- INVENTORY MODAL -->
+<div class="modal-overlay" id="inventory-modal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h2>Dieu chinh ton kho</h2>
+      <button class="modal-close" onclick="closeModal('inventory-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="inv-product-id">
+      <div class="form-group"><label>So luong (+ nhap / - xuat)</label><input type="number" id="inv-qty" placeholder="VD: 10 hoac -5"></div>
+      <div class="form-group"><label>Ly do</label><input type="text" id="inv-reason" placeholder="VD: nhap hang"></div>
+      <div class="form-group"><label>Ghi chu</label><input type="text" id="inv-note" placeholder="Chi tiet"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('inventory-modal')">Huy</button>
+      <button class="btn btn-success" onclick="saveInventory()">Cap nhat</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/v1';
+let allProducts = [];
+let allOrders = [];
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'reports') loadReports();
+  });
+});
+
+// Toast
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// Modal
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// PRODUCTS
+async function loadProducts() {
+  const res = await fetch(API + '/products');
+  allProducts = await res.json();
+  renderProducts(allProducts);
+  document.getElementById('stat-products').textContent = allProducts.length + ' SP';
+  const low = allProducts.filter(p => p.quantity <= 5).length;
+  document.getElementById('stat-low-stock').textContent = low + ' Low Stock';
+}
+
+function renderProducts(list) {
+  const q = document.getElementById('search-products').value.toLowerCase();
+  const filtered = list.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+  document.getElementById('products-body').innerHTML = filtered.length === 0
+    ? '<tr><td colspan="7" class="empty">Khong co san pham nao</td></tr>'
+    : filtered.map(p => `<tr>
+        <td><strong>${esc(p.sku)}</strong></td>
+        <td>${esc(p.name)}</td>
+        <td>${esc(p.category)}</td>
+        <td>$${p.price.toFixed(2)}</td>
+        <td class="${p.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${p.quantity}</td>
+        <td>${esc(p.location)}</td>
+        <td class="actions-cell">
+          <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Sua</button>
+          <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Kho</button>
+        </td>
+      </tr>`).join('');
+}
+
+document.getElementById('search-products').addEventListener('input', () => renderProducts(allProducts));
+
+function openProductModal(product = null) {
+  document.getElementById('product-modal-title').textContent = product ? 'Sua san pham' : 'Them san pham';
+  document.getElementById('product-edit-id').value = product ? product.id : '';
+  document.getElementById('p-sku').value = product ? product.sku : '';
+  document.getElementById('p-sku').disabled = !!product;
+  document.getElementById('p-name').value = product ? product.name : '';
+  document.getElementById('p-desc').value = product ? product.description : '';
+  document.getElementById('p-category').value = product ? product.category : '';
+  document.getElementById('p-price').value = product ? product.price : '';
+  document.getElementById('p-weight').value = product ? product.weight_oz : '';
+  document.getElementById('p-qty').value = product ? product.quantity : '';
+  document.getElementById('p-location').value = product ? product.location : '';
+  if (product) { document.getElementById('p-qty').disabled = true; }
+  else { document.getElementById('p-qty').disabled = false; }
+  document.getElementById('product-modal').classList.add('show');
+}
+
+function editProduct(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (p) openProductModal(p);
+}
+
+async function saveProduct() {
+  const editId = document.getElementById('product-edit-id').value;
+  if (editId) {
+    const body = {
+      name: document.getElementById('p-name').value,
+      description: document.getElementById('p-desc').value,
+      category: document.getElementById('p-category').value,
+      price: parseFloat(document.getElementById('p-price').value) || 0,
+      weight_oz: parseFloat(document.getElementById('p-weight').value) || 0,
+      location: document.getElementById('p-location').value,
+    };
+    const res = await fetch(API + '/products/' + editId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (res.ok) { toast('Da cap nhat san pham'); closeModal('product-modal'); loadProducts(); }
+    else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  } else {
+    const body = {
+      sku: document.getElementById('p-sku').value,
+      name: document.getElementById('p-name').value,
+      description: document.getElementById('p-desc').value,
+      category: document.getElementById('p-category').value,
+      price: parseFloat(document.getElementById('p-price').value) || 0,
+      weight_oz: parseFloat(document.getElementById('p-weight').value) || 0,
+      quantity: parseInt(document.getElementById('p-qty').value) || 0,
+      location: document.getElementById('p-location').value,
+    };
+    const res = await fetch(API + '/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (res.ok) { toast('Da them san pham moi'); closeModal('product-modal'); loadProducts(); }
+    else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  }
+}
+
+// INVENTORY
+function openInventoryModal(productId) {
+  document.getElementById('inv-product-id').value = productId;
+  document.getElementById('inv-qty').value = '';
+  document.getElementById('inv-reason').value = '';
+  document.getElementById('inv-note').value = '';
+  document.getElementById('inventory-modal').classList.add('show');
+}
+
+async function saveInventory() {
+  const id = document.getElementById('inv-product-id').value;
+  const body = {
+    quantity: parseInt(document.getElementById('inv-qty').value) || 0,
+    reason: document.getElementById('inv-reason').value || 'adjustment',
+    note: document.getElementById('inv-note').value,
+  };
+  const res = await fetch(API + '/products/' + id + '/inventory', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) { toast('Da cap nhat ton kho'); closeModal('inventory-modal'); loadProducts(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+// ORDERS
+async function loadOrders() {
+  const status = document.getElementById('filter-status').value;
+  const url = status ? API + '/orders?status=' + status : API + '/orders';
+  const res = await fetch(url);
+  allOrders = await res.json();
+  renderOrders(allOrders);
+  document.getElementById('stat-orders').textContent = allOrders.length + ' DH';
+}
+
+function renderOrders(list) {
+  const q = document.getElementById('search-orders').value.toLowerCase();
+  const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q));
+  document.getElementById('orders-body').innerHTML = filtered.length === 0
+    ? '<tr><td colspan="8" class="empty">Khong co don hang nao</td></tr>'
+    : filtered.map(o => `<tr>
+        <td><strong>${esc(o.order_number)}</strong></td>
+        <td>${esc(o.customer_name)}</td>
+        <td>${o.items.length} SP</td>
+        <td>$${o.total_price.toFixed(2)}</td>
+        <td><span class="badge badge-${o.status}">${o.status}</span></td>
+        <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : '-'}</td>
+        <td>${new Date(o.created_at).toLocaleDateString('vi-VN')}</td>
+        <td class="actions-cell">
+          <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">Xem</button>
+        </td>
+      </tr>`).join('');
+}
+
+document.getElementById('search-orders').addEventListener('input', () => renderOrders(allOrders));
+document.getElementById('filter-status').addEventListener('change', loadOrders);
+
+function openOrderModal() {
+  document.getElementById('o-name').value = '';
+  document.getElementById('o-email').value = '';
+  document.getElementById('o-phone').value = '';
+  document.getElementById('o-ship-name').value = '';
+  document.getElementById('o-street1').value = '';
+  document.getElementById('o-street2').value = '';
+  document.getElementById('o-city').value = '';
+  document.getElementById('o-state').value = '';
+  document.getElementById('o-zip').value = '';
+  document.getElementById('o-notes').value = '';
+  document.getElementById('order-items-list').innerHTML = '';
+  addOrderItemRow();
+  document.getElementById('order-modal').classList.add('show');
+}
+
+function addOrderItemRow() {
+  const div = document.createElement('div');
+  div.className = 'order-item-row';
+  div.innerHTML = `
+    <select class="oi-product">${allProducts.map(p => `<option value="${p.id}">${esc(p.sku)} - ${esc(p.name)} (${p.quantity})</option>`).join('')}</select>
+    <input type="number" class="oi-qty" value="1" min="1" style="max-width:80px" placeholder="SL">
+    <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">X</button>
+  `;
+  document.getElementById('order-items-list').appendChild(div);
+}
+
+async function saveOrder() {
+  const rows = document.querySelectorAll('.order-item-row');
+  const items = Array.from(rows).map(r => ({
+    product_id: r.querySelector('.oi-product').value,
+    quantity: parseInt(r.querySelector('.oi-qty').value) || 1,
+  }));
+  if (items.length === 0) { toast('Chua chon san pham', 'error'); return; }
+  const body = {
+    customer_name: document.getElementById('o-name').value,
+    customer_email: document.getElementById('o-email').value,
+    customer_phone: document.getElementById('o-phone').value,
+    ship_to: {
+      name: document.getElementById('o-ship-name').value,
+      street1: document.getElementById('o-street1').value,
+      street2: document.getElementById('o-street2').value,
+      city: document.getElementById('o-city').value,
+      state: document.getElementById('o-state').value,
+      zip: document.getElementById('o-zip').value,
+    },
+    items: items,
+    notes: document.getElementById('o-notes').value,
+  };
+  const res = await fetch(API + '/orders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) { toast('Da tao don hang'); closeModal('order-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi tao don hang', 'error'); }
+}
+
+async function viewOrder(id) {
+  const res = await fetch(API + '/orders/' + id);
+  const o = await res.json();
+  document.getElementById('order-detail-title').textContent = 'Don hang ' + o.order_number;
+  document.getElementById('order-detail-body').innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item"><div class="label">Khach hang</div><div class="value">${esc(o.customer_name)}</div></div>
+      <div class="detail-item"><div class="label">Email</div><div class="value">${esc(o.customer_email) || '-'}</div></div>
+      <div class="detail-item"><div class="label">Trang thai</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>
+      <div class="detail-item"><div class="label">Tong tien</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
+      <div class="detail-item"><div class="label">Phi ship</div><div class="value">$${o.shipping_cost.toFixed(2)}</div></div>
+      <div class="detail-item"><div class="label">Tracking</div><div class="value">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : 'Chua co'}</div></div>
+    </div>
+    <h3 style="margin:16px 0 8px;font-size:15px">San pham</h3>
+    <table>
+      <thead><tr><th>SKU</th><th>Ten</th><th>SL</th><th>Don gia</th><th>Thanh tien</th></tr></thead>
+      <tbody>${o.items.map(i => `<tr><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
+    </table>
+    ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">Xem nhan van chuyen</a></div>' : ''}
+    ${o.notes ? '<div style="margin-top:12px"><strong>Ghi chu:</strong> '+esc(o.notes)+'</div>' : ''}
+  `;
+
+  const statusFlow = ['pending','confirmed','processing','packed','label_purchased','shipped','in_transit','delivered'];
+  const curIdx = statusFlow.indexOf(o.status);
+  let footerHtml = '';
+  if (o.status !== 'cancelled' && o.status !== 'delivered') {
+    if (curIdx < statusFlow.length - 1) {
+      const next = statusFlow[curIdx + 1];
+      footerHtml += `<button class="btn btn-success" onclick="updateOrderStatus('${o.id}','${next}')">Chuyen sang: ${next}</button>`;
+    }
+    footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}')">Huy don</button>`;
+  }
+  document.getElementById('order-detail-footer').innerHTML = footerHtml;
+  document.getElementById('order-detail-modal').classList.add('show');
+}
+
+async function updateOrderStatus(id, status) {
+  const res = await fetch(API + '/orders/' + id + '/status', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status}) });
+  if (res.ok) { toast('Da cap nhat trang thai'); closeModal('order-detail-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+async function cancelOrder(id) {
+  if (!confirm('Ban chac chan muon huy don hang nay?')) return;
+  const res = await fetch(API + '/orders/' + id + '/cancel', { method: 'POST' });
+  if (res.ok) { toast('Da huy don hang'); closeModal('order-detail-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+// REPORTS
+async function loadReports() {
+  const [invRes, ordRes, topRes, lowRes] = await Promise.all([
+    fetch(API + '/reports/inventory'),
+    fetch(API + '/reports/orders'),
+    fetch(API + '/reports/top-products'),
+    fetch(API + '/products/low-stock?threshold=10'),
+  ]);
+  const inv = await invRes.json();
+  const ord = await ordRes.json();
+  const top = await topRes.json();
+  const low = await lowRes.json();
+
+  document.getElementById('report-cards').innerHTML = `
+    <div class="report-card"><div class="number">${inv.total_products ?? 0}</div><div class="label">Tong san pham</div></div>
+    <div class="report-card"><div class="number">${inv.total_quantity ?? 0}</div><div class="label">Tong ton kho</div></div>
+    <div class="report-card"><div class="number">$${(inv.total_value ?? 0).toFixed(2)}</div><div class="label">Gia tri kho</div></div>
+    <div class="report-card"><div class="number">${ord.total_orders ?? 0}</div><div class="label">Tong don hang</div></div>
+    <div class="report-card"><div class="number">$${(ord.total_revenue ?? 0).toFixed(2)}</div><div class="label">Doanh thu</div></div>
+    <div class="report-card"><div class="number">${inv.low_stock_count ?? 0}</div><div class="label">Sap het hang</div></div>
+  `;
+
+  const topList = Array.isArray(top) ? top : (top.products || []);
+  document.getElementById('top-products-body').innerHTML = topList.length === 0
+    ? '<tr><td colspan="5" class="empty">Chua co du lieu</td></tr>'
+    : topList.map((p,i) => `<tr><td>${i+1}</td><td>${esc(p.sku||'')}</td><td>${esc(p.product_name||p.name||'')}</td><td>${p.total_sold||p.quantity_sold||0}</td><td>$${(p.total_revenue||p.revenue||0).toFixed(2)}</td></tr>`).join('');
+
+  document.getElementById('low-stock-body').innerHTML = low.length === 0
+    ? '<tr><td colspan="4" class="empty">Tat ca san pham du hang</td></tr>'
+    : low.map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td class="stock-low">${p.quantity}</td><td>${esc(p.location)}</td></tr>`).join('');
+}
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+// Init
+loadProducts();
+loadOrders();
+</script>
+</body>
+</html>

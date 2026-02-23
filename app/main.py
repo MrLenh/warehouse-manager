@@ -1,9 +1,14 @@
+import pathlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import orders, products, reports, webhooks
 from app.database import init_db
+
+STATIC_DIR = pathlib.Path(__file__).parent / "static"
 
 
 @asynccontextmanager
@@ -25,9 +30,12 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
 
 
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
 @app.get("/")
 def root():
-    return {"app": "Warehouse Manager", "docs": "/docs"}
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health")
