@@ -7,6 +7,7 @@ from app.models.order import OrderStatus
 
 class OrderItemCreate(BaseModel):
     product_id: str
+    variant_id: str = ""
     quantity: int = 1
 
 
@@ -39,7 +40,10 @@ class OrderStatusUpdate(BaseModel):
 class OrderItemOut(BaseModel):
     id: str
     product_id: str
+    variant_id: str = ""
     sku: str
+    variant_sku: str = ""
+    variant_label: str = ""
     product_name: str
     quantity: int
     unit_price: float

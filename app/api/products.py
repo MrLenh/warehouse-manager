@@ -6,7 +6,16 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.product import InventoryAdjust, ProductCreate, ProductOut, ProductUpdate
+from app.schemas.product import (
+    InventoryAdjust,
+    ProductCreate,
+    ProductOut,
+    ProductUpdate,
+    VariantCreate,
+    VariantInventoryAdjust,
+    VariantOut,
+    VariantUpdate,
+)
 from app.services import product_service
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -159,3 +168,49 @@ def get_qrcode(product_id: str, db: Session = Depends(get_db)):
     if not product.qr_code_path:
         raise HTTPException(404, "QR code not generated")
     return FileResponse(product.qr_code_path, media_type="image/png")
+
+
+# --- Variant endpoints ---
+
+@router.post("/{product_id}/variants", response_model=VariantOut, status_code=201)
+def create_variant(product_id: str, data: VariantCreate, db: Session = Depends(get_db)):
+    try:
+        variant = product_service.create_variant(db, product_id, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not variant:
+        raise HTTPException(404, "Product not found")
+    return variant
+
+
+@router.get("/{product_id}/variants", response_model=list[VariantOut])
+def list_variants(product_id: str, db: Session = Depends(get_db)):
+    product = product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(404, "Product not found")
+    return product.variants
+
+
+@router.patch("/variants/{variant_id}", response_model=VariantOut)
+def update_variant(variant_id: str, data: VariantUpdate, db: Session = Depends(get_db)):
+    variant = product_service.update_variant(db, variant_id, data)
+    if not variant:
+        raise HTTPException(404, "Variant not found")
+    return variant
+
+
+@router.delete("/variants/{variant_id}", status_code=204)
+def delete_variant(variant_id: str, db: Session = Depends(get_db)):
+    if not product_service.delete_variant(db, variant_id):
+        raise HTTPException(404, "Variant not found")
+
+
+@router.post("/variants/{variant_id}/inventory", response_model=VariantOut)
+def adjust_variant_inventory(variant_id: str, data: VariantInventoryAdjust, db: Session = Depends(get_db)):
+    try:
+        variant = product_service.adjust_variant_inventory(db, variant_id, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not variant:
+        raise HTTPException(404, "Variant not found")
+    return variant

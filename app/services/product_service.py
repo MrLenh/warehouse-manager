@@ -1,3 +1,4 @@
+import json
 import os
 
 import qrcode
@@ -5,8 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.inventory_log import InventoryLog
-from app.models.product import Product
-from app.schemas.product import InventoryAdjust, ProductCreate, ProductUpdate
+from app.models.product import Product, Variant
+from app.schemas.product import (
+    InventoryAdjust,
+    ProductCreate,
+    ProductUpdate,
+    VariantCreate,
+    VariantInventoryAdjust,
+    VariantUpdate,
+)
 
 
 def _generate_qr_code(product: Product) -> str:
@@ -31,6 +39,7 @@ def create_product(db: Session, data: ProductCreate) -> Product:
         price=data.price,
         quantity=data.quantity,
         location=data.location,
+        option_types=json.dumps(data.option_types),
     )
     db.add(product)
     db.flush()
@@ -46,6 +55,19 @@ def create_product(db: Session, data: ProductCreate) -> Product:
             note="Initial stock on product creation",
         )
         db.add(log)
+
+    # Create variants if provided
+    for v_data in data.variants:
+        variant = Variant(
+            product_id=product.id,
+            variant_sku=v_data.variant_sku,
+            attributes=json.dumps(v_data.attributes),
+            price_override=v_data.price_override,
+            weight_oz_override=v_data.weight_oz_override,
+            quantity=v_data.quantity,
+            location=v_data.location or product.location,
+        )
+        db.add(variant)
 
     db.commit()
     db.refresh(product)
@@ -71,7 +93,10 @@ def update_product(db: Session, product_id: str, data: ProductUpdate) -> Product
     product = get_product(db, product_id)
     if not product:
         return None
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+    if "option_types" in update_data:
+        update_data["option_types"] = json.dumps(update_data["option_types"])
+    for field, value in update_data.items():
         setattr(product, field, value)
     db.commit()
     db.refresh(product)
@@ -110,3 +135,79 @@ def get_inventory_logs(db: Session, product_id: str) -> list[InventoryLog]:
 
 def get_low_stock(db: Session, threshold: int = 5) -> list[Product]:
     return db.query(Product).filter(Product.quantity <= threshold).all()
+
+
+# --- Variant service ---
+
+def create_variant(db: Session, product_id: str, data: VariantCreate) -> Variant | None:
+    product = get_product(db, product_id)
+    if not product:
+        return None
+    existing = db.query(Variant).filter(Variant.variant_sku == data.variant_sku).first()
+    if existing:
+        raise ValueError(f"Variant SKU {data.variant_sku} already exists")
+    variant = Variant(
+        product_id=product_id,
+        variant_sku=data.variant_sku,
+        attributes=json.dumps(data.attributes),
+        price_override=data.price_override,
+        weight_oz_override=data.weight_oz_override,
+        quantity=data.quantity,
+        location=data.location or product.location,
+    )
+    db.add(variant)
+    db.commit()
+    db.refresh(variant)
+    return variant
+
+
+def get_variant(db: Session, variant_id: str) -> Variant | None:
+    return db.query(Variant).filter(Variant.id == variant_id).first()
+
+
+def get_variant_by_sku(db: Session, variant_sku: str) -> Variant | None:
+    return db.query(Variant).filter(Variant.variant_sku == variant_sku).first()
+
+
+def update_variant(db: Session, variant_id: str, data: VariantUpdate) -> Variant | None:
+    variant = get_variant(db, variant_id)
+    if not variant:
+        return None
+    update_data = data.model_dump(exclude_unset=True)
+    if "attributes" in update_data:
+        update_data["attributes"] = json.dumps(update_data["attributes"])
+    for field, value in update_data.items():
+        setattr(variant, field, value)
+    db.commit()
+    db.refresh(variant)
+    return variant
+
+
+def delete_variant(db: Session, variant_id: str) -> bool:
+    variant = get_variant(db, variant_id)
+    if not variant:
+        return False
+    db.delete(variant)
+    db.commit()
+    return True
+
+
+def adjust_variant_inventory(db: Session, variant_id: str, data: VariantInventoryAdjust) -> Variant | None:
+    variant = get_variant(db, variant_id)
+    if not variant:
+        return None
+    new_qty = variant.quantity + data.quantity
+    if new_qty < 0:
+        raise ValueError(f"Insufficient stock. Current: {variant.quantity}, requested change: {data.quantity}")
+    variant.quantity = new_qty
+    log = InventoryLog(
+        product_id=variant.product_id,
+        change=data.quantity,
+        reason=data.reason,
+        balance_after=new_qty,
+        note=f"[Variant {variant.variant_sku}] {data.note}",
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(variant)
+    return variant

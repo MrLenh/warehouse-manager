@@ -79,7 +79,10 @@ class OrderItem(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     order_id: Mapped[str] = mapped_column(String, ForeignKey("orders.id"), nullable=False)
     product_id: Mapped[str] = mapped_column(String, ForeignKey("products.id"), nullable=False)
+    variant_id: Mapped[str] = mapped_column(String, default="")
     sku: Mapped[str] = mapped_column(String, nullable=False)
+    variant_sku: Mapped[str] = mapped_column(String, default="")
+    variant_label: Mapped[str] = mapped_column(String, default="")  # e.g. "Red / M"
     product_name: Mapped[str] = mapped_column(String, default="")
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     unit_price: Mapped[float] = mapped_column(Float, default=0.0)

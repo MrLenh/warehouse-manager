@@ -1,7 +1,56 @@
+import json
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
+
+# --- Variant schemas ---
+
+class VariantCreate(BaseModel):
+    variant_sku: str
+    attributes: dict[str, str] = {}  # {"color": "Red", "size": "M"}
+    price_override: float = 0.0
+    weight_oz_override: float = 0.0
+    quantity: int = 0
+    location: str = ""
+
+
+class VariantUpdate(BaseModel):
+    attributes: dict[str, str] | None = None
+    price_override: float | None = None
+    weight_oz_override: float | None = None
+    location: str | None = None
+
+
+class VariantOut(BaseModel):
+    id: str
+    product_id: str
+    variant_sku: str
+    attributes: dict[str, str] = {}
+    price_override: float
+    weight_oz_override: float
+    quantity: int
+    location: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("attributes", mode="before")
+    @classmethod
+    def parse_attributes(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+
+class VariantInventoryAdjust(BaseModel):
+    quantity: int
+    reason: str = "adjustment"
+    note: str = ""
+
+
+# --- Product schemas ---
 
 class ProductCreate(BaseModel):
     sku: str
@@ -15,6 +64,8 @@ class ProductCreate(BaseModel):
     price: float = 0.0
     quantity: int = 0
     location: str = ""
+    option_types: list[str] = []  # e.g. ["color", "size"]
+    variants: list[VariantCreate] = []
 
 
 class ProductUpdate(BaseModel):
@@ -27,6 +78,7 @@ class ProductUpdate(BaseModel):
     height_in: float | None = None
     price: float | None = None
     location: str | None = None
+    option_types: list[str] | None = None
 
 
 class ProductOut(BaseModel):
@@ -43,10 +95,19 @@ class ProductOut(BaseModel):
     quantity: int
     location: str
     qr_code_path: str
+    option_types: list[str] = []
+    variants: list[VariantOut] = []
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("option_types", mode="before")
+    @classmethod
+    def parse_option_types(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
 
 
 class InventoryAdjust(BaseModel):

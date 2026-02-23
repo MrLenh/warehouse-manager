@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.inventory_log import InventoryLog
 from app.models.order import Order, OrderItem, OrderStatus
-from app.models.product import Product
+from app.models.product import Product, Variant
 from app.schemas.order import OrderCreate, OrderStatusUpdate
 
 
@@ -61,29 +61,64 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         product = db.query(Product).filter(Product.id == item_data.product_id).first()
         if not product:
             raise ValueError(f"Product {item_data.product_id} not found")
-        if product.quantity < item_data.quantity:
-            raise ValueError(f"Insufficient stock for {product.sku}. Available: {product.quantity}")
+
+        variant = None
+        variant_label = ""
+        if item_data.variant_id:
+            variant = db.query(Variant).filter(
+                Variant.id == item_data.variant_id,
+                Variant.product_id == product.id,
+            ).first()
+            if not variant:
+                raise ValueError(f"Variant {item_data.variant_id} not found for product {product.sku}")
+            if variant.quantity < item_data.quantity:
+                raise ValueError(f"Insufficient stock for variant {variant.variant_sku}. Available: {variant.quantity}")
+            # Build variant label from attributes
+            attrs = json.loads(variant.attributes) if isinstance(variant.attributes, str) else variant.attributes
+            variant_label = " / ".join(attrs.values()) if attrs else ""
+        else:
+            if product.quantity < item_data.quantity:
+                raise ValueError(f"Insufficient stock for {product.sku}. Available: {product.quantity}")
+
+        # Determine price: variant override > product price
+        unit_price = product.price
+        if variant and variant.price_override > 0:
+            unit_price = variant.price_override
 
         order_item = OrderItem(
             order_id=order.id,
             product_id=product.id,
+            variant_id=variant.id if variant else "",
             sku=product.sku,
+            variant_sku=variant.variant_sku if variant else "",
+            variant_label=variant_label,
             product_name=product.name,
             quantity=item_data.quantity,
-            unit_price=product.price,
+            unit_price=unit_price,
         )
         db.add(order_item)
 
-        # Deduct inventory
-        product.quantity -= item_data.quantity
-        log = InventoryLog(
-            product_id=product.id,
-            change=-item_data.quantity,
-            reason="order",
-            reference_id=order.id,
-            balance_after=product.quantity,
-            note=f"Reserved for order {order.order_number}",
-        )
+        # Deduct inventory from variant or product
+        if variant:
+            variant.quantity -= item_data.quantity
+            log = InventoryLog(
+                product_id=product.id,
+                change=-item_data.quantity,
+                reason="order",
+                reference_id=order.id,
+                balance_after=variant.quantity,
+                note=f"[Variant {variant.variant_sku}] Reserved for order {order.order_number}",
+            )
+        else:
+            product.quantity -= item_data.quantity
+            log = InventoryLog(
+                product_id=product.id,
+                change=-item_data.quantity,
+                reason="order",
+                reference_id=order.id,
+                balance_after=product.quantity,
+                note=f"Reserved for order {order.order_number}",
+            )
         db.add(log)
         total_items += item_data.quantity
 
@@ -135,18 +170,32 @@ def cancel_order(db: Session, order_id: str) -> Order | None:
 
     # Restore inventory
     for item in order.items:
-        product = db.query(Product).filter(Product.id == item.product_id).first()
-        if product:
-            product.quantity += item.quantity
-            log = InventoryLog(
-                product_id=product.id,
-                change=item.quantity,
-                reason="order_cancelled",
-                reference_id=order.id,
-                balance_after=product.quantity,
-                note=f"Restored from cancelled order {order.order_number}",
-            )
-            db.add(log)
+        if item.variant_id:
+            variant = db.query(Variant).filter(Variant.id == item.variant_id).first()
+            if variant:
+                variant.quantity += item.quantity
+                log = InventoryLog(
+                    product_id=item.product_id,
+                    change=item.quantity,
+                    reason="order_cancelled",
+                    reference_id=order.id,
+                    balance_after=variant.quantity,
+                    note=f"[Variant {variant.variant_sku}] Restored from cancelled order {order.order_number}",
+                )
+                db.add(log)
+        else:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                product.quantity += item.quantity
+                log = InventoryLog(
+                    product_id=product.id,
+                    change=item.quantity,
+                    reason="order_cancelled",
+                    reference_id=order.id,
+                    balance_after=product.quantity,
+                    note=f"Restored from cancelled order {order.order_number}",
+                )
+                db.add(log)
 
     order.status = OrderStatus.CANCELLED
     _add_status_history(order, OrderStatus.CANCELLED, "Order cancelled")
