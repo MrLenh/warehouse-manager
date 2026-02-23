@@ -11,6 +11,9 @@ class VariantCreate(BaseModel):
     attributes: dict[str, str] = {}  # {"color": "Red", "size": "M"}
     price_override: float = 0.0
     weight_oz_override: float = 0.0
+    length_in_override: float = 0.0
+    width_in_override: float = 0.0
+    height_in_override: float = 0.0
     quantity: int = 0
     location: str = ""
 
@@ -19,6 +22,9 @@ class VariantUpdate(BaseModel):
     attributes: dict[str, str] | None = None
     price_override: float | None = None
     weight_oz_override: float | None = None
+    length_in_override: float | None = None
+    width_in_override: float | None = None
+    height_in_override: float | None = None
     location: str | None = None
 
 
@@ -29,6 +35,9 @@ class VariantOut(BaseModel):
     attributes: dict[str, str] = {}
     price_override: float
     weight_oz_override: float
+    length_in_override: float
+    width_in_override: float
+    height_in_override: float
     quantity: int
     location: str
     created_at: datetime

@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -21,7 +22,11 @@ from app.services.qr_service import generate_bulk_qr_page, generate_qr_label, ge
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
-CSV_COLUMNS = ["sku", "name", "description", "category", "weight_oz", "length_in", "width_in", "height_in", "price", "quantity", "location"]
+CSV_COLUMNS = [
+    "sku", "name", "description", "category", "weight_oz", "length_in", "width_in", "height_in",
+    "price", "quantity", "location", "variant_sku", "attributes", "price_override",
+    "weight_oz_override", "length_in_override", "width_in_override", "height_in_override",
+]
 
 
 @router.post("", response_model=ProductOut, status_code=201)
@@ -46,8 +51,18 @@ def low_stock(threshold: int = 5, db: Session = Depends(get_db)):
 def download_import_template():
     buf = io.StringIO()
     writer = csv.writer(buf)
+    # Header
     writer.writerow(CSV_COLUMNS)
-    writer.writerow(["SP-001", "San pham mau", "Mo ta", "Dien tu", "16", "10", "8", "6", "29.99", "100", "A-01-01"])
+    # Product row (no variant)
+    writer.writerow(["SP-001", "San pham A", "Mo ta SP A", "Dien tu", "16", "10", "8", "6", "29.99", "100", "A-01-01", "", "", "", "", "", "", ""])
+    # Product with variants - parent row
+    writer.writerow(["SP-002", "San pham B (co variant)", "Mo ta SP B", "Thoi trang", "12", "8", "6", "4", "49.99", "0", "B-01-01", "", "", "", "", "", "", ""])
+    # Variant rows for SP-002
+    writer.writerow(["SP-002", "", "", "", "", "", "", "", "", "30", "B-01-01", "SP-002-RED-M", '{"color":"Red","size":"M"}', "51.99", "14", "9", "7", "5"])
+    writer.writerow(["SP-002", "", "", "", "", "", "", "", "", "20", "B-01-02", "SP-002-RED-L", '{"color":"Red","size":"L"}', "53.99", "16", "10", "8", "5"])
+    writer.writerow(["SP-002", "", "", "", "", "", "", "", "", "15", "B-02-01", "SP-002-BLUE-M", '{"color":"Blue","size":"M"}', "0", "0", "0", "0", "0"])
+    # Another simple product
+    writer.writerow(["SP-003", "San pham C", "", "Gia dung", "8", "5", "5", "3", "15.00", "200", "C-01-01", "", "", "", "", "", "", ""])
     buf.seek(0)
     return StreamingResponse(
         iter([buf.getvalue()]),
@@ -66,14 +81,63 @@ def import_products(file: UploadFile, db: Session = Depends(get_db)):
 
     created = 0
     updated = 0
+    variants_created = 0
+    variants_updated = 0
     errors = []
 
     for row_num, row in enumerate(reader, start=2):
         sku = (row.get("sku") or "").strip()
+        variant_sku = (row.get("variant_sku") or "").strip()
+
         if not sku:
             errors.append({"row": row_num, "error": "SKU is required"})
             continue
 
+        # --- Variant row ---
+        if variant_sku:
+            try:
+                parent = product_service.get_product_by_sku(db, sku)
+                if not parent:
+                    errors.append({"row": row_num, "sku": sku, "error": f"Parent product {sku} not found"})
+                    continue
+
+                attrs_raw = (row.get("attributes") or "").strip()
+                attrs = {}
+                if attrs_raw:
+                    attrs = json.loads(attrs_raw)
+
+                existing_variant = product_service.get_variant_by_sku(db, variant_sku)
+                if existing_variant:
+                    update_data = VariantUpdate(
+                        attributes=attrs if attrs else None,
+                        price_override=float(row.get("price_override") or 0) or None,
+                        weight_oz_override=float(row.get("weight_oz_override") or 0) or None,
+                        length_in_override=float(row.get("length_in_override") or 0) or None,
+                        width_in_override=float(row.get("width_in_override") or 0) or None,
+                        height_in_override=float(row.get("height_in_override") or 0) or None,
+                        location=(row.get("location") or "").strip() or None,
+                    )
+                    product_service.update_variant(db, existing_variant.id, update_data)
+                    variants_updated += 1
+                else:
+                    v_data = VariantCreate(
+                        variant_sku=variant_sku,
+                        attributes=attrs,
+                        price_override=float(row.get("price_override") or 0),
+                        weight_oz_override=float(row.get("weight_oz_override") or 0),
+                        length_in_override=float(row.get("length_in_override") or 0),
+                        width_in_override=float(row.get("width_in_override") or 0),
+                        height_in_override=float(row.get("height_in_override") or 0),
+                        quantity=int(row.get("quantity") or 0),
+                        location=(row.get("location") or "").strip(),
+                    )
+                    product_service.create_variant(db, parent.id, v_data)
+                    variants_created += 1
+            except (ValueError, TypeError) as e:
+                errors.append({"row": row_num, "sku": sku, "variant_sku": variant_sku, "error": str(e)})
+            continue
+
+        # --- Product row ---
         try:
             data = ProductCreate(
                 sku=sku,
@@ -111,7 +175,7 @@ def import_products(file: UploadFile, db: Session = Depends(get_db)):
             product_service.create_product(db, data)
             created += 1
 
-    return {"created": created, "updated": updated, "errors": errors}
+    return {"created": created, "updated": updated, "variants_created": variants_created, "variants_updated": variants_updated, "errors": errors}
 
 
 @router.get("/{product_id}", response_model=ProductOut)
@@ -159,6 +223,20 @@ def inventory_logs(product_id: str, db: Session = Depends(get_db)):
         }
         for log in logs
     ]
+
+
+@router.post("/{product_id}/generate-qr")
+def generate_qr(product_id: str, db: Session = Depends(get_db)):
+    """Generate and save QR code for a product that doesn't have one."""
+    product = product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(404, "Product not found")
+    from app.services.qr_service import generate_product_qr
+    path = generate_product_qr(product)
+    product.qr_code_path = path
+    db.commit()
+    db.refresh(product)
+    return {"qr_code_path": path}
 
 
 @router.get("/{product_id}/qrcode")

@@ -46,6 +46,9 @@ class Variant(Base):
     # Override parent product values (0 = use parent)
     price_override: Mapped[float] = mapped_column(Float, default=0.0)
     weight_oz_override: Mapped[float] = mapped_column(Float, default=0.0)
+    length_in_override: Mapped[float] = mapped_column(Float, default=0.0)
+    width_in_override: Mapped[float] = mapped_column(Float, default=0.0)
+    height_in_override: Mapped[float] = mapped_column(Float, default=0.0)
 
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     location: Mapped[str] = mapped_column(String, default="")
@@ -62,3 +65,15 @@ class Variant(Base):
     @property
     def effective_weight_oz(self) -> float:
         return self.weight_oz_override if self.weight_oz_override > 0 else self.product.weight_oz
+
+    @property
+    def effective_length_in(self) -> float:
+        return self.length_in_override if self.length_in_override > 0 else self.product.length_in
+
+    @property
+    def effective_width_in(self) -> float:
+        return self.width_in_override if self.width_in_override > 0 else self.product.width_in
+
+    @property
+    def effective_height_in(self) -> float:
+        return self.height_in_override if self.height_in_override > 0 else self.product.height_in

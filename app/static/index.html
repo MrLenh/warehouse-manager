@@ -110,6 +110,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadProducts()">Lam moi</button>
         <a href="/api/v1/products/import-template" class="btn btn-outline btn-sm" download>Tai mau CSV</a>
         <label class="btn btn-success btn-sm" style="margin:0">Import CSV<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-guide-modal').classList.add('show')" title="Huong dan import">?</button>
         <button class="btn btn-primary" onclick="openProductModal()">+ Them san pham</button>
       </div>
     </div>
@@ -341,7 +342,7 @@ tr:hover{background:#f8f9ff}
         <span id="variants-option-types" style="font-size:13px;color:#667eea"></span>
       </div>
       <table>
-        <thead><tr><th>Variant SKU</th><th>Attributes</th><th>Gia</th><th>Ton kho</th><th>Vi tri</th><th>Thao tac</th></tr></thead>
+        <thead><tr><th>Variant SKU</th><th>Attributes</th><th>Gia</th><th>KL (oz)</th><th>KT (LxWxH)</th><th>Ton kho</th><th>Vi tri</th><th>Thao tac</th></tr></thead>
         <tbody id="variants-body"></tbody>
       </table>
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8e8e8">
@@ -353,11 +354,69 @@ tr:hover{background:#f8f9ff}
         </div>
         <div id="v-attrs-container"></div>
         <div class="form-row">
-          <div class="form-group"><label>So luong</label><input type="number" id="v-qty" value="0"></div>
+          <div class="form-group"><label>Can nang (oz, 0 = theo SP goc)</label><input type="number" step="0.1" id="v-weight" placeholder="0"></div>
           <div class="form-group"><label>Vi tri</label><input type="text" id="v-location" placeholder="De trong = theo SP goc"></div>
+        </div>
+        <div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px">
+          <label style="display:block;margin-bottom:8px;font-weight:600;font-size:13px;color:#555">Kich thuoc (inches, 0 = theo SP goc)</label>
+          <div class="form-row-3">
+            <div class="form-group" style="margin:0"><label>Dai (L)</label><input type="number" step="0.1" id="v-length" placeholder="0"></div>
+            <div class="form-group" style="margin:0"><label>Rong (W)</label><input type="number" step="0.1" id="v-width" placeholder="0"></div>
+            <div class="form-group" style="margin:0"><label>Cao (H)</label><input type="number" step="0.1" id="v-height" placeholder="0"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>So luong</label><input type="number" id="v-qty" value="0"></div>
         </div>
         <button class="btn btn-success btn-sm" onclick="saveVariant()">Them variant</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT GUIDE MODAL -->
+<div class="modal-overlay" id="import-guide-modal">
+  <div class="modal" style="width:820px">
+    <div class="modal-header">
+      <h2>Huong dan Import CSV</h2>
+      <button class="modal-close" onclick="closeModal('import-guide-modal')">&times;</button>
+    </div>
+    <div class="modal-body" style="font-size:13px;line-height:1.7">
+      <p><strong>Cac cot trong file CSV:</strong></p>
+      <table style="font-size:12px;margin-bottom:16px">
+        <thead>
+          <tr><th>Cot</th><th>Bat buoc</th><th>Mo ta</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>sku</code></td><td>Co</td><td>Ma SKU san pham. Dong variant cung can cot nay (tro toi SP goc)</td></tr>
+          <tr><td><code>name</code></td><td>SP: Co</td><td>Ten san pham (chi can o dong SP, de trong o dong variant)</td></tr>
+          <tr><td><code>description</code></td><td>Khong</td><td>Mo ta san pham</td></tr>
+          <tr><td><code>category</code></td><td>Khong</td><td>Danh muc</td></tr>
+          <tr><td><code>weight_oz</code></td><td>Khong</td><td>Can nang (oz) cua SP goc</td></tr>
+          <tr><td><code>length_in</code>, <code>width_in</code>, <code>height_in</code></td><td>Khong</td><td>Kich thuoc (inches) cua SP goc</td></tr>
+          <tr><td><code>price</code></td><td>Khong</td><td>Gia SP goc</td></tr>
+          <tr><td><code>quantity</code></td><td>Khong</td><td>So luong ton kho (SP hoac variant)</td></tr>
+          <tr><td><code>location</code></td><td>Khong</td><td>Vi tri kho</td></tr>
+          <tr style="background:#f0f4ff"><td><code>variant_sku</code></td><td>Variant: Co</td><td>Ma SKU variant. <b>Neu co = dong variant</b>, neu trong = dong SP</td></tr>
+          <tr style="background:#f0f4ff"><td><code>attributes</code></td><td>Khong</td><td>JSON thuoc tinh, VD: <code>{"color":"Red","size":"M"}</code></td></tr>
+          <tr style="background:#f0f4ff"><td><code>price_override</code></td><td>Khong</td><td>Gia rieng variant (0 = dung gia SP goc)</td></tr>
+          <tr style="background:#f0f4ff"><td><code>weight_oz_override</code></td><td>Khong</td><td>Can nang rieng variant (0 = theo SP goc)</td></tr>
+          <tr style="background:#f0f4ff"><td><code>length_in_override</code>, <code>width_in_override</code>, <code>height_in_override</code></td><td>Khong</td><td>Kich thuoc rieng variant (0 = theo SP goc)</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Quy tac:</strong></p>
+      <ul style="padding-left:20px;margin-bottom:16px">
+        <li>Dong <b>khong co</b> <code>variant_sku</code> = <b>san pham</b>. SKU trung se cap nhat thong tin SP.</li>
+        <li>Dong <b>co</b> <code>variant_sku</code> = <b>variant</b>. Cot <code>sku</code> tro toi SP goc (SP phai ton tai truoc).</li>
+        <li>Variant voi <code>variant_sku</code> trung se cap nhat. Moi se tao moi.</li>
+        <li>Cac truong override de <b>0</b> se dung gia tri cua SP goc.</li>
+      </ul>
+      <p><strong>Vi du:</strong></p>
+      <div style="overflow-x:auto;background:#f8f9fa;padding:10px;border-radius:6px;font-family:monospace;font-size:11px;white-space:pre;margin-bottom:8px">sku,name,...,variant_sku,attributes,price_override,...
+SP-002,Ao thun,...,,,,...             &larr; Dong SP
+SP-002,,,,...,SP-002-RED-M,"{""color"":""Red""}",51.99,...  &larr; Variant
+SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (gia goc)</div>
+      <p>Bam <b>"Tai mau CSV"</b> de tai file mau day du.</p>
     </div>
   </div>
 </div>
@@ -474,7 +533,9 @@ function renderProducts(list) {
           <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Sua</button>
           <button class="btn btn-sm btn-primary" onclick="openVariantsModal('${p.id}')">Variants</button>
           <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Kho</button>
-          <button class="btn btn-sm btn-success" onclick="openQrModal('${p.id}')">QR</button>
+          ${p.qr_code_path
+            ? `<button class="btn btn-sm btn-success" onclick="openQrModal('${p.id}')">QR</button>`
+            : `<button class="btn btn-sm btn-danger" onclick="generateQr('${p.id}')">Tao QR</button>`}
         </td>
       </tr>`;}).join('');
 }
@@ -557,7 +618,8 @@ async function importCSV(input) {
   const res = await fetch(API + '/products/import', { method: 'POST', body: formData });
   const result = await res.json();
   if (res.ok) {
-    let msg = `Import: ${result.created} moi, ${result.updated} cap nhat`;
+    let msg = `Import: ${result.created} SP moi, ${result.updated} SP cap nhat`;
+    if (result.variants_created || result.variants_updated) msg += `, ${result.variants_created || 0} variant moi, ${result.variants_updated || 0} variant cap nhat`;
     if (result.errors.length > 0) msg += `, ${result.errors.length} loi`;
     toast(msg);
     loadProducts();
@@ -576,13 +638,17 @@ function openVariantsModal(productId) {
   const p = allProducts.find(x => x.id === productId);
   if (!p) return;
   document.getElementById('variants-modal-title').textContent = 'Variants - ' + p.name;
-  document.getElementById('variants-product-info').textContent = `SKU: ${p.sku} | Gia goc: $${p.price.toFixed(2)} | W: ${p.weight_oz}oz`;
+  document.getElementById('variants-product-info').textContent = `SKU: ${p.sku} | Gia: $${p.price.toFixed(2)} | ${p.weight_oz}oz | ${p.length_in}x${p.width_in}x${p.height_in} in`;
   const optTypes = p.option_types || [];
   document.getElementById('variants-option-types').textContent = optTypes.length > 0 ? optTypes.join(', ') : 'Chua thiet lap';
   renderVariantAttrInputs(optTypes);
   renderVariantsTable(p.variants || []);
   document.getElementById('v-sku').value = '';
   document.getElementById('v-price').value = '';
+  document.getElementById('v-weight').value = '';
+  document.getElementById('v-length').value = '';
+  document.getElementById('v-width').value = '';
+  document.getElementById('v-height').value = '';
   document.getElementById('v-qty').value = '0';
   document.getElementById('v-location').value = '';
   document.getElementById('variants-modal').classList.add('show');
@@ -613,14 +679,19 @@ function getVariantAttrs() {
 
 function renderVariantsTable(variants) {
   document.getElementById('variants-body').innerHTML = variants.length === 0
-    ? '<tr><td colspan="6" class="empty">Chua co variant</td></tr>'
+    ? '<tr><td colspan="8" class="empty">Chua co variant</td></tr>'
     : variants.map(v => {
         const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
         const attrStr = Object.entries(attrs).map(([k,val]) => `${k}: ${val}`).join(', ');
+        const wt = v.weight_oz_override > 0 ? v.weight_oz_override + ' oz' : 'Goc';
+        const dims = (v.length_in_override > 0 || v.width_in_override > 0 || v.height_in_override > 0)
+          ? `${v.length_in_override}x${v.width_in_override}x${v.height_in_override}` : 'Goc';
         return `<tr>
           <td><strong>${esc(v.variant_sku)}</strong></td>
           <td>${esc(attrStr)}</td>
           <td>${v.price_override > 0 ? '$'+v.price_override.toFixed(2) : 'Gia goc'}</td>
+          <td>${wt}</td>
+          <td>${dims}</td>
           <td class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${v.quantity}</td>
           <td>${esc(v.location)}</td>
           <td class="actions-cell">
@@ -637,6 +708,10 @@ async function saveVariant() {
     variant_sku: document.getElementById('v-sku').value,
     attributes: getVariantAttrs(),
     price_override: parseFloat(document.getElementById('v-price').value) || 0,
+    weight_oz_override: parseFloat(document.getElementById('v-weight').value) || 0,
+    length_in_override: parseFloat(document.getElementById('v-length').value) || 0,
+    width_in_override: parseFloat(document.getElementById('v-width').value) || 0,
+    height_in_override: parseFloat(document.getElementById('v-height').value) || 0,
     quantity: parseInt(document.getElementById('v-qty').value) || 0,
     location: document.getElementById('v-location').value,
   };
@@ -664,6 +739,18 @@ async function adjustVariantStock(variantId) {
 }
 
 // QR CODES
+async function generateQr(productId) {
+  const res = await fetch(API + '/products/' + productId + '/generate-qr', { method: 'POST' });
+  if (res.ok) {
+    toast('Da tao QR code');
+    await loadProducts();
+    openQrModal(productId);
+  } else {
+    const e = await res.json();
+    toast(e.detail || 'Loi tao QR', 'error');
+  }
+}
+
 function openQrModal(productId) {
   const p = allProducts.find(x => x.id === productId);
   if (!p) return;

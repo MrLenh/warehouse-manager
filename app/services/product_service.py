@@ -57,6 +57,9 @@ def create_product(db: Session, data: ProductCreate) -> Product:
             attributes=json.dumps(v_data.attributes),
             price_override=v_data.price_override,
             weight_oz_override=v_data.weight_oz_override,
+            length_in_override=v_data.length_in_override,
+            width_in_override=v_data.width_in_override,
+            height_in_override=v_data.height_in_override,
             quantity=v_data.quantity,
             location=v_data.location or product.location,
         )
@@ -145,6 +148,9 @@ def create_variant(db: Session, product_id: str, data: VariantCreate) -> Variant
         attributes=json.dumps(data.attributes),
         price_override=data.price_override,
         weight_oz_override=data.weight_oz_override,
+        length_in_override=data.length_in_override,
+        width_in_override=data.width_in_override,
+        height_in_override=data.height_in_override,
         quantity=data.quantity,
         location=data.location or product.location,
     )
