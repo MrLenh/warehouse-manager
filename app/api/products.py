@@ -1,8 +1,8 @@
 import csv
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,6 +17,7 @@ from app.schemas.product import (
     VariantUpdate,
 )
 from app.services import product_service
+from app.services.qr_service import generate_bulk_qr_page, generate_qr_label, generate_variant_qr
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -162,12 +163,74 @@ def inventory_logs(product_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{product_id}/qrcode")
 def get_qrcode(product_id: str, db: Session = Depends(get_db)):
+    """Get QR code label for a product (regenerated on-the-fly with styled label)."""
     product = product_service.get_product(db, product_id)
     if not product:
         raise HTTPException(404, "Product not found")
-    if not product.qr_code_path:
-        raise HTTPException(404, "QR code not generated")
-    return FileResponse(product.qr_code_path, media_type="image/png")
+    img_bytes = generate_qr_label(
+        sku=product.sku,
+        name=product.name,
+        product_id=product.id,
+        location=product.location,
+        price=product.price,
+    )
+    return Response(content=img_bytes, media_type="image/png")
+
+
+@router.get("/{product_id}/qrcode/bulk")
+def get_bulk_qrcode(product_id: str, db: Session = Depends(get_db)):
+    """Get a printable sheet with QR labels for product + all variants."""
+    product = product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(404, "Product not found")
+    img_bytes = generate_bulk_qr_page(product, product.variants)
+    return Response(content=img_bytes, media_type="image/png")
+
+
+@router.get("/variants/{variant_id}/qrcode")
+def get_variant_qrcode(variant_id: str, db: Session = Depends(get_db)):
+    """Get QR code label for a specific variant."""
+    variant = product_service.get_variant(db, variant_id)
+    if not variant:
+        raise HTTPException(404, "Variant not found")
+    product = product_service.get_product(db, variant.product_id)
+    img_bytes = generate_variant_qr(variant, product)
+    return Response(content=img_bytes, media_type="image/png")
+
+
+@router.get("/qr/lookup")
+def qr_lookup(sku: str = Query(..., description="SKU or variant_sku from QR scan"), db: Session = Depends(get_db)):
+    """Lookup product/variant by SKU (for QR scan)."""
+    # Try variant first
+    variant = product_service.get_variant_by_sku(db, sku)
+    if variant:
+        product = product_service.get_product(db, variant.product_id)
+        return {
+            "type": "variant",
+            "product_id": product.id,
+            "variant_id": variant.id,
+            "sku": product.sku,
+            "variant_sku": variant.variant_sku,
+            "name": product.name,
+            "price": variant.effective_price,
+            "quantity": variant.quantity,
+            "location": variant.location or product.location,
+        }
+    # Try product
+    product = product_service.get_product_by_sku(db, sku)
+    if product:
+        return {
+            "type": "product",
+            "product_id": product.id,
+            "variant_id": "",
+            "sku": product.sku,
+            "variant_sku": "",
+            "name": product.name,
+            "price": product.price,
+            "quantity": product.quantity,
+            "location": product.location,
+        }
+    raise HTTPException(404, f"No product or variant found with SKU: {sku}")
 
 
 # --- Variant endpoints ---

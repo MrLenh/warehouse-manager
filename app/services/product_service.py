@@ -1,10 +1,7 @@
 import json
-import os
 
-import qrcode
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.inventory_log import InventoryLog
 from app.models.product import Product, Variant
 from app.schemas.product import (
@@ -15,15 +12,11 @@ from app.schemas.product import (
     VariantInventoryAdjust,
     VariantUpdate,
 )
+from app.services.qr_service import generate_product_qr
 
 
 def _generate_qr_code(product: Product) -> str:
-    os.makedirs(settings.QR_CODE_DIR, exist_ok=True)
-    data = f"SKU:{product.sku}|ID:{product.id}|NAME:{product.name}"
-    img = qrcode.make(data)
-    path = os.path.join(settings.QR_CODE_DIR, f"{product.sku}.png")
-    img.save(path)
-    return path
+    return generate_product_qr(product)
 
 
 def create_product(db: Session, data: ProductCreate) -> Product:

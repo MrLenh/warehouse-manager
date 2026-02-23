@@ -397,6 +397,23 @@ tr:hover{background:#f8f9ff}
   </div>
 </div>
 
+<!-- QR CODE MODAL -->
+<div class="modal-overlay" id="qr-modal">
+  <div class="modal" style="width:900px">
+    <div class="modal-header">
+      <h2 id="qr-modal-title">QR Codes</h2>
+      <button class="modal-close" onclick="closeModal('qr-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" id="qr-print-btn" onclick="printQrPage()">In tat ca QR</button>
+        <button class="btn btn-outline btn-sm" id="qr-bulk-btn">Tai trang in (PNG)</button>
+      </div>
+      <div id="qr-body" style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center"></div>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = '/api/v1';
 let allProducts = [];
@@ -457,6 +474,7 @@ function renderProducts(list) {
           <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Sua</button>
           <button class="btn btn-sm btn-primary" onclick="openVariantsModal('${p.id}')">Variants</button>
           <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Kho</button>
+          <button class="btn btn-sm btn-success" onclick="openQrModal('${p.id}')">QR</button>
         </td>
       </tr>`;}).join('');
 }
@@ -643,6 +661,57 @@ async function adjustVariantStock(variantId) {
   });
   if (res.ok) { toast('Da cap nhat ton kho variant'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
   else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+// QR CODES
+function openQrModal(productId) {
+  const p = allProducts.find(x => x.id === productId);
+  if (!p) return;
+  document.getElementById('qr-modal-title').textContent = 'QR Codes - ' + p.name;
+
+  // Bulk download button
+  document.getElementById('qr-bulk-btn').onclick = () => {
+    window.open(API + '/products/' + productId + '/qrcode/bulk', '_blank');
+  };
+
+  // Build QR cards: product + variants
+  let html = '';
+  // Product QR
+  html += `<div style="text-align:center;border:1px solid #e8e8e8;border-radius:12px;padding:12px;background:#fafafa">
+    <img src="${API}/products/${p.id}/qrcode" alt="QR ${esc(p.sku)}" style="max-width:280px;border-radius:8px">
+    <div style="margin-top:8px;font-size:12px;color:#888">San pham goc</div>
+    <a href="${API}/products/${p.id}/qrcode" download="${p.sku}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Tai xuong</a>
+  </div>`;
+
+  // Variant QRs
+  if (p.variants && p.variants.length > 0) {
+    for (const v of p.variants) {
+      const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
+      const attrStr = Object.values(attrs).join(' / ') || v.variant_sku;
+      html += `<div style="text-align:center;border:1px solid #e8e8e8;border-radius:12px;padding:12px;background:#fafafa">
+        <img src="${API}/products/variants/${v.id}/qrcode" alt="QR ${esc(v.variant_sku)}" style="max-width:280px;border-radius:8px">
+        <div style="margin-top:8px;font-size:12px;color:#888">${esc(attrStr)}</div>
+        <a href="${API}/products/variants/${v.id}/qrcode" download="${v.variant_sku}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Tai xuong</a>
+      </div>`;
+    }
+  }
+
+  document.getElementById('qr-body').innerHTML = html;
+  document.getElementById('qr-modal').classList.add('show');
+}
+
+function printQrPage() {
+  const content = document.getElementById('qr-body').innerHTML;
+  const win = window.open('', '_blank');
+  win.document.write(`<html><head><title>Print QR Codes</title><style>
+    body{font-family:sans-serif;padding:20px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
+    div{text-align:center;border:1px solid #ccc;border-radius:8px;padding:12px;page-break-inside:avoid}
+    img{max-width:280px}
+    .btn{display:none}
+    @media print{body{padding:0;gap:8px} div{border:1px solid #ddd;padding:8px}}
+  </style></head><body>${content}</body></html>`);
+  win.document.close();
+  win.onload = () => { win.print(); };
 }
 
 // INVENTORY
