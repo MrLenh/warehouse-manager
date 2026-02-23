@@ -502,9 +502,14 @@ const CARRIERS = {
 let defaultCarrier = 'USPS';
 let defaultService = 'GroundAdvantage';
 
+let warehouseConfigured = false;
+
 // Load config defaults
 fetch(API + '/shipping/defaults').then(r => r.ok ? r.json() : null).then(d => {
-  if (d) { defaultCarrier = d.carrier; defaultService = d.service; }
+  if (d) {
+    defaultCarrier = d.carrier; defaultService = d.service;
+    if (d.warehouse && d.warehouse.street1) warehouseConfigured = true;
+  }
 }).catch(() => {});
 
 // Tabs
@@ -1094,10 +1099,18 @@ async function getRates(orderId) {
   ratesDiv.innerHTML = '<em>Dang lay gia...</em>';
   try {
     const res = await fetch(API + '/orders/' + orderId + '/rates');
-    if (!res.ok) { const e = await res.json(); ratesDiv.innerHTML = '<span style="color:red">' + esc(e.detail || 'Loi') + '</span>'; return; }
+    if (!res.ok) {
+      let errMsg;
+      try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
+      ratesDiv.innerHTML = '<span style="color:red">' + esc(errMsg || 'Loi lay gia') + '</span>';
+      return;
+    }
     const data = await res.json();
     const rates = data.rates || [];
-    if (rates.length === 0) { ratesDiv.innerHTML = '<em>Khong co gia nao</em>'; return; }
+    if (rates.length === 0) {
+      ratesDiv.innerHTML = '<em style="color:orange">Khong co rates. Kiem tra dia chi nguoi nhan va dia chi kho (WAREHOUSE_* trong .env).</em>';
+      return;
+    }
     ratesDiv.innerHTML = '<table style="width:100%;font-size:13px"><thead><tr><th>Carrier</th><th>Service</th><th>Gia</th><th>Ngay</th><th></th></tr></thead><tbody>' +
       rates.map(r => `<tr>
         <td>${esc(r.carrier)}</td><td>${esc(r.service)}</td>

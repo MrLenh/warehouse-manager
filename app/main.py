@@ -71,9 +71,20 @@ def get_config():
 
 @app.get("/api/v1/shipping/defaults")
 def get_shipping_defaults():
-    """Return default carrier & service from config."""
+    """Return default carrier & service and warehouse address from config."""
     from app.config import settings
-    return {"carrier": settings.DEFAULT_CARRIER, "service": settings.DEFAULT_SERVICE}
+    return {
+        "carrier": settings.DEFAULT_CARRIER,
+        "service": settings.DEFAULT_SERVICE,
+        "warehouse": {
+            "name": settings.WAREHOUSE_NAME,
+            "street1": settings.WAREHOUSE_STREET1,
+            "city": settings.WAREHOUSE_CITY,
+            "state": settings.WAREHOUSE_STATE,
+            "zip": settings.WAREHOUSE_ZIP,
+            "country": settings.WAREHOUSE_COUNTRY,
+        },
+    }
 
 
 @app.get("/health")

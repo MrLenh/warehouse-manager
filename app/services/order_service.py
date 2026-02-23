@@ -55,6 +55,14 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         order.ship_from_state = data.ship_from.state
         order.ship_from_zip = data.ship_from.zip
         order.ship_from_country = data.ship_from.country
+    elif settings.WAREHOUSE_STREET1:
+        # Use warehouse config as default ship_from
+        order.ship_from_name = settings.WAREHOUSE_NAME
+        order.ship_from_street1 = settings.WAREHOUSE_STREET1
+        order.ship_from_city = settings.WAREHOUSE_CITY
+        order.ship_from_state = settings.WAREHOUSE_STATE
+        order.ship_from_zip = settings.WAREHOUSE_ZIP
+        order.ship_from_country = settings.WAREHOUSE_COUNTRY
 
     db.add(order)
     db.flush()

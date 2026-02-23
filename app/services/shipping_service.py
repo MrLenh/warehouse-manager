@@ -78,18 +78,48 @@ def _find_rate(rates, carrier: str, service: str):
     return min(rates, key=lambda r: float(r.rate))
 
 
-def _create_shipment(client, order: Order, db: Session):
-    """Create EasyPost shipment for an order."""
-    parcel = _calc_parcel(order, db)
-    return client.shipment.create(
-        from_address={
+def _get_from_address(order: Order) -> dict:
+    """Get ship-from address: order's address if set, otherwise warehouse config."""
+    # Use order's ship_from if it has a street address
+    if order.ship_from_street1:
+        return {
             "name": order.ship_from_name,
             "street1": order.ship_from_street1,
             "city": order.ship_from_city,
             "state": order.ship_from_state,
             "zip": order.ship_from_zip,
             "country": order.ship_from_country,
-        },
+        }
+
+    # Fallback to warehouse config
+    if not settings.WAREHOUSE_STREET1:
+        raise ValueError(
+            "Chua cau hinh dia chi kho (warehouse). "
+            "Vui long set WAREHOUSE_STREET1, WAREHOUSE_CITY, WAREHOUSE_STATE, WAREHOUSE_ZIP trong .env "
+            "hoac nhap dia chi gui hang khi tao don."
+        )
+
+    return {
+        "name": settings.WAREHOUSE_NAME,
+        "street1": settings.WAREHOUSE_STREET1,
+        "city": settings.WAREHOUSE_CITY,
+        "state": settings.WAREHOUSE_STATE,
+        "zip": settings.WAREHOUSE_ZIP,
+        "country": settings.WAREHOUSE_COUNTRY,
+    }
+
+
+def _create_shipment(client, order: Order, db: Session):
+    """Create EasyPost shipment for an order."""
+    parcel = _calc_parcel(order, db)
+    from_addr = _get_from_address(order)
+
+    # Validate to_address has required fields
+    if not order.ship_to_street1 or not order.ship_to_zip:
+        raise ValueError("Dia chi nguoi nhan thieu street hoac zip code.")
+
+    return client.shipment.create(
+        from_address=from_addr,
         to_address={
             "name": order.ship_to_name,
             "street1": order.ship_to_street1,

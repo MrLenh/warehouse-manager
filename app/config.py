@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     DEFAULT_CARRIER: str = "USPS"
     DEFAULT_SERVICE: str = "GroundAdvantage"
 
+    # Default warehouse (ship-from) address
+    WAREHOUSE_NAME: str = "Warehouse"
+    WAREHOUSE_STREET1: str = ""
+    WAREHOUSE_CITY: str = ""
+    WAREHOUSE_STATE: str = ""
+    WAREHOUSE_ZIP: str = ""
+    WAREHOUSE_COUNTRY: str = "US"
+
     # Webhook: list of customer callback URLs (comma-separated)
     WEBHOOK_URLS: str = ""
 
