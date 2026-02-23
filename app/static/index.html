@@ -643,6 +643,13 @@ async function importOrderCSV(input) {
     let msg = `Import: ${result.created} don hang moi`;
     if (result.errors && result.errors.length > 0) msg += `, ${result.errors.length} loi`;
     toast(msg);
+    if (result.created_details && result.created_details.length > 0) {
+      console.log('Import details:', result.created_details);
+      result.created_details.forEach(d => {
+        const items = d.items.map(i => `${i.item_name} x${i.quantity}`).join(', ');
+        console.log(`  ${d.order_name}: ${items}`);
+      });
+    }
     if (result.errors && result.errors.length > 0) {
       console.log('Import errors:', result.errors);
       toast('Xem Console (F12) de biet chi tiet loi', 'error');

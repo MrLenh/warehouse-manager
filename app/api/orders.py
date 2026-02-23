@@ -18,7 +18,7 @@ ORDER_CSV_COLUMNS = [
     "order_name", "customer_name", "customer_email", "customer_phone",
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
-    "sku", "quantity", "notes",
+    "sku", "item_name", "quantity", "notes",
 ]
 
 
@@ -52,19 +52,19 @@ def download_order_import_template():
     writer.writerow([
         "Don hang A", "Nguyen Van A", "a@email.com", "0901234567",
         "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "VN",
-        "SP-001", "2", "Giao buoi sang",
+        "SP-001", "San pham A", "2", "Giao buoi sang",
     ])
     # Order 2: multiple items - first row has full info
     writer.writerow([
         "Don hang B", "Tran Thi B", "b@email.com", "0912345678",
         "Tran Thi B", "456 Hai Ba Trung", "Phong 302", "Ha Noi", "HN", "10000", "VN",
-        "SP-002-RED-M", "1", "Can boc qua",
+        "SP-002-RED-M", "San pham B - Red M", "1", "Can boc qua",
     ])
     # Order 2: additional item row - only needs sku + quantity (same order_name)
     writer.writerow([
         "Don hang B", "", "", "",
         "", "", "", "", "", "", "",
-        "SP-003", "3", "",
+        "SP-003", "San pham C", "3", "",
     ])
     buf.seek(0)
     return StreamingResponse(
@@ -125,8 +125,11 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
             }
             group_order.append(order_name)
 
+        item_name = (row.get("item_name") or "").strip()
+
         order_groups[order_name]["items"].append({
             "sku": sku,
+            "item_name": item_name,
             "quantity": quantity,
             "row": row_num,
         })
@@ -143,6 +146,7 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
     from app.services import product_service
 
     created = 0
+    created_details = []
     for order_name in group_order:
         group = order_groups[order_name]
 
@@ -151,15 +155,20 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
         has_error = False
         for item in group["items"]:
             sku_val = item["sku"]
+            csv_item_name = item["item_name"]
             row_num = item["row"]
 
             # Try variant_sku first
             variant = product_service.get_variant_by_sku(db, sku_val)
             if variant:
+                product = product_service.get_product(db, variant.product_id)
+                resolved_name = csv_item_name or f"{product.name} ({variant.variant_sku})"
                 resolved_items.append({
                     "product_id": variant.product_id,
                     "variant_id": variant.id,
                     "quantity": item["quantity"],
+                    "resolved_name": resolved_name,
+                    "sku": sku_val,
                 })
                 continue
 
@@ -179,6 +188,8 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
                     "product_id": product.id,
                     "variant_id": "",
                     "quantity": item["quantity"],
+                    "resolved_name": csv_item_name or product.name,
+                    "sku": sku_val,
                 })
                 continue
 
@@ -219,10 +230,17 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
         try:
             order_service.create_order(db, order_data)
             created += 1
+            created_details.append({
+                "order_name": order_name,
+                "items": [
+                    {"sku": ri["sku"], "item_name": ri["resolved_name"], "quantity": ri["quantity"]}
+                    for ri in resolved_items
+                ],
+            })
         except ValueError as e:
             errors.append({"order_name": order_name, "error": str(e)})
 
-    return {"created": created, "errors": errors}
+    return {"created": created, "created_details": created_details, "errors": errors}
 
 
 @router.get("/{order_id}", response_model=OrderOut)
