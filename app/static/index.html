@@ -101,13 +101,15 @@ tr:hover{background:#f8f9ff}
   <div class="panel active" id="panel-products">
     <div class="toolbar">
       <input type="text" class="search" id="search-products" placeholder="Tim kiem san pham...">
-      <div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadProducts()">Lam moi</button>
+        <a href="/api/v1/products/import-template" class="btn btn-outline btn-sm" download>Tai mau CSV</a>
+        <label class="btn btn-success btn-sm" style="margin:0">Import CSV<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
         <button class="btn btn-primary" onclick="openProductModal()">+ Them san pham</button>
       </div>
     </div>
     <table>
-      <thead><tr><th>SKU</th><th>Ten</th><th>Danh muc</th><th>Gia</th><th>Ton kho</th><th>Vi tri</th><th>Thao tac</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Ten</th><th>Danh muc</th><th>Gia</th><th>W (oz)</th><th>L x W x H (in)</th><th>Ton kho</th><th>Vi tri</th><th>Thao tac</th></tr></thead>
       <tbody id="products-body"></tbody>
     </table>
   </div>
@@ -179,6 +181,14 @@ tr:hover{background:#f8f9ff}
         <div class="form-group"><label>Danh muc</label><input type="text" id="p-category" placeholder="VD: Dien tu"></div>
         <div class="form-group"><label>Gia (USD)</label><input type="number" step="0.01" id="p-price" placeholder="0.00"></div>
         <div class="form-group"><label>Can nang (oz)</label><input type="number" step="0.1" id="p-weight" placeholder="0"></div>
+      </div>
+      <div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px">
+        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:13px;color:#555">Kich thuoc dong goi (inches)</label>
+        <div class="form-row-3">
+          <div class="form-group" style="margin:0"><label>Dai (L)</label><input type="number" step="0.1" id="p-length" placeholder="0"></div>
+          <div class="form-group" style="margin:0"><label>Rong (W)</label><input type="number" step="0.1" id="p-width" placeholder="0"></div>
+          <div class="form-group" style="margin:0"><label>Cao (H)</label><input type="number" step="0.1" id="p-height" placeholder="0"></div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>So luong</label><input type="number" id="p-qty" placeholder="0"></div>
@@ -303,19 +313,23 @@ function renderProducts(list) {
   const q = document.getElementById('search-products').value.toLowerCase();
   const filtered = list.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
   document.getElementById('products-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="7" class="empty">Khong co san pham nao</td></tr>'
-    : filtered.map(p => `<tr>
+    ? '<tr><td colspan="9" class="empty">Khong co san pham nao</td></tr>'
+    : filtered.map(p => {
+        const dims = (p.length_in && p.width_in && p.height_in) ? `${p.length_in} x ${p.width_in} x ${p.height_in}` : '-';
+        return `<tr>
         <td><strong>${esc(p.sku)}</strong></td>
         <td>${esc(p.name)}</td>
         <td>${esc(p.category)}</td>
         <td>$${p.price.toFixed(2)}</td>
+        <td>${p.weight_oz || '-'}</td>
+        <td>${dims}</td>
         <td class="${p.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${p.quantity}</td>
         <td>${esc(p.location)}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Sua</button>
           <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Kho</button>
         </td>
-      </tr>`).join('');
+      </tr>`;}).join('');
 }
 
 document.getElementById('search-products').addEventListener('input', () => renderProducts(allProducts));
@@ -330,6 +344,9 @@ function openProductModal(product = null) {
   document.getElementById('p-category').value = product ? product.category : '';
   document.getElementById('p-price').value = product ? product.price : '';
   document.getElementById('p-weight').value = product ? product.weight_oz : '';
+  document.getElementById('p-length').value = product ? product.length_in : '';
+  document.getElementById('p-width').value = product ? product.width_in : '';
+  document.getElementById('p-height').value = product ? product.height_in : '';
   document.getElementById('p-qty').value = product ? product.quantity : '';
   document.getElementById('p-location').value = product ? product.location : '';
   if (product) { document.getElementById('p-qty').disabled = true; }
@@ -351,6 +368,9 @@ async function saveProduct() {
       category: document.getElementById('p-category').value,
       price: parseFloat(document.getElementById('p-price').value) || 0,
       weight_oz: parseFloat(document.getElementById('p-weight').value) || 0,
+      length_in: parseFloat(document.getElementById('p-length').value) || 0,
+      width_in: parseFloat(document.getElementById('p-width').value) || 0,
+      height_in: parseFloat(document.getElementById('p-height').value) || 0,
       location: document.getElementById('p-location').value,
     };
     const res = await fetch(API + '/products/' + editId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -364,6 +384,9 @@ async function saveProduct() {
       category: document.getElementById('p-category').value,
       price: parseFloat(document.getElementById('p-price').value) || 0,
       weight_oz: parseFloat(document.getElementById('p-weight').value) || 0,
+      length_in: parseFloat(document.getElementById('p-length').value) || 0,
+      width_in: parseFloat(document.getElementById('p-width').value) || 0,
+      height_in: parseFloat(document.getElementById('p-height').value) || 0,
       quantity: parseInt(document.getElementById('p-qty').value) || 0,
       location: document.getElementById('p-location').value,
     };
@@ -371,6 +394,25 @@ async function saveProduct() {
     if (res.ok) { toast('Da them san pham moi'); closeModal('product-modal'); loadProducts(); }
     else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
   }
+}
+
+// CSV IMPORT
+async function importCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(API + '/products/import', { method: 'POST', body: formData });
+  const result = await res.json();
+  if (res.ok) {
+    let msg = `Import: ${result.created} moi, ${result.updated} cap nhat`;
+    if (result.errors.length > 0) msg += `, ${result.errors.length} loi`;
+    toast(msg);
+    loadProducts();
+  } else {
+    toast(result.detail || 'Loi import', 'error');
+  }
+  input.value = '';
 }
 
 // INVENTORY
@@ -506,6 +548,10 @@ async function viewOrder(id) {
   const curIdx = statusFlow.indexOf(o.status);
   let footerHtml = '';
   if (o.status !== 'cancelled' && o.status !== 'delivered') {
+    // Buy label button - available before label_purchased
+    if (!o.label_url && curIdx < 4) {
+      footerHtml += `<button class="btn btn-primary" onclick="buyLabel('${o.id}')">Mua tracking / label</button>`;
+    }
     if (curIdx < statusFlow.length - 1) {
       const next = statusFlow[curIdx + 1];
       footerHtml += `<button class="btn btn-success" onclick="updateOrderStatus('${o.id}','${next}')">Chuyen sang: ${next}</button>`;
@@ -527,6 +573,25 @@ async function cancelOrder(id) {
   const res = await fetch(API + '/orders/' + id + '/cancel', { method: 'POST' });
   if (res.ok) { toast('Da huy don hang'); closeModal('order-detail-modal'); loadOrders(); }
   else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+}
+
+// BUY LABEL
+async function buyLabel(orderId) {
+  if (!confirm('Mua shipping label cho don hang nay? He thong se tu dong tinh kich thuoc va can nang tu san pham.')) return;
+  toast('Dang mua label...', 'success');
+  const res = await fetch(API + '/orders/' + orderId + '/buy-label', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({carrier: 'USPS', service: 'Priority'}),
+  });
+  if (res.ok) {
+    toast('Da mua label thanh cong!');
+    closeModal('order-detail-modal');
+    loadOrders();
+  } else {
+    const e = await res.json();
+    toast(e.detail || 'Loi mua label', 'error');
+  }
 }
 
 // REPORTS

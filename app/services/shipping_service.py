@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.order import Order, OrderStatus
+from app.models.product import Product
 from app.services.order_service import _add_status_history
 
 
@@ -10,6 +11,34 @@ def _get_client() -> easypost.EasyPostClient:
     if not settings.EASYPOST_API_KEY:
         raise RuntimeError("EASYPOST_API_KEY not configured")
     return easypost.EasyPostClient(settings.EASYPOST_API_KEY)
+
+
+def _calc_parcel(order: Order, db: Session) -> dict:
+    """Calculate parcel weight and dimensions from product data."""
+    total_weight_oz = 0.0
+    max_length = 0.0
+    max_width = 0.0
+    total_height = 0.0
+
+    for item in order.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if product and product.weight_oz > 0:
+            total_weight_oz += product.weight_oz * item.quantity
+        else:
+            total_weight_oz += 8.0 * item.quantity  # fallback 8oz
+
+        if product:
+            max_length = max(max_length, product.length_in)
+            max_width = max(max_width, product.width_in)
+            total_height += product.height_in * item.quantity
+
+    parcel = {"weight": total_weight_oz}
+    if max_length > 0 and max_width > 0 and total_height > 0:
+        parcel["length"] = max_length
+        parcel["width"] = max_width
+        parcel["height"] = total_height
+
+    return parcel
 
 
 def buy_label(db: Session, order_id: str, carrier: str = "USPS", service: str = "Priority") -> Order:
@@ -20,8 +49,7 @@ def buy_label(db: Session, order_id: str, carrier: str = "USPS", service: str = 
         raise ValueError("Label already purchased for this order")
 
     client = _get_client()
-
-    total_weight_oz = sum(item.quantity * 8.0 for item in order.items)  # default 8oz per item
+    parcel = _calc_parcel(order, db)
 
     shipment = client.shipment.create(
         from_address={
@@ -41,9 +69,7 @@ def buy_label(db: Session, order_id: str, carrier: str = "USPS", service: str = 
             "zip": order.ship_to_zip,
             "country": order.ship_to_country,
         },
-        parcel={
-            "weight": total_weight_oz,
-        },
+        parcel=parcel,
     )
 
     # Find matching rate
@@ -54,7 +80,6 @@ def buy_label(db: Session, order_id: str, carrier: str = "USPS", service: str = 
             break
 
     if not selected_rate:
-        # Fallback: pick the lowest rate
         selected_rate = shipment.lowest_rate()
 
     bought = client.shipment.buy(shipment.id, rate=selected_rate)
@@ -81,7 +106,7 @@ def get_rates(order_id: str, db: Session) -> list[dict]:
         raise ValueError("Order not found")
 
     client = _get_client()
-    total_weight_oz = sum(item.quantity * 8.0 for item in order.items)
+    parcel = _calc_parcel(order, db)
 
     shipment = client.shipment.create(
         from_address={
@@ -101,9 +126,7 @@ def get_rates(order_id: str, db: Session) -> list[dict]:
             "zip": order.ship_to_zip,
             "country": order.ship_to_country,
         },
-        parcel={
-            "weight": total_weight_oz,
-        },
+        parcel=parcel,
     )
 
     return [

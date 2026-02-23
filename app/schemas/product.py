@@ -9,6 +9,9 @@ class ProductCreate(BaseModel):
     description: str = ""
     category: str = ""
     weight_oz: float = 0.0
+    length_in: float = 0.0
+    width_in: float = 0.0
+    height_in: float = 0.0
     price: float = 0.0
     quantity: int = 0
     location: str = ""
@@ -19,6 +22,9 @@ class ProductUpdate(BaseModel):
     description: str | None = None
     category: str | None = None
     weight_oz: float | None = None
+    length_in: float | None = None
+    width_in: float | None = None
+    height_in: float | None = None
     price: float | None = None
     location: str | None = None
 
@@ -30,6 +36,9 @@ class ProductOut(BaseModel):
     description: str
     category: str
     weight_oz: float
+    length_in: float
+    width_in: float
+    height_in: float
     price: float
     quantity: int
     location: str

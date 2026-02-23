@@ -16,6 +16,9 @@ class Product(Base):
     description: Mapped[str] = mapped_column(String, default="")
     category: Mapped[str] = mapped_column(String, default="")
     weight_oz: Mapped[float] = mapped_column(Float, default=0.0)
+    length_in: Mapped[float] = mapped_column(Float, default=0.0)
+    width_in: Mapped[float] = mapped_column(Float, default=0.0)
+    height_in: Mapped[float] = mapped_column(Float, default=0.0)
     price: Mapped[float] = mapped_column(Float, default=0.0)
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     location: Mapped[str] = mapped_column(String, default="")  # bin/shelf location

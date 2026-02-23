@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+import csv
+import io
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -7,6 +10,8 @@ from app.schemas.product import InventoryAdjust, ProductCreate, ProductOut, Prod
 from app.services import product_service
 
 router = APIRouter(prefix="/products", tags=["Products"])
+
+CSV_COLUMNS = ["sku", "name", "description", "category", "weight_oz", "length_in", "width_in", "height_in", "price", "quantity", "location"]
 
 
 @router.post("", response_model=ProductOut, status_code=201)
@@ -25,6 +30,78 @@ def list_products(skip: int = 0, limit: int = 100, category: str | None = None, 
 @router.get("/low-stock", response_model=list[ProductOut])
 def low_stock(threshold: int = 5, db: Session = Depends(get_db)):
     return product_service.get_low_stock(db, threshold)
+
+
+@router.get("/import-template")
+def download_import_template():
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(CSV_COLUMNS)
+    writer.writerow(["SP-001", "San pham mau", "Mo ta", "Dien tu", "16", "10", "8", "6", "29.99", "100", "A-01-01"])
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=product_import_template.csv"},
+    )
+
+
+@router.post("/import")
+def import_products(file: UploadFile, db: Session = Depends(get_db)):
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported")
+
+    content = file.file.read().decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(content))
+
+    created = 0
+    updated = 0
+    errors = []
+
+    for row_num, row in enumerate(reader, start=2):
+        sku = (row.get("sku") or "").strip()
+        if not sku:
+            errors.append({"row": row_num, "error": "SKU is required"})
+            continue
+
+        try:
+            data = ProductCreate(
+                sku=sku,
+                name=(row.get("name") or "").strip(),
+                description=(row.get("description") or "").strip(),
+                category=(row.get("category") or "").strip(),
+                weight_oz=float(row.get("weight_oz") or 0),
+                length_in=float(row.get("length_in") or 0),
+                width_in=float(row.get("width_in") or 0),
+                height_in=float(row.get("height_in") or 0),
+                price=float(row.get("price") or 0),
+                quantity=int(row.get("quantity") or 0),
+                location=(row.get("location") or "").strip(),
+            )
+        except (ValueError, TypeError) as e:
+            errors.append({"row": row_num, "sku": sku, "error": str(e)})
+            continue
+
+        existing = product_service.get_product_by_sku(db, sku)
+        if existing:
+            update_data = ProductUpdate(
+                name=data.name or None,
+                description=data.description or None,
+                category=data.category or None,
+                weight_oz=data.weight_oz or None,
+                length_in=data.length_in or None,
+                width_in=data.width_in or None,
+                height_in=data.height_in or None,
+                price=data.price or None,
+                location=data.location or None,
+            )
+            product_service.update_product(db, existing.id, update_data)
+            updated += 1
+        else:
+            product_service.create_product(db, data)
+            created += 1
+
+    return {"created": created, "updated": updated, "errors": errors}
 
 
 @router.get("/{product_id}", response_model=ProductOut)
