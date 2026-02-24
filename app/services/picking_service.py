@@ -99,6 +99,75 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
     }
 
 
+def delete_picking_list(db: Session, picking_list_id: str) -> dict:
+    """Delete a picking list and all its pick items (unpack entire batch)."""
+    pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
+    if not pl:
+        raise ValueError("Picking list not found")
+
+    order_ids = set(i.order_id for i in pl.items)
+    item_count = len(pl.items)
+
+    # Reset orders that were marked as packed/processing back to pending
+    for order_id in order_ids:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if order and order.status in ("processing", "packed"):
+            order.status = "pending"
+
+    # Delete picking list (cascade deletes pick items)
+    db.delete(pl)
+    db.commit()
+
+    return {
+        "deleted_picking_list": picking_list_id,
+        "orders_released": len(order_ids),
+        "items_removed": item_count,
+    }
+
+
+def remove_order_from_picking_list(db: Session, picking_list_id: str, order_id: str) -> dict:
+    """Remove a single order from a picking list (unpack order from batch)."""
+    pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
+    if not pl:
+        raise ValueError("Picking list not found")
+
+    items_to_remove = db.query(PickItem).filter(
+        PickItem.picking_list_id == picking_list_id,
+        PickItem.order_id == order_id,
+    ).all()
+
+    if not items_to_remove:
+        raise ValueError("Order not found in this picking list")
+
+    removed_count = len(items_to_remove)
+    for item in items_to_remove:
+        db.delete(item)
+
+    # Reset order status if it was changed
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if order and order.status in ("processing", "packed"):
+        order.status = "pending"
+
+    db.commit()
+
+    # Check if picking list is now empty
+    remaining = db.query(PickItem).filter(PickItem.picking_list_id == picking_list_id).count()
+    if remaining == 0:
+        db.delete(pl)
+        db.commit()
+        return {
+            "order_id": order_id,
+            "items_removed": removed_count,
+            "picking_list_deleted": True,
+        }
+
+    return {
+        "order_id": order_id,
+        "items_removed": removed_count,
+        "picking_list_deleted": False,
+    }
+
+
 def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
     """Get per-order progress for a picking list."""
     items = db.query(PickItem).filter(PickItem.picking_list_id == picking_list_id).all()

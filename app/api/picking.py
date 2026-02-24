@@ -67,6 +67,26 @@ def scan_qr(qr_code: str, db: Session = Depends(get_db)):
     return result
 
 
+@router.delete("/{picking_list_id}")
+def delete_picking_list(picking_list_id: str, db: Session = Depends(get_db)):
+    """Delete a picking list and release all orders (unpack entire batch)."""
+    try:
+        result = picking_service.delete_picking_list(db, picking_list_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.delete("/{picking_list_id}/orders/{order_id}")
+def remove_order_from_picking_list(picking_list_id: str, order_id: str, db: Session = Depends(get_db)):
+    """Remove a single order from a picking list (unpack from batch)."""
+    try:
+        result = picking_service.remove_order_from_picking_list(db, picking_list_id, order_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
 @router.get("/{picking_list_id}/qrcodes")
 def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     """Export all QR codes for a picking list as a printable PDF (2x1 inch labels)."""

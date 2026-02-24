@@ -120,9 +120,14 @@ tr:hover{background:#f8f9ff}
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <h3 style="margin:0">Picking List: <span id="pl-number"></span></h3>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">Export QR Codes PDF (2x1in)</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="filter-needs-packing" onchange="renderOrderCards()" checked>
+            Only needs packing
+          </label>
+          <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">Export QR PDF</button>
           <button class="btn btn-outline btn-sm" onclick="refreshProgress()">Refresh</button>
+          <button class="btn btn-danger btn-sm" onclick="unpackBatch()">Unpack Batch</button>
         </div>
       </div>
       <div class="progress-bar">
@@ -208,7 +213,10 @@ async function loadPickingLists() {
   container.innerHTML = lists.map(pl => {
     const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
     return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" onclick="selectPickingList('${pl.id}')">
-      <h4>${esc(pl.picking_number)}</h4>
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <h4>${esc(pl.picking_number)}</h4>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Delete batch">&#10005;</button>
+      </div>
       <div class="meta">${pl.order_count} orders, ${pl.total_items} items</div>
       <div class="progress-bar" style="height:16px;margin-top:8px">
         <div class="progress-fill" style="width:${pct}%;${pct >= 100 ? 'background:#28a745' : ''}">${pct}%</div>
@@ -252,7 +260,19 @@ async function refreshProgress() {
 
 function renderOrderCards() {
   const container = document.getElementById('orders-progress');
-  container.innerHTML = progressData.map(o => {
+  const filterNeeds = document.getElementById('filter-needs-packing').checked;
+
+  let filtered = progressData;
+  if (filterNeeds) {
+    filtered = progressData.filter(o => o.picked < o.total);
+  }
+
+  if (filtered.length === 0 && progressData.length > 0) {
+    container.innerHTML = '<div class="empty">All orders fully picked! Uncheck "Only needs packing" to see all.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(o => {
     const pct = o.total > 0 ? Math.round(o.picked / o.total * 100) : 0;
     const isComplete = o.picked >= o.total;
     const hasLabel = !!o.label_url;
@@ -269,6 +289,8 @@ function renderOrderCards() {
         actionsHtml += ` <span style="font-size:12px;color:#888">Track: ${esc(o.tracking_number)}</span>`;
       }
     }
+    // Unpack button - remove order from batch
+    actionsHtml += ` <button class="btn btn-danger btn-sm" onclick="unpackOrder('${o.order_id}','${esc(o.order_number)}')" title="Remove from batch">Unpack</button>`;
 
     const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
       <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
@@ -417,6 +439,72 @@ async function markDropOff(orderId) {
     } else {
       const e = await res.json().catch(() => ({}));
       toast(e.detail || 'Error', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+// Delete batch from picking list selector
+async function deleteBatch(plId, plNumber) {
+  if (!confirm(`Delete batch "${plNumber}"?\nAll orders will be released from this batch.`)) return;
+  try {
+    const res = await fetch(API + '/picking-lists/' + plId, { method: 'DELETE' });
+    if (res.ok) {
+      const data = await res.json();
+      toast(`Batch deleted: ${data.orders_released} orders released`);
+      if (currentPL && currentPL.id === plId) {
+        currentPL = null;
+        document.getElementById('packing-session').style.display = 'none';
+        document.getElementById('header-info').textContent = '';
+      }
+      await loadPickingLists();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error deleting batch', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+// Unpack entire batch
+async function unpackBatch() {
+  if (!currentPL) return;
+  if (!confirm(`Unpack entire batch "${currentPL.picking_number}"?\nThis will release all orders from this batch and delete the picking list.`)) return;
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id, { method: 'DELETE' });
+    if (res.ok) {
+      const data = await res.json();
+      toast(`Batch unpacked: ${data.orders_released} orders released, ${data.items_removed} items removed`);
+      currentPL = null;
+      document.getElementById('packing-session').style.display = 'none';
+      document.getElementById('header-info').textContent = '';
+      await loadPickingLists();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error unpacking batch', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+// Unpack single order from batch
+async function unpackOrder(orderId, orderNumber) {
+  if (!currentPL) return;
+  if (!confirm(`Remove order "${orderNumber}" from this batch?\nAll pick items for this order will be deleted.`)) return;
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id + '/orders/' + orderId, { method: 'DELETE' });
+    if (res.ok) {
+      const data = await res.json();
+      toast(`Order ${orderNumber} removed (${data.items_removed} items)`);
+      if (data.picking_list_deleted) {
+        toast('Picking list deleted (no more orders)');
+        currentPL = null;
+        document.getElementById('packing-session').style.display = 'none';
+        document.getElementById('header-info').textContent = '';
+        await loadPickingLists();
+      } else {
+        await refreshProgress();
+      }
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error removing order', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
