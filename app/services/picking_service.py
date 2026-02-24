@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models.order import Order, OrderItem
-from app.models.picking import PickingList, PickItem
+from app.models.picking import PickingList, PickingListStatus, PickItem
 
 
 def _generate_picking_number() -> str:
@@ -18,6 +18,23 @@ def create_picking_list(db: Session, order_ids: list[str]) -> PickingList:
     orders = db.query(Order).filter(Order.id.in_(order_ids)).all()
     if not orders:
         raise ValueError("No valid orders found")
+
+    # Check if any order is already in an active picking list
+    already_in_batch = (
+        db.query(PickItem.order_id)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id.in_(order_ids),
+            PickingList.status == PickingListStatus.ACTIVE,
+        )
+        .distinct()
+        .all()
+    )
+    if already_in_batch:
+        dupe_ids = {row[0] for row in already_in_batch}
+        dupe_orders = [o for o in orders if o.id in dupe_ids]
+        names = ", ".join(o.order_number for o in dupe_orders)
+        raise ValueError(f"Orders already in an active batch: {names}")
 
     picking_list = PickingList(
         picking_number=_generate_picking_number(),
