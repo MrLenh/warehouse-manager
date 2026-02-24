@@ -103,6 +103,31 @@ def _migrate_add_columns():
                     conn.execute(text(f"ALTER TABLE order_items ADD COLUMN {col_name} {col_type}"))
 
 
+def _migrate_order_status_enum():
+    """Add new enum values to order status (PostgreSQL only)."""
+    if not settings.DATABASE_URL.startswith("postgresql"):
+        return
+    try:
+        with engine.begin() as conn:
+            # Check if drop_off already exists
+            result = conn.execute(text(
+                "SELECT 1 FROM pg_enum WHERE enumlabel = 'drop_off' "
+                "AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'orderstatus')"
+            ))
+            if not result.fetchone():
+                conn.execute(text("ALTER TYPE orderstatus ADD VALUE IF NOT EXISTS 'drop_off' AFTER 'label_purchased'"))
+    except Exception:
+        pass  # SQLite or enum already exists
+
+
 def init_db():
+    # Import all models so Base.metadata knows about them
+    import app.models.order  # noqa: F401
+    import app.models.product  # noqa: F401
+    import app.models.inventory_log  # noqa: F401
+    import app.models.stock_request  # noqa: F401
+    import app.models.picking  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
     _migrate_add_columns()
+    _migrate_order_status_enum()

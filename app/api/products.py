@@ -1,6 +1,8 @@
 import csv
 import io
 import json
+import pathlib
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -176,6 +178,41 @@ def import_products(file: UploadFile, db: Session = Depends(get_db)):
             created += 1
 
     return {"created": created, "updated": updated, "variants_created": variants_created, "variants_updated": variants_updated, "errors": errors}
+
+
+UPLOAD_DIR = pathlib.Path(__file__).parent.parent / "static" / "uploads"
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+
+@router.post("/{product_id}/upload-image", response_model=ProductOut)
+def upload_product_image(product_id: str, file: UploadFile, db: Session = Depends(get_db)):
+    """Upload an image file for a product. Saves to static/uploads and sets image_url."""
+    product = product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(404, "Product not found")
+
+    if not file.filename:
+        raise HTTPException(400, "No file provided")
+
+    ext = pathlib.Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"File type {ext} not allowed. Use: {', '.join(ALLOWED_EXTENSIONS)}")
+
+    content = file.file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, f"File too large. Max {MAX_FILE_SIZE // 1024 // 1024}MB")
+
+    filename = f"{product.sku}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = UPLOAD_DIR / filename
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    filepath.write_bytes(content)
+
+    image_url = f"/static/uploads/{filename}"
+    product.image_url = image_url
+    db.commit()
+    db.refresh(product)
+    return product
 
 
 @router.get("/{product_id}", response_model=ProductOut)

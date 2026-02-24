@@ -105,16 +105,26 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f6f6f
 .error{text-align:center;padding:120px 20px;color:#c62828;font-size:16px}
 
 /* Image edit inline */
-.img-edit-bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;justify-content:center}
-.img-edit-bar input{flex:1;padding:8px 12px;border:1px solid #c9cccf;border-radius:8px;font-size:13px;font-family:inherit;outline:none}
-.img-edit-bar input:focus{border-color:#2c6ecb;box-shadow:0 0 0 2px rgba(44,110,203,.15)}
-.img-edit-bar button{padding:8px 14px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;transition:.15s}
-.img-edit-bar .btn-save{background:#2c6ecb;color:#fff}
-.img-edit-bar .btn-save:hover{background:#1a5db0}
-.img-edit-bar .btn-cancel{background:#f0f0f0;color:#333}
-.img-edit-bar .btn-cancel:hover{background:#e0e0e0}
+.img-edit-bar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.img-edit-bar input[type="url"]{flex:1;padding:8px 12px;border:1px solid #c9cccf;border-radius:8px;font-size:13px;font-family:inherit;outline:none}
+.img-edit-bar input[type="url"]:focus{border-color:#2c6ecb;box-shadow:0 0 0 2px rgba(44,110,203,.15)}
+.img-edit-bar button,.img-edit-form-inner .btn-action{padding:8px 14px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;transition:.15s}
+.btn-save{background:#2c6ecb;color:#fff}
+.btn-save:hover{background:#1a5db0}
+.btn-cancel{background:#f0f0f0;color:#333}
+.btn-cancel:hover{background:#e0e0e0}
 .img-edit-link{display:inline-block;font-size:13px;color:#2c6ecb;cursor:pointer;text-decoration:none;margin-bottom:12px}
 .img-edit-link:hover{text-decoration:underline}
+.img-tabs{display:flex;gap:0;margin-bottom:12px;border-bottom:2px solid #e3e3e3}
+.img-tab{padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#6d7175;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s}
+.img-tab:hover{color:#2c6ecb}
+.img-tab.active{color:#2c6ecb;border-bottom-color:#2c6ecb}
+.upload-zone{border:2px dashed #c9cccf;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.15s;margin-bottom:8px;background:#fafafa}
+.upload-zone:hover,.upload-zone.dragover{border-color:#2c6ecb;background:#f0f4ff}
+.upload-zone input[type="file"]{display:none}
+.upload-zone .label{font-size:14px;color:#6d7175}
+.upload-zone .label strong{color:#2c6ecb}
+.upload-progress{font-size:13px;color:#6d7175;margin-bottom:8px}
 .toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .toast-success{background:#1a7d2f}
 .toast-error{background:#c62828}
@@ -286,16 +296,34 @@ function render() {
     html += '<a href="' + qrImgUrl + '" target="_blank" style="font-size:13px;color:#2c6ecb;text-decoration:none;margin-right:12px">View QR Code</a>';
   }
   html += '<span class="img-edit-link" onclick="showImageEdit()">Update Image</span>';
+  if (p.image_url) {
+    html += ' <span class="img-edit-link" style="color:#c62828;margin-left:8px" onclick="removeImage()">Remove</span>';
+  }
   html += '</div>';
   html += '<div id="img-edit-form" style="display:none">';
+  // Tabs: Upload / URL
+  html += '<div class="img-tabs">';
+  html += '<div class="img-tab active" onclick="switchImgTab(\'upload\',this)">Upload File</div>';
+  html += '<div class="img-tab" onclick="switchImgTab(\'url\',this)">Image URL</div>';
+  html += '</div>';
+  // Upload tab
+  html += '<div id="img-tab-upload">';
+  html += '<div class="upload-zone" id="upload-zone" onclick="document.getElementById(\'file-input\').click()" ondragover="event.preventDefault();this.classList.add(\'dragover\')" ondragleave="this.classList.remove(\'dragover\')" ondrop="handleDrop(event)">';
+  html += '<input type="file" id="file-input" accept="image/*" onchange="uploadFile(this.files[0])">';
+  html += '<div class="label"><strong>Click to upload</strong> or drag &amp; drop</div>';
+  html += '<div style="font-size:12px;color:#999;margin-top:4px">JPG, PNG, GIF, WebP, SVG (max 5MB)</div>';
+  html += '</div>';
+  html += '<div id="upload-progress" class="upload-progress" style="display:none">Uploading...</div>';
+  html += '</div>';
+  // URL tab
+  html += '<div id="img-tab-url" style="display:none">';
   html += '<div class="img-edit-bar">';
   html += '<input type="url" id="img-url-input" placeholder="https://example.com/image.jpg" value="' + escAttr(p.image_url || '') + '">';
   html += '<button class="btn-save" onclick="saveImageUrl()">Save</button>';
-  html += '<button class="btn-cancel" onclick="hideImageEdit()">Cancel</button>';
   html += '</div>';
-  if (p.image_url) {
-    html += '<span class="img-edit-link" style="color:#c62828;font-size:12px" onclick="removeImage()">Remove image</span>';
-  }
+  html += '</div>';
+  // Cancel
+  html += '<div style="text-align:center;margin-top:4px"><span class="img-edit-link" onclick="hideImageEdit()">Cancel</span></div>';
   html += '</div>';
   html += '</div>';
   if (baseDomain) {
@@ -447,12 +475,53 @@ function toast(msg, type = 'success') {
 function showImageEdit() {
   document.getElementById('img-edit-display').style.display = 'none';
   document.getElementById('img-edit-form').style.display = '';
-  document.getElementById('img-url-input').focus();
 }
 
 function hideImageEdit() {
   document.getElementById('img-edit-display').style.display = '';
   document.getElementById('img-edit-form').style.display = 'none';
+}
+
+function switchImgTab(tab, el) {
+  document.querySelectorAll('.img-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('img-tab-upload').style.display = tab === 'upload' ? '' : 'none';
+  document.getElementById('img-tab-url').style.display = tab === 'url' ? '' : 'none';
+}
+
+async function uploadFile(file) {
+  if (!file) return;
+  const progress = document.getElementById('upload-progress');
+  progress.style.display = '';
+  progress.textContent = 'Uploading...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch(API + '/products/' + productId + '/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    if (res.ok) {
+      productData = await res.json();
+      toast('Image uploaded');
+      render();
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Upload error', 'error');
+      progress.style.display = 'none';
+    }
+  } catch (err) {
+    toast('Upload failed: ' + err.message, 'error');
+    progress.style.display = 'none';
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadFile(file);
 }
 
 async function saveImageUrl() {

@@ -40,6 +40,7 @@ tr:hover{background:#f8f9ff}
 .badge-shipped,.badge-in_transit{background:#d1ecf1;color:#0c5460}
 .badge-delivered{background:#28a745;color:#fff}
 .badge-cancelled{background:#f8d7da;color:#721c24}
+.badge-drop_off{background:#17a2b8;color:#fff}
 .badge-draft{background:#e2e3e5;color:#383d41}
 .badge-approved{background:#d4edda;color:#155724}
 .badge-receiving{background:#cce5ff;color:#004085}
@@ -132,6 +133,7 @@ tr:hover{background:#f8f9ff}
           <option value="processing">Processing</option>
           <option value="packed">Packed</option>
           <option value="label_purchased">Label Purchased</option>
+          <option value="drop_off">Drop Off</option>
           <option value="shipped">Shipped</option>
           <option value="in_transit">In Transit</option>
           <option value="delivered">Delivered</option>
@@ -142,11 +144,13 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
         <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <label class="btn btn-success btn-sm" style="margin:0">Import Orders<input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="importOrderCSV(this)"></label>
+        <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
+        <a href="/packing" target="_blank" class="btn btn-outline btn-sm">Packing Station</a>
         <button class="btn btn-primary" onclick="openOrderModal()">+ Create Order</button>
       </div>
     </div>
     <table>
-      <thead><tr><th>Order #</th><th>Order Name</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
+      <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
   </div>
@@ -232,7 +236,19 @@ tr:hover{background:#f8f9ff}
         <div class="form-group"><label>Product Name *</label><input type="text" id="p-name" placeholder="Product name"></div>
       </div>
       <div class="form-group"><label>Description</label><textarea id="p-desc" rows="2" placeholder="Product description"></textarea></div>
-      <div class="form-group"><label>Image URL</label><input type="url" id="p-image-url" placeholder="https://example.com/image.jpg"></div>
+      <div class="form-group">
+        <label>Product Image</label>
+        <div id="p-image-preview" style="display:none;margin-bottom:8px;text-align:center">
+          <img id="p-image-preview-img" src="" alt="" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid #ddd;object-fit:cover">
+          <div><span style="font-size:12px;color:#dc3545;cursor:pointer" onclick="clearProductImage()">Remove</span></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label class="btn btn-outline btn-sm" style="margin:0;cursor:pointer">Upload File<input type="file" accept="image/*" id="p-image-file" style="display:none" onchange="onProductFileSelected(this)"></label>
+          <span style="font-size:13px;color:#888">or</span>
+          <input type="url" id="p-image-url" placeholder="https://example.com/image.jpg" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div id="p-image-upload-status" style="display:none;font-size:12px;color:#667eea;margin-top:4px">Uploading...</div>
+      </div>
       <div class="form-row-3">
         <div class="form-group"><label>Category</label><input type="text" id="p-category" placeholder="e.g. Electronics"></div>
         <div class="form-group"><label>Price (USD)</label><input type="number" step="0.01" id="p-price" placeholder="0.00"></div>
@@ -595,6 +611,16 @@ function openProductModal(product = null) {
   document.getElementById('p-qty').value = product ? product.quantity : '';
   document.getElementById('p-location').value = product ? product.location : '';
   document.getElementById('p-image-url').value = product ? (product.image_url || '') : '';
+  document.getElementById('p-image-file').value = '';
+  document.getElementById('p-image-upload-status').style.display = 'none';
+  // Show image preview if exists
+  const imgUrl = product && product.image_url ? product.image_url : '';
+  if (imgUrl) {
+    document.getElementById('p-image-preview').style.display = '';
+    document.getElementById('p-image-preview-img').src = imgUrl;
+  } else {
+    document.getElementById('p-image-preview').style.display = 'none';
+  }
   document.getElementById('p-option-types').value = product && product.option_types ? product.option_types.join(', ') : '';
   if (product) { document.getElementById('p-qty').disabled = true; }
   else { document.getElementById('p-qty').disabled = false; }
@@ -604,6 +630,64 @@ function openProductModal(product = null) {
 function editProduct(id) {
   const p = allProducts.find(x => x.id === id);
   if (p) openProductModal(p);
+}
+
+// Pending file for upload after product creation
+let pendingImageFile = null;
+
+function onProductFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const editId = document.getElementById('product-edit-id').value;
+  if (editId) {
+    // Existing product: upload immediately
+    uploadProductImage(editId, file);
+  } else {
+    // New product: store file, show preview, upload after create
+    pendingImageFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('p-image-preview').style.display = '';
+      document.getElementById('p-image-preview-img').src = e.target.result;
+      document.getElementById('p-image-url').value = '';
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+async function uploadProductImage(productId, file) {
+  const status = document.getElementById('p-image-upload-status');
+  status.style.display = '';
+  status.textContent = 'Uploading...';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch(API + '/products/' + productId + '/upload-image', { method: 'POST', body: formData });
+    if (res.ok) {
+      const product = await res.json();
+      document.getElementById('p-image-url').value = product.image_url;
+      document.getElementById('p-image-preview').style.display = '';
+      document.getElementById('p-image-preview-img').src = product.image_url;
+      status.textContent = 'Uploaded!';
+      setTimeout(() => { status.style.display = 'none'; }, 2000);
+      toast('Image uploaded');
+      loadProducts();
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Upload error', 'error');
+      status.style.display = 'none';
+    }
+  } catch (err) {
+    toast('Upload failed: ' + err.message, 'error');
+    status.style.display = 'none';
+  }
+}
+
+function clearProductImage() {
+  document.getElementById('p-image-url').value = '';
+  document.getElementById('p-image-preview').style.display = 'none';
+  document.getElementById('p-image-file').value = '';
+  pendingImageFile = null;
 }
 
 async function saveProduct() {
@@ -644,7 +728,15 @@ async function saveProduct() {
       option_types: optTypes,
     };
     const res = await fetch(API + '/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (res.ok) { toast('Product created'); closeModal('product-modal'); loadProducts(); }
+    if (res.ok) {
+      const newProduct = await res.json();
+      // Upload pending file if any
+      if (pendingImageFile) {
+        await uploadProductImage(newProduct.id, pendingImageFile);
+        pendingImageFile = null;
+      }
+      toast('Product created'); closeModal('product-modal'); loadProducts();
+    }
     else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
   }
 }
@@ -913,8 +1005,9 @@ function renderOrders(list) {
   const q = document.getElementById('search-orders').value.toLowerCase();
   const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || (o.order_name || '').toLowerCase().includes(q));
   document.getElementById('orders-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="9" class="empty">No orders found</td></tr>'
+    ? '<tr><td colspan="10" class="empty">No orders found</td></tr>'
     : filtered.map(o => `<tr>
+        <td><input type="checkbox" class="order-check" value="${o.id}" onchange="updateSelectedCount()"></td>
         <td><strong>${esc(o.order_number)}</strong></td>
         <td>${esc(o.order_name || '-')}</td>
         <td>${esc(o.customer_name)}</td>
@@ -927,6 +1020,45 @@ function renderOrders(list) {
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
         </td>
       </tr>`).join('');
+  updateSelectedCount();
+}
+
+function toggleAllOrders(master) {
+  document.querySelectorAll('.order-check').forEach(cb => cb.checked = master.checked);
+  updateSelectedCount();
+}
+
+function updateSelectedCount() {
+  const checked = document.querySelectorAll('.order-check:checked');
+  const btn = document.getElementById('btn-create-picking');
+  const count = document.getElementById('selected-count');
+  count.textContent = checked.length;
+  btn.style.display = checked.length > 0 ? '' : 'none';
+}
+
+async function createPickingList() {
+  const checked = document.querySelectorAll('.order-check:checked');
+  const orderIds = Array.from(checked).map(cb => cb.value);
+  if (orderIds.length === 0) { toast('Select orders first', 'error'); return; }
+  if (!confirm(`Create picking list for ${orderIds.length} order(s)?`)) return;
+  try {
+    const res = await fetch(API + '/picking-lists', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ order_ids: orderIds }),
+    });
+    if (res.ok) {
+      const pl = await res.json();
+      toast(`Picking list ${pl.picking_number} created (${pl.total_items} items)`);
+      document.getElementById('select-all-orders').checked = false;
+      document.querySelectorAll('.order-check').forEach(cb => cb.checked = false);
+      updateSelectedCount();
+      // Open packing station in new tab
+      window.open('/packing/' + pl.id, '_blank');
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Error creating picking list', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
 document.getElementById('search-orders').addEventListener('input', () => renderOrders(allOrders));
@@ -1058,7 +1190,7 @@ async function viewOrder(id) {
     </div>
   `;
 
-  const statusFlow = ['pending','confirmed','processing','packed','label_purchased','shipped','in_transit','delivered'];
+  const statusFlow = ['pending','confirmed','processing','packed','label_purchased','drop_off','shipped','in_transit','delivered'];
   const curIdx = statusFlow.indexOf(o.status);
   let footerHtml = '';
   if (o.status !== 'cancelled' && o.status !== 'delivered') {

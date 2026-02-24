@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
-from app.api import orders, products, reports, stock_requests, webhooks
+from app.api import orders, picking, products, reports, stock_requests, webhooks
 from app.database import init_db
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -40,6 +40,7 @@ app.include_router(orders.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(stock_requests.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
+app.include_router(picking.router, prefix="/api/v1")
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -60,6 +61,18 @@ def product_detail_page(product_id: str):
 def order_detail_page(order_id: str):
     """Order detail page - landing for QR code scans."""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/packing")
+def packing_page():
+    """Packing station page for scanning QR codes."""
+    return FileResponse(STATIC_DIR / "packing.html")
+
+
+@app.get("/packing/{picking_list_id}")
+def packing_detail_page(picking_list_id: str):
+    """Packing station page for a specific picking list."""
+    return FileResponse(STATIC_DIR / "packing.html")
 
 
 @app.get("/api/v1/config")
@@ -101,6 +114,7 @@ def clear_all_data():
     db = SessionLocal()
     try:
         tables = [
+            "pick_items", "picking_lists",
             "order_items", "orders", "stock_request_items",
             "stock_requests", "inventory_logs", "variants", "products",
         ]

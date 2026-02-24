@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Packing Station - Warehouse Manager</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
+.header{background:linear-gradient(135deg,#17a2b8,#138496);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header h1{font-size:20px;font-weight:600}
+.header a{color:#fff;text-decoration:none;font-size:13px;background:rgba(255,255,255,.2);padding:6px 14px;border-radius:20px}
+.header a:hover{background:rgba(255,255,255,.3)}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px}
+.card h3{margin-bottom:12px;font-size:16px;color:#333}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:#667eea;color:#fff}.btn-primary:hover{background:#5a6fd6}
+.btn-success{background:#28a745;color:#fff}.btn-success:hover{background:#218838}
+.btn-danger{background:#dc3545;color:#fff}.btn-danger:hover{background:#c82333}
+.btn-warning{background:#ffc107;color:#333}.btn-warning:hover{background:#e0a800}
+.btn-outline{background:transparent;border:1px solid #667eea;color:#667eea}.btn-outline:hover{background:#667eea;color:#fff}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-lg{padding:14px 28px;font-size:16px}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+thead{background:#f8f9fa}
+th{padding:12px 16px;text-align:left;font-weight:600;font-size:13px;color:#555;border-bottom:2px solid #e8e8e8}
+td{padding:10px 16px;border-bottom:1px solid #f0f0f0;font-size:14px}
+tr:hover{background:#f8f9ff}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase}
+.badge-pending{background:#fff3cd;color:#856404}
+.badge-confirmed,.badge-processing{background:#cce5ff;color:#004085}
+.badge-packed,.badge-label_purchased{background:#d4edda;color:#155724}
+.badge-drop_off{background:#17a2b8;color:#fff}
+.badge-shipped,.badge-in_transit{background:#d1ecf1;color:#0c5460}
+.badge-delivered{background:#28a745;color:#fff}
+.badge-cancelled{background:#f8d7da;color:#721c24}
+.badge-active{background:#cce5ff;color:#004085}
+.badge-completed{background:#28a745;color:#fff}
+.toast{position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast-success{background:#28a745}
+.toast-error{background:#dc3545}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* Scanner */
+.scan-area{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.scan-input-wrap{flex:1;min-width:300px}
+.scan-input{width:100%;padding:16px 20px;border:2px solid #17a2b8;border-radius:12px;font-size:18px;outline:none;transition:.2s}
+.scan-input:focus{border-color:#667eea;box-shadow:0 0 0 4px rgba(102,126,234,.2)}
+.scan-result{padding:16px;border-radius:12px;margin-bottom:16px;display:none;animation:slideIn .3s ease}
+.scan-result.success{background:#d4edda;border:1px solid #c3e6cb;color:#155724;display:block}
+.scan-result.error{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;display:block}
+.scan-result.complete{background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460;display:block}
+
+/* Progress bar */
+.progress-bar{background:#e9ecef;border-radius:8px;height:24px;overflow:hidden;margin:8px 0}
+.progress-fill{background:linear-gradient(90deg,#28a745,#20c997);height:100%;border-radius:8px;transition:width .5s ease;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;min-width:30px}
+
+/* Order cards */
+.order-card{border:1px solid #e8e8e8;border-radius:12px;padding:16px;margin-bottom:12px;transition:.2s}
+.order-card.complete{border-color:#28a745;background:#f8fff8}
+.order-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.order-card-header h4{font-size:15px;color:#333}
+.order-card-actions{display:flex;gap:6px;align-items:center}
+
+/* Picking list selector */
+.pl-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px}
+.pl-card{border:1px solid #e8e8e8;border-radius:12px;padding:16px;cursor:pointer;transition:.2s}
+.pl-card:hover{border-color:#17a2b8;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.pl-card.active{border-color:#17a2b8;background:#f0fafb}
+.pl-card h4{font-size:15px;margin-bottom:4px}
+.pl-card .meta{font-size:12px;color:#888}
+
+.empty{text-align:center;padding:40px;color:#999;font-size:15px}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:16px;padding:0;width:600px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-header{padding:20px 24px;border-bottom:1px solid #e8e8e8;display:flex;justify-content:space-between;align-items:center}
+.modal-header h2{font-size:18px}
+.modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#999;padding:0 4px}
+.modal-close:hover{color:#333}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:10px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Packing Station</h1>
+  <div style="display:flex;gap:12px;align-items:center">
+    <span id="header-info" style="font-size:13px;opacity:.8"></span>
+    <a href="/">Dashboard</a>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Picking List Selection -->
+  <div id="pl-selector" class="card">
+    <h3>Select Picking List</h3>
+    <div class="pl-list" id="pl-list"></div>
+    <div id="pl-empty" class="empty" style="display:none">No picking lists available. Create one from the Orders tab.</div>
+  </div>
+
+  <!-- Active Packing Session -->
+  <div id="packing-session" style="display:none">
+    <!-- Scanner -->
+    <div class="card">
+      <h3>Scan QR Code</h3>
+      <div class="scan-area">
+        <div class="scan-input-wrap">
+          <input type="text" class="scan-input" id="scan-input" placeholder="Scan or type QR code (e.g. PICK-XXXXXXXX)..." autofocus>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="doScan()">Scan</button>
+      </div>
+      <div class="scan-result" id="scan-result"></div>
+    </div>
+
+    <!-- QR Codes Export -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0">Picking List: <span id="pl-number"></span></h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">Export QR Codes (Print)</button>
+          <button class="btn btn-outline btn-sm" onclick="refreshProgress()">Refresh</button>
+        </div>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="total-progress" style="width:0%">0%</div>
+      </div>
+      <div style="font-size:13px;color:#888;margin-top:4px">
+        <span id="progress-text">0 / 0 items picked</span>
+      </div>
+    </div>
+
+    <!-- Orders Progress -->
+    <div id="orders-progress"></div>
+  </div>
+</div>
+
+<!-- Buy Label Modal -->
+<div class="modal-overlay" id="label-modal">
+  <div class="modal" style="width:500px">
+    <div class="modal-header">
+      <h2>Buy Shipping Label</h2>
+      <button class="modal-close" onclick="closeLabelModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:12px"><strong>Order:</strong> <span id="lm-order-number"></span></p>
+      <p style="margin-bottom:16px;color:#28a745;font-weight:600">All items picked! Ready for label.</p>
+      <div style="display:flex;gap:12px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:13px;color:#555;display:block;margin-bottom:4px">Carrier</label>
+          <select id="lm-carrier" onchange="updateLmService()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px">
+            <option value="USPS">USPS</option><option value="UPS">UPS</option><option value="FedEx">FedEx</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label style="font-size:13px;color:#555;display:block;margin-bottom:4px">Service</label>
+          <select id="lm-service" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px"></select>
+        </div>
+      </div>
+      <div id="lm-rates" style="margin-bottom:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLabelModal()">Cancel</button>
+      <button class="btn btn-outline" onclick="getLmRates()">Get Rates</button>
+      <button class="btn btn-primary" onclick="buyLmLabel()">Buy Label</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/v1';
+let currentPL = null; // current picking list
+let progressData = []; // per-order progress
+
+const CARRIERS = {
+  'USPS': ['GroundAdvantage', 'Priority', 'Express', 'ParcelSelect', 'LibraryMail', 'MediaMail', 'First'],
+  'UPS': ['Ground', '3DaySelect', '2ndDayAir', '2ndDayAirAM', 'NextDayAirSaver', 'NextDayAir', 'NextDayAirEarlyAM'],
+  'FedEx': ['GROUND_HOME_DELIVERY', 'FEDEX_GROUND', 'FEDEX_EXPRESS_SAVER', 'FEDEX_2_DAY', 'STANDARD_OVERNIGHT', 'PRIORITY_OVERNIGHT', 'FIRST_OVERNIGHT'],
+};
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// Load picking lists
+async function loadPickingLists() {
+  const res = await fetch(API + '/picking-lists');
+  const lists = await res.json();
+  const container = document.getElementById('pl-list');
+  const empty = document.getElementById('pl-empty');
+
+  if (lists.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  container.innerHTML = lists.map(pl => {
+    const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
+    return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" onclick="selectPickingList('${pl.id}')">
+      <h4>${esc(pl.picking_number)}</h4>
+      <div class="meta">${pl.order_count} orders, ${pl.total_items} items</div>
+      <div class="progress-bar" style="height:16px;margin-top:8px">
+        <div class="progress-fill" style="width:${pct}%;${pct >= 100 ? 'background:#28a745' : ''}">${pct}%</div>
+      </div>
+      <div class="meta" style="margin-top:4px">${pl.picked_items}/${pl.total_items} picked | <span class="badge badge-${pl.status}">${pl.status}</span></div>
+    </div>`;
+  }).join('');
+}
+
+async function selectPickingList(plId) {
+  const res = await fetch(API + '/picking-lists/' + plId);
+  currentPL = await res.json();
+  document.getElementById('pl-number').textContent = currentPL.picking_number;
+  document.getElementById('header-info').textContent = currentPL.picking_number;
+  document.getElementById('packing-session').style.display = '';
+  document.getElementById('scan-input').focus();
+
+  // Highlight selected card
+  document.querySelectorAll('.pl-card').forEach(c => c.classList.remove('active'));
+  event.target.closest('.pl-card')?.classList.add('active');
+
+  await refreshProgress();
+}
+
+async function refreshProgress() {
+  if (!currentPL) return;
+  const res = await fetch(API + '/picking-lists/' + currentPL.id + '/progress');
+  progressData = await res.json();
+
+  // Update total progress
+  let totalItems = 0, totalPicked = 0;
+  progressData.forEach(o => { totalItems += o.total; totalPicked += o.picked; });
+  const pct = totalItems > 0 ? Math.round(totalPicked / totalItems * 100) : 0;
+  document.getElementById('total-progress').style.width = pct + '%';
+  document.getElementById('total-progress').textContent = pct + '%';
+  document.getElementById('progress-text').textContent = `${totalPicked} / ${totalItems} items picked`;
+
+  // Render order cards
+  renderOrderCards();
+}
+
+function renderOrderCards() {
+  const container = document.getElementById('orders-progress');
+  container.innerHTML = progressData.map(o => {
+    const pct = o.total > 0 ? Math.round(o.picked / o.total * 100) : 0;
+    const isComplete = o.picked >= o.total;
+    const hasLabel = !!o.label_url;
+
+    let actionsHtml = '';
+    if (isComplete && !hasLabel) {
+      actionsHtml = `<button class="btn btn-primary btn-sm" onclick="openLabelModal('${o.order_id}','${esc(o.order_number)}')">Buy Label</button>`;
+    } else if (hasLabel) {
+      actionsHtml = `<a href="${esc(o.label_url)}" target="_blank" class="btn btn-success btn-sm">Print Label</a>`;
+      if (o.order_status !== 'drop_off' && o.order_status !== 'shipped' && o.order_status !== 'in_transit' && o.order_status !== 'delivered') {
+        actionsHtml += ` <button class="btn btn-warning btn-sm" onclick="markDropOff('${o.order_id}')">Drop Off</button>`;
+      }
+      if (o.tracking_number) {
+        actionsHtml += ` <span style="font-size:12px;color:#888">Track: ${esc(o.tracking_number)}</span>`;
+      }
+    }
+
+    const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
+      <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
+      <td><strong>${esc(i.sku)}</strong></td>
+      <td>${esc(i.product_name)}</td>
+      <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
+      <td>#${i.sequence}</td>
+      <td style="font-size:11px;color:#888;font-family:monospace">${esc(i.qr_code)}</td>
+      <td>${i.picked_at ? new Date(i.picked_at).toLocaleTimeString() : '-'}</td>
+    </tr>`).join('');
+
+    return `<div class="card order-card ${isComplete ? 'complete' : ''}">
+      <div class="order-card-header">
+        <h4>${esc(o.order_number)} ${o.order_name ? '(' + esc(o.order_name) + ')' : ''} - ${esc(o.customer_name)}</h4>
+        <div class="order-card-actions">
+          <span class="badge badge-${o.order_status}">${o.order_status}</span>
+          ${actionsHtml}
+        </div>
+      </div>
+      <div class="progress-bar" style="height:16px">
+        <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${o.picked}/${o.total}</div>
+      </div>
+      <table style="margin-top:8px;box-shadow:none">
+        <thead><tr><th style="width:30px"></th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+
+// Scanning
+document.getElementById('scan-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); doScan(); }
+});
+
+async function doScan() {
+  const input = document.getElementById('scan-input');
+  const code = input.value.trim();
+  if (!code) return;
+
+  const resultEl = document.getElementById('scan-result');
+  try {
+    const res = await fetch(API + '/picking-lists/scan?qr_code=' + encodeURIComponent(code), { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      resultEl.className = 'scan-result ' + (data.order_complete ? 'complete' : 'success');
+      let msg = data.message;
+      msg += ` | Order: ${data.order_number} (${data.order_picked}/${data.order_total})`;
+      if (data.order_complete) {
+        msg += ' | ORDER COMPLETE - Ready for label!';
+      }
+      resultEl.textContent = msg;
+      await refreshProgress();
+    } else {
+      resultEl.className = 'scan-result error';
+      resultEl.textContent = data.message;
+    }
+  } catch (err) {
+    resultEl.className = 'scan-result error';
+    resultEl.textContent = 'Error: ' + err.message;
+  }
+
+  input.value = '';
+  input.focus();
+}
+
+// Export QR codes
+function exportQrCodes() {
+  if (!currentPL) return;
+  window.open(API + '/picking-lists/' + currentPL.id + '/qrcodes', '_blank');
+}
+
+// Label modal
+let labelOrderId = '';
+
+function openLabelModal(orderId, orderNumber) {
+  labelOrderId = orderId;
+  document.getElementById('lm-order-number').textContent = orderNumber;
+  document.getElementById('lm-carrier').value = 'USPS';
+  updateLmService();
+  document.getElementById('lm-rates').innerHTML = '';
+  document.getElementById('label-modal').classList.add('show');
+}
+
+function closeLabelModal() {
+  document.getElementById('label-modal').classList.remove('show');
+}
+
+function updateLmService() {
+  const carrier = document.getElementById('lm-carrier').value;
+  const services = CARRIERS[carrier] || [];
+  document.getElementById('lm-service').innerHTML = services.map(s => `<option value="${s}">${s}</option>`).join('');
+}
+
+async function getLmRates() {
+  const div = document.getElementById('lm-rates');
+  div.innerHTML = '<em>Loading rates...</em>';
+  try {
+    const res = await fetch(API + '/orders/' + labelOrderId + '/rates');
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      div.innerHTML = '<span style="color:red">' + esc(e.detail || 'Error') + '</span>';
+      return;
+    }
+    const data = await res.json();
+    const rates = data.rates || [];
+    if (rates.length === 0) { div.innerHTML = '<em style="color:orange">No rates available</em>'; return; }
+    div.innerHTML = '<table style="font-size:12px;box-shadow:none"><thead><tr><th>Carrier</th><th>Service</th><th>Rate</th><th>Days</th><th></th></tr></thead><tbody>' +
+      rates.map(r => `<tr><td>${esc(r.carrier)}</td><td>${esc(r.service)}</td><td><strong>$${parseFloat(r.rate).toFixed(2)}</strong></td><td>${r.delivery_days || '-'}</td><td><button class="btn btn-sm btn-outline" onclick="document.getElementById('lm-carrier').value='${esc(r.carrier)}';updateLmService();document.getElementById('lm-service').value='${esc(r.service)}'">Select</button></td></tr>`).join('') +
+      '</tbody></table>';
+  } catch (err) { div.innerHTML = '<span style="color:red">' + err.message + '</span>'; }
+}
+
+async function buyLmLabel() {
+  const carrier = document.getElementById('lm-carrier').value;
+  const service = document.getElementById('lm-service').value;
+  if (!confirm(`Buy label: ${carrier} ${service}?`)) return;
+  toast('Purchasing label...');
+  try {
+    const res = await fetch(API + '/orders/' + labelOrderId + '/buy-label', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ carrier, service }),
+    });
+    if (res.ok) {
+      toast('Label purchased!');
+      closeLabelModal();
+      await refreshProgress();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error buying label', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function markDropOff(orderId) {
+  if (!confirm('Mark this order as Drop Off?')) return;
+  try {
+    const res = await fetch(API + '/orders/' + orderId + '/status', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'drop_off' }),
+    });
+    if (res.ok) {
+      toast('Order marked as Drop Off');
+      await refreshProgress();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+// Init
+loadPickingLists();
+
+// Auto-select if URL has picking list ID
+const pathParts = window.location.pathname.split('/');
+if (pathParts.length >= 3 && pathParts[1] === 'packing' && pathParts[2]) {
+  const plId = pathParts[2];
+  fetch(API + '/picking-lists/' + plId).then(r => r.ok ? r.json() : null).then(pl => {
+    if (pl) {
+      currentPL = pl;
+      document.getElementById('pl-number').textContent = pl.picking_number;
+      document.getElementById('header-info').textContent = pl.picking_number;
+      document.getElementById('packing-session').style.display = '';
+      document.getElementById('scan-input').focus();
+      refreshProgress();
+    }
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

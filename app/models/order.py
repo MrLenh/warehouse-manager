@@ -14,6 +14,7 @@ class OrderStatus(str, PyEnum):
     PROCESSING = "processing"
     PACKED = "packed"
     LABEL_PURCHASED = "label_purchased"
+    DROP_OFF = "drop_off"
     SHIPPED = "shipped"
     IN_TRANSIT = "in_transit"
     DELIVERED = "delivered"
