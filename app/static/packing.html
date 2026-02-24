@@ -52,6 +52,19 @@ tr:hover{background:#f8f9ff}
 .scan-result.error{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;display:block}
 .scan-result.complete{background:#d1ecf1;border:1px solid #bee5eb;color:#0c5460;display:block}
 
+/* Active order panel */
+.active-order{border:2px solid #667eea;border-radius:12px;padding:20px;margin-bottom:16px;background:#f8f9ff;animation:slideIn .3s ease}
+.active-order h3{color:#667eea;margin-bottom:12px;font-size:17px}
+.active-order .ao-top{display:flex;gap:16px;align-items:start;flex-wrap:wrap}
+.active-order .ao-info{flex:1;min-width:200px}
+.active-order .ao-info p{margin:4px 0;font-size:14px}
+.active-order .ao-qr{text-align:center}
+.active-order .ao-qr img{width:100px;height:100px;border:1px solid #ddd;border-radius:8px}
+.active-order .ao-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.active-order .ao-complete{margin-top:16px;padding:16px;border-top:2px solid #28a745;text-align:center;background:#f0fff0;border-radius:0 0 10px 10px}
+.active-order .ao-complete p{font-size:16px;font-weight:600;color:#28a745;margin-bottom:12px}
+.active-order .ao-waiting{margin-top:12px;padding:12px;background:#fff3cd;border-radius:8px;text-align:center;color:#856404;font-weight:500}
+
 /* Progress bar */
 .progress-bar{background:#e9ecef;border-radius:8px;height:24px;overflow:hidden;margin:8px 0}
 .progress-fill{background:linear-gradient(90deg,#28a745,#20c997);height:100%;border-radius:8px;transition:width .5s ease;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;min-width:30px}
@@ -59,6 +72,7 @@ tr:hover{background:#f8f9ff}
 /* Order cards */
 .order-card{border:1px solid #e8e8e8;border-radius:12px;padding:16px;margin-bottom:12px;transition:.2s}
 .order-card.complete{border-color:#28a745;background:#f8fff8}
+.order-card.dimmed{opacity:0.4}
 .order-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .order-card-header h4{font-size:15px;color:#333}
 .order-card-actions{display:flex;gap:6px;align-items:center}
@@ -115,6 +129,9 @@ tr:hover{background:#f8f9ff}
       </div>
       <div class="scan-result" id="scan-result"></div>
     </div>
+
+    <!-- Active Order Panel (shown during packing cycle) -->
+    <div id="active-order" class="active-order" style="display:none"></div>
 
     <!-- QR Codes Export -->
     <div class="card">
@@ -179,6 +196,7 @@ tr:hover{background:#f8f9ff}
 const API = '/api/v1';
 let currentPL = null; // current picking list
 let progressData = []; // per-order progress
+let activeOrderId = null; // order currently being packed
 
 const CARRIERS = {
   'USPS': ['GroundAdvantage', 'Priority', 'Express', 'ParcelSelect', 'LibraryMail', 'MediaMail', 'First'],
@@ -256,6 +274,7 @@ async function refreshProgress() {
 
   // Render order cards
   renderOrderCards();
+  showActiveOrder();
 }
 
 function renderOrderCards() {
@@ -264,7 +283,7 @@ function renderOrderCards() {
 
   let filtered = progressData;
   if (filterNeeds) {
-    filtered = progressData.filter(o => o.picked < o.total);
+    filtered = progressData.filter(o => o.picked < o.total || (o.picked >= o.total && !['drop_off','shipped','in_transit','delivered'].includes(o.order_status)));
   }
 
   if (filtered.length === 0 && progressData.length > 0) {
@@ -277,13 +296,13 @@ function renderOrderCards() {
     const isComplete = o.picked >= o.total;
     const hasLabel = !!o.label_url;
 
+    const isDroppedOff = ['drop_off','shipped','in_transit','delivered'].includes(o.order_status);
     let actionsHtml = '';
     if (isComplete && !hasLabel) {
       actionsHtml = `<button class="btn btn-primary btn-sm" onclick="openLabelModal('${o.order_id}','${esc(o.order_number)}')">Buy Label</button>`;
     } else if (hasLabel) {
-      actionsHtml = `<a href="${esc(o.label_url)}" target="_blank" class="btn btn-success btn-sm">Print Label</a>`;
-      if (o.order_status !== 'drop_off' && o.order_status !== 'shipped' && o.order_status !== 'in_transit' && o.order_status !== 'delivered') {
-        actionsHtml += ` <button class="btn btn-warning btn-sm" onclick="markDropOff('${o.order_id}')">Drop Off</button>`;
+      if (!isDroppedOff) {
+        actionsHtml = `<button class="btn btn-success btn-sm" onclick="printAndDropOff('${o.order_id}','${esc(o.label_url)}')">Print Label</button>`;
       }
       if (o.tracking_number) {
         actionsHtml += ` <span style="font-size:12px;color:#888">Track: ${esc(o.tracking_number)}</span>`;
@@ -302,7 +321,7 @@ function renderOrderCards() {
       <td>${i.picked_at ? new Date(i.picked_at).toLocaleTimeString() : '-'}</td>
     </tr>`).join('');
 
-    return `<div class="card order-card ${isComplete ? 'complete' : ''}">
+    return `<div class="card order-card ${isComplete ? 'complete' : ''} ${isDroppedOff ? 'dimmed' : ''}">
       <div class="order-card-header">
         <h4>${esc(o.order_number)} ${o.order_name ? '(' + esc(o.order_name) + ')' : ''} - ${esc(o.customer_name)}</h4>
         <div class="order-card-actions">
@@ -332,19 +351,56 @@ async function doScan() {
   if (!code) return;
 
   const resultEl = document.getElementById('scan-result');
+
+  // If active order, validate QR belongs to it before sending to server
+  if (activeOrderId && progressData.length > 0) {
+    const activeOrder = progressData.find(x => x.order_id === activeOrderId);
+    if (activeOrder) {
+      const belongsToActive = activeOrder.items.some(i => i.qr_code === code);
+      if (!belongsToActive) {
+        const otherOrder = progressData.find(x => x.order_id !== activeOrderId && x.items.some(i => i.qr_code === code));
+        resultEl.className = 'scan-result error';
+        resultEl.textContent = otherOrder
+          ? `Wrong order! This item belongs to ${otherOrder.order_number}. Finish packing ${activeOrder.order_number} first.`
+          : `This QR code does not belong to order ${activeOrder.order_number}.`;
+        input.value = '';
+        input.focus();
+        return;
+      }
+    }
+  }
+
   try {
     const res = await fetch(API + '/picking-lists/scan?qr_code=' + encodeURIComponent(code), { method: 'POST' });
     const data = await res.json();
 
     if (data.success) {
+      // Set active order on first scan
+      const isFirstScan = !activeOrderId;
+      if (!activeOrderId) {
+        activeOrderId = data.order_id;
+      }
+
       resultEl.className = 'scan-result ' + (data.order_complete ? 'complete' : 'success');
       let msg = data.message;
       msg += ` | Order: ${data.order_number} (${data.order_picked}/${data.order_total})`;
       if (data.order_complete) {
-        msg += ' | ORDER COMPLETE - Ready for label!';
+        msg += ' | ORDER COMPLETE - Ready for shipping label!';
       }
       resultEl.textContent = msg;
       await refreshProgress();
+
+      // Auto-open order label on first scan (for packing cover)
+      if (isFirstScan) {
+        printOrderLabel(data.order_id);
+        toast('Print order label for packing cover');
+      }
+
+      // Update scanner placeholder
+      const ao = progressData.find(x => x.order_id === activeOrderId);
+      if (ao && ao.picked < ao.total) {
+        input.placeholder = `Scan next item for ${ao.order_number} (${ao.picked}/${ao.total})...`;
+      }
     } else {
       resultEl.className = 'scan-result error';
       resultEl.textContent = data.message;
@@ -356,6 +412,92 @@ async function doScan() {
 
   input.value = '';
   input.focus();
+}
+
+// Active order panel
+function showActiveOrder() {
+  const panel = document.getElementById('active-order');
+  if (!activeOrderId) { panel.style.display = 'none'; return; }
+
+  const o = progressData.find(x => x.order_id === activeOrderId);
+  if (!o) { panel.style.display = 'none'; return; }
+
+  panel.style.display = '';
+  const pct = o.total > 0 ? Math.round(o.picked / o.total * 100) : 0;
+  const isComplete = o.picked >= o.total;
+  const hasLabel = !!o.label_url;
+  const isDroppedOff = ['drop_off','shipped','in_transit','delivered'].includes(o.order_status);
+
+  const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
+    <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
+    <td><strong>${esc(i.sku)}</strong></td>
+    <td>${esc(i.product_name)}</td>
+    <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
+    <td>#${i.sequence}</td>
+  </tr>`).join('');
+
+  let bottomHtml = '';
+  if (isComplete && !isDroppedOff) {
+    if (!hasLabel) {
+      bottomHtml = `<div class="ao-complete">
+        <p>All items picked!</p>
+        <button class="btn btn-primary btn-lg" onclick="openLabelModal('${o.order_id}','${esc(o.order_number)}')">Buy Shipping Label</button>
+      </div>`;
+    } else {
+      bottomHtml = `<div class="ao-complete">
+        <p>All items picked! Ready to ship.</p>
+        <button class="btn btn-success btn-lg" onclick="printAndDropOff('${o.order_id}','${esc(o.label_url)}')">Print Shipping Label & Drop Off</button>
+      </div>`;
+    }
+  } else if (isDroppedOff) {
+    bottomHtml = `<div class="ao-complete" style="border-color:#17a2b8;background:#e8f8fb">
+      <p style="color:#17a2b8">Order dropped off!</p>
+      <button class="btn btn-primary" onclick="clearActiveOrder()">Next Order</button>
+    </div>`;
+  } else {
+    const remaining = o.total - o.picked;
+    bottomHtml = `<div class="ao-waiting">Scan ${remaining} more item${remaining > 1 ? 's' : ''} for this order...</div>`;
+  }
+
+  panel.innerHTML = `
+    <h3>Packing: ${esc(o.order_number)} ${o.order_name ? '(' + esc(o.order_name) + ')' : ''}</h3>
+    <div class="ao-top">
+      <div class="ao-info">
+        <p><strong>Customer:</strong> ${esc(o.customer_name)}</p>
+        <p><strong>Status:</strong> <span class="badge badge-${o.order_status}">${o.order_status}</span></p>
+        <p><strong>Progress:</strong> ${o.picked} / ${o.total} items</p>
+      </div>
+      <div class="ao-qr">
+        <img src="${API}/orders/${o.order_id}/qrcode" alt="Order QR" title="Order Label">
+        <div style="margin-top:4px">
+          <button class="btn btn-outline btn-sm" onclick="printOrderLabel('${o.order_id}')">Print Order Label</button>
+        </div>
+      </div>
+    </div>
+    <div class="ao-actions">
+      <button class="btn btn-outline btn-sm" style="color:#999;border-color:#ccc" onclick="clearActiveOrder()">Skip Order</button>
+    </div>
+    <div class="progress-bar" style="height:20px;margin-top:12px">
+      <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${pct}%</div>
+    </div>
+    <table style="margin-top:12px;box-shadow:none;font-size:13px">
+      <thead><tr><th style="width:30px"></th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th></tr></thead>
+      <tbody>${itemsHtml}</tbody>
+    </table>
+    ${bottomHtml}
+  `;
+}
+
+function clearActiveOrder() {
+  activeOrderId = null;
+  document.getElementById('active-order').style.display = 'none';
+  document.getElementById('scan-result').className = 'scan-result';
+  document.getElementById('scan-input').placeholder = 'Scan or type QR code (e.g. PICK-XXXXXXXX)...';
+  document.getElementById('scan-input').focus();
+}
+
+function printOrderLabel(orderId) {
+  window.open(API + '/orders/' + orderId + '/qrcode', '_blank');
 }
 
 // Export QR codes
@@ -426,19 +568,23 @@ async function buyLmLabel() {
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
-async function markDropOff(orderId) {
-  if (!confirm('Mark this order as Drop Off?')) return;
+async function printAndDropOff(orderId, labelUrl) {
+  window.open(labelUrl, '_blank');
   try {
     const res = await fetch(API + '/orders/' + orderId + '/status', {
       method: 'PATCH', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ status: 'drop_off' }),
     });
     if (res.ok) {
-      toast('Order marked as Drop Off');
+      toast('Shipping label opened & order marked as Drop Off');
       await refreshProgress();
+      // Auto-clear active order and move to next
+      if (activeOrderId === orderId) {
+        clearActiveOrder();
+      }
     } else {
       const e = await res.json().catch(() => ({}));
-      toast(e.detail || 'Error', 'error');
+      toast(e.detail || 'Error updating status', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
