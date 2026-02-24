@@ -276,6 +276,50 @@ def generate_qr(product_id: str, db: Session = Depends(get_db)):
     return {"qr_code_path": path}
 
 
+@router.post("/regen-all-qr")
+def regen_all_qr(db: Session = Depends(get_db)):
+    """Regenerate QR codes for ALL products and orders (2x1in format)."""
+    import os
+
+    from app.config import settings
+    from app.models.order import Order
+    from app.models.product import Product
+    from app.services.qr_service import generate_order_qr, generate_product_qr
+
+    os.makedirs(settings.QR_CODE_DIR, exist_ok=True)
+
+    # Regen products
+    products = db.query(Product).all()
+    product_count = 0
+    for p in products:
+        try:
+            path = generate_product_qr(p)
+            p.qr_code_path = path
+            product_count += 1
+        except Exception:
+            pass
+
+    # Regen orders
+    orders = db.query(Order).all()
+    order_count = 0
+    for o in orders:
+        try:
+            qr_bytes = generate_order_qr(o)
+            qr_path = os.path.join(settings.QR_CODE_DIR, f"order-{o.order_number}.png")
+            with open(qr_path, "wb") as f:
+                f.write(qr_bytes)
+            o.qr_code_path = qr_path
+            order_count += 1
+        except Exception:
+            pass
+
+    db.commit()
+    return {
+        "products_regenerated": product_count,
+        "orders_regenerated": order_count,
+    }
+
+
 @router.get("/{product_id}/qrcode")
 def get_qrcode(product_id: str, db: Session = Depends(get_db)):
     """Get QR code label for a product (regenerated on-the-fly with styled label)."""
