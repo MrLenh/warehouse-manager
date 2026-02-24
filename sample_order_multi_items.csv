@@ -1,0 +1,6 @@
+order_name,customer_name,customer_email,customer_phone,ship_to_name,ship_to_street1,ship_to_street2,ship_to_city,ship_to_state,ship_to_zip,ship_to_country,carrier,service,sku,item_name,quantity,notes
+Order 001,John Smith,john@example.com,555-1234,John Smith,123 Main St,,New York,NY,10001,US,USPS,GroundAdvantage,SKU-001,Widget A,2,Handle with care
+Order 001,,,,,,,,,,,,,,SKU-002,Widget B,1,
+Order 001,,,,,,,,,,,,,,SKU-003,Widget C,3,
+Order 002,Jane Doe,jane@example.com,555-5678,Jane Doe,456 Oak Ave,Apt 5B,Los Angeles,CA,90001,US,UPS,Ground,SKU-001,Widget A,1,Gift wrap please
+Order 002,,,,,,,,,,,,,,SKU-002,Widget B,4,
