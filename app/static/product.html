@@ -104,6 +104,22 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f6f6f
 @keyframes spin{to{transform:rotate(360deg)}}
 .error{text-align:center;padding:120px 20px;color:#c62828;font-size:16px}
 
+/* Image edit inline */
+.img-edit-bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;justify-content:center}
+.img-edit-bar input{flex:1;padding:8px 12px;border:1px solid #c9cccf;border-radius:8px;font-size:13px;font-family:inherit;outline:none}
+.img-edit-bar input:focus{border-color:#2c6ecb;box-shadow:0 0 0 2px rgba(44,110,203,.15)}
+.img-edit-bar button{padding:8px 14px;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;transition:.15s}
+.img-edit-bar .btn-save{background:#2c6ecb;color:#fff}
+.img-edit-bar .btn-save:hover{background:#1a5db0}
+.img-edit-bar .btn-cancel{background:#f0f0f0;color:#333}
+.img-edit-bar .btn-cancel:hover{background:#e0e0e0}
+.img-edit-link{display:inline-block;font-size:13px;color:#2c6ecb;cursor:pointer;text-decoration:none;margin-bottom:12px}
+.img-edit-link:hover{text-decoration:underline}
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast-success{background:#1a7d2f}
+.toast-error{background:#c62828}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+
 /* Responsive */
 @media(max-width:768px){
   .product-layout{grid-template-columns:1fr;gap:20px}
@@ -263,9 +279,25 @@ function render() {
   const mainImg = p.image_url ? p.image_url : qrImgUrl;
   const mainAlt = p.image_url ? esc(p.name) : 'QR Code - ' + esc(displaySku);
   html += '<div class="media-main"><img src="' + mainImg + '" alt="' + mainAlt + '"></div>';
+  // Update image button / inline editor
+  html += '<div id="img-edit-area" style="text-align:center">';
+  html += '<div id="img-edit-display">';
   if (p.image_url) {
-    html += '<div style="margin-bottom:12px;text-align:center"><a href="' + qrImgUrl + '" target="_blank" style="font-size:13px;color:#2c6ecb;text-decoration:none">View QR Code</a></div>';
+    html += '<a href="' + qrImgUrl + '" target="_blank" style="font-size:13px;color:#2c6ecb;text-decoration:none;margin-right:12px">View QR Code</a>';
   }
+  html += '<span class="img-edit-link" onclick="showImageEdit()">Update Image</span>';
+  html += '</div>';
+  html += '<div id="img-edit-form" style="display:none">';
+  html += '<div class="img-edit-bar">';
+  html += '<input type="url" id="img-url-input" placeholder="https://example.com/image.jpg" value="' + escAttr(p.image_url || '') + '">';
+  html += '<button class="btn-save" onclick="saveImageUrl()">Save</button>';
+  html += '<button class="btn-cancel" onclick="hideImageEdit()">Cancel</button>';
+  html += '</div>';
+  if (p.image_url) {
+    html += '<span class="img-edit-link" style="color:#c62828;font-size:12px" onclick="removeImage()">Remove image</span>';
+  }
+  html += '</div>';
+  html += '</div>';
   if (baseDomain) {
     html += '<div class="qr-link-box">';
     html += '<a href="' + esc(scanUrl) + '" target="_blank">' + esc(scanUrl) + '</a>';
@@ -402,6 +434,58 @@ function esc(s) {
 
 function escAttr(s) {
   return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function showImageEdit() {
+  document.getElementById('img-edit-display').style.display = 'none';
+  document.getElementById('img-edit-form').style.display = '';
+  document.getElementById('img-url-input').focus();
+}
+
+function hideImageEdit() {
+  document.getElementById('img-edit-display').style.display = '';
+  document.getElementById('img-edit-form').style.display = 'none';
+}
+
+async function saveImageUrl() {
+  const url = document.getElementById('img-url-input').value.trim();
+  const res = await fetch(API + '/products/' + productId, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ image_url: url }),
+  });
+  if (res.ok) {
+    productData = await res.json();
+    toast('Image updated');
+    render();
+  } else {
+    const e = await res.json();
+    toast(e.detail || 'Error updating image', 'error');
+  }
+}
+
+async function removeImage() {
+  const res = await fetch(API + '/products/' + productId, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ image_url: '' }),
+  });
+  if (res.ok) {
+    productData = await res.json();
+    toast('Image removed');
+    render();
+  } else {
+    const e = await res.json();
+    toast(e.detail || 'Error removing image', 'error');
+  }
 }
 
 function copyLink(url, btn) {
