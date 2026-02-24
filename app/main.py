@@ -92,7 +92,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/api/v1/admin/clear-all-data")
+@app.get("/api/v1/admin/clear-all-data")
 def clear_all_data():
     """Temporary endpoint to clear all data from the database."""
     from app.database import SessionLocal
