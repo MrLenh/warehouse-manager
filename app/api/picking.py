@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.picking import PickingListCreate, PickingListOut, ScanResult
 from app.services import picking_service
-from app.services.qr_service import _get_font, QR_SIZE, LABEL_WIDTH, PADDING
+from app.services.qr_service import _get_font, _draw_label_2x1, DPI, LABEL_W, LABEL_H
 
 router = APIRouter(prefix="/picking-lists", tags=["picking"])
 
@@ -69,9 +69,8 @@ def scan_qr(qr_code: str, db: Session = Depends(get_db)):
 
 @router.get("/{picking_list_id}/qrcodes")
 def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
-    """Export all QR codes for a picking list as a printable PDF (5x7 inch pages)."""
-    import qrcode
-    from PIL import Image, ImageDraw
+    """Export all QR codes for a picking list as a printable PDF (2x1 inch labels)."""
+    from app.models.order import Order
 
     pl = picking_service.get_picking_list(db, picking_list_id)
     if not pl:
@@ -80,80 +79,34 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     if not pl.items:
         raise HTTPException(400, "No items in picking list")
 
-    # 5x7 inches at 300 DPI
-    DPI = 300
-    PAGE_W = int(5 * DPI)   # 1500
-    PAGE_H = int(7 * DPI)   # 2100
-    QR_LABEL_SIZE = 800
-    MARGIN = 100
-
-    font_title = _get_font(48)
-    font_sku = _get_font(56)
-    font_name = _get_font(36)
-    font_detail = _get_font(28)
-    font_qr_code = _get_font(24)
-
+    # Cache order info to avoid repeated queries
+    order_cache = {}
     pages = []
+
     for item in pl.items:
-        # Generate QR code
-        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=2)
-        qr.add_data(item.qr_code)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-        qr_img = qr_img.resize((QR_LABEL_SIZE, QR_LABEL_SIZE), Image.NEAREST)
+        # Get order info
+        if item.order_id not in order_cache:
+            order = db.query(Order).filter(Order.id == item.order_id).first()
+            order_cache[item.order_id] = order
 
-        # Create page
-        page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-        draw = ImageDraw.Draw(page)
+        order = order_cache[item.order_id]
 
-        # Center QR code horizontally, place near top
-        qr_x = (PAGE_W - QR_LABEL_SIZE) // 2
-        qr_y = MARGIN + 60
-        page.paste(qr_img, (qr_x, qr_y))
-
-        # Text below QR
-        text_y = qr_y + QR_LABEL_SIZE + 40
-
-        # SKU (large, bold)
-        _draw_centered(draw, item.sku, font_sku, PAGE_W, text_y, "#000000")
-        text_y += 70
-
-        # Product name
-        name_display = item.product_name[:35] + "..." if len(item.product_name) > 35 else item.product_name
-        _draw_centered(draw, name_display, font_name, PAGE_W, text_y, "#333333")
-        text_y += 50
-
-        # Variant
+        # Build text lines for right side
+        lines = [
+            ("20", item.sku, "#000000"),
+            ("12", item.product_name, "#333333"),
+        ]
         if item.variant_label:
-            _draw_centered(draw, item.variant_label, font_detail, PAGE_W, text_y, "#555555")
-            text_y += 40
-
-        # Sequence / unit number
-        _draw_centered(draw, f"Unit #{item.sequence}", font_detail, PAGE_W, text_y, "#667eea")
-        text_y += 50
-
-        # QR code string (for manual entry)
-        _draw_centered(draw, item.qr_code, font_qr_code, PAGE_W, text_y, "#888888")
-        text_y += 40
-
-        # Order info at bottom
-        from app.models.order import Order
-        order = db.query(Order).filter(Order.id == item.order_id).first()
+            lines.append(("10", item.variant_label, "#555555"))
+        lines.append(("10", f"#{item.sequence} | {item.qr_code}", "#888888"))
         if order:
-            order_info = f"Order: {order.order_number}"
+            order_label = order.order_number
             if order.order_name:
-                order_info += f" ({order.order_name})"
-            _draw_centered(draw, order_info, font_detail, PAGE_W, text_y, "#888888")
-            text_y += 36
-            _draw_centered(draw, order.customer_name, font_detail, PAGE_W, text_y, "#888888")
+                order_label += f" ({order.order_name})"
+            lines.append(("9", order_label, "#888888"))
 
-        # Border
-        draw.rectangle([(20, 20), (PAGE_W - 21, PAGE_H - 21)], outline="#cccccc", width=2)
-
-        # Picking list number at top
-        _draw_centered(draw, pl.picking_number, font_qr_code, PAGE_W, 30, "#aaaaaa")
-
-        pages.append(page)
+        label_img = _draw_label_2x1(item.qr_code, lines)
+        pages.append(label_img)
 
     if not pages:
         raise HTTPException(400, "No labels generated")
@@ -165,11 +118,3 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     return StreamingResponse(buf, media_type="application/pdf", headers={
         "Content-Disposition": f"inline; filename=picking-{pl.picking_number}.pdf"
     })
-
-
-def _draw_centered(draw, text: str, font, page_w: int, y: int, color: str):
-    """Draw text centered horizontally on the page."""
-    bbox = draw.textbbox((0, 0), text, font=font)
-    tw = bbox[2] - bbox[0]
-    x = (page_w - tw) // 2
-    draw.text((x, y), text, fill=color, font=font)

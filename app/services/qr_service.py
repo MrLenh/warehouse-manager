@@ -7,13 +7,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 from app.config import settings
 
-# Label layout constants — 5x7 inch at 300 DPI
+# Label layout constants — 2x1 inch at 300 DPI
 DPI = 300
-PAGE_W = int(5 * DPI)   # 1500
-PAGE_H = int(7 * DPI)   # 2100
-QR_SIZE = 800
-LABEL_WIDTH = PAGE_W
-PADDING = 80
+LABEL_W = int(2 * DPI)   # 600
+LABEL_H = int(1 * DPI)   # 300
+QR_SIZE = LABEL_H - 20   # 280, nearly full height with small margin
+PADDING = 10
 
 
 def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -30,6 +29,59 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+def _draw_label_2x1(qr_data: str, lines: list[tuple[str, str, str]]) -> Image.Image:
+    """Create a 2x1 inch label: QR on left, text info on right.
+
+    Args:
+        qr_data: data to encode in QR code
+        lines: list of (font_size, text, color) tuples
+    Returns:
+        PIL Image
+    """
+    # Generate QR code
+    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=1)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    qr_img = qr_img.resize((QR_SIZE, QR_SIZE), Image.NEAREST)
+
+    # Create label
+    img = Image.new("RGB", (LABEL_W, LABEL_H), "white")
+    draw = ImageDraw.Draw(img)
+
+    # QR on left, vertically centered
+    qr_x = PADDING
+    qr_y = (LABEL_H - QR_SIZE) // 2
+    img.paste(qr_img, (qr_x, qr_y))
+
+    # Text on right side
+    text_x = PADDING + QR_SIZE + PADDING
+    text_area_w = LABEL_W - text_x - PADDING
+
+    # Calculate total text height to vertically center
+    total_text_h = 0
+    rendered_lines = []
+    for font_size_str, text, color in lines:
+        sz = int(font_size_str)
+        font = _get_font(sz)
+        # Truncate if too wide
+        while text and draw.textbbox((0, 0), text, font=font)[2] > text_area_w and len(text) > 3:
+            text = text[:-4] + "..."
+        rendered_lines.append((font, text, color, sz + 4))
+        total_text_h += sz + 4
+
+    y = max(PADDING, (LABEL_H - total_text_h) // 2)
+
+    for font, text, color, line_h in rendered_lines:
+        draw.text((text_x, y), text, fill=color, font=font)
+        y += line_h
+
+    # Border
+    draw.rectangle([(0, 0), (LABEL_W - 1, LABEL_H - 1)], outline="#cccccc", width=1)
+
+    return img
+
+
 def generate_qr_label(
     sku: str,
     name: str,
@@ -40,72 +92,28 @@ def generate_qr_label(
     location: str = "",
     price: float = 0.0,
 ) -> bytes:
-    """Generate a QR code label image with text info below. Returns PNG bytes."""
-    # QR data = URL to product detail page
+    """Generate a 2x1 inch QR code label. QR left, info right. Returns PNG bytes."""
     base = settings.BASE_URL.rstrip("/")
     qr_data = f"{base}/product/{product_id}"
     if variant_id:
         qr_data += f"?variant={variant_id}"
 
-    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=2)
-    qr.add_data(qr_data)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-    qr_img = qr_img.resize((QR_SIZE, QR_SIZE), Image.NEAREST)
-
-    # Build text lines — sized for 5x7 inch print
-    font_big = _get_font(56)
-    font_med = _get_font(36)
-    font_sm = _get_font(28)
-
-    lines = []
     display_sku = variant_sku or sku
-    lines.append(("sku", display_sku))
-    display_name = name if len(name) <= 35 else name[:32] + "..."
-    lines.append(("name", display_name))
+    lines = [
+        ("22", display_sku, "#000000"),
+        ("14", name, "#333333"),
+    ]
     if variant_label:
-        lines.append(("variant", variant_label))
+        lines.append(("12", variant_label, "#555555"))
     if location:
-        lines.append(("location", f"Loc: {location}"))
+        lines.append(("11", f"Loc: {location}", "#888888"))
     if price > 0:
-        lines.append(("price", f"${price:.2f}"))
+        lines.append(("12", f"${price:.2f}", "#667eea"))
 
-    # Calculate text block height
-    line_height = {"sku": 70, "name": 50, "variant": 42, "location": 38, "price": 38}
-    text_height = sum(line_height.get(t, 42) for t, _ in lines) + PADDING
-
-    # Create 5x7 inch page
-    img = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-
-    # Paste QR centered near top
-    qr_x = (PAGE_W - QR_SIZE) // 2
-    qr_y = PADDING + 20
-    img.paste(qr_img, (qr_x, qr_y))
-
-    # Draw text below QR
-    draw = ImageDraw.Draw(img)
-    y = qr_y + QR_SIZE + 40
-
-    for line_type, text in lines:
-        if line_type == "sku":
-            font = font_big
-        elif line_type == "name":
-            font = font_med
-        else:
-            font = font_sm
-
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw = bbox[2] - bbox[0]
-        x = (PAGE_W - tw) // 2
-        color = "#333333" if line_type != "price" else "#667eea"
-        draw.text((x, y), text, fill=color, font=font)
-        y += line_height.get(line_type, 42)
-
-    # Draw border
-    draw.rectangle([(20, 20), (PAGE_W - 21, PAGE_H - 21)], outline="#cccccc", width=2)
+    img = _draw_label_2x1(qr_data, lines)
 
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG", dpi=(DPI, DPI))
     buf.seek(0)
     return buf.getvalue()
 
@@ -145,71 +153,34 @@ def generate_variant_qr(variant, product) -> bytes:
 
 
 def generate_order_qr(order) -> bytes:
-    """Generate a QR code label for an order (for picking/packing). Returns PNG bytes."""
+    """Generate a 2x1 inch QR label for an order. Returns PNG bytes."""
     base = settings.BASE_URL.rstrip("/")
     qr_data = f"{base}/order/{order.id}"
 
-    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=2)
-    qr.add_data(qr_data)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-    qr_img = qr_img.resize((QR_SIZE, QR_SIZE), Image.NEAREST)
-
-    font_big = _get_font(56)
-    font_med = _get_font(36)
-    font_sm = _get_font(28)
-
-    lines = []
-    lines.append(("sku", order.order_number))
+    lines = [
+        ("22", order.order_number, "#000000"),
+    ]
     if order.order_name:
-        display_name = order.order_name if len(order.order_name) <= 35 else order.order_name[:32] + "..."
-        lines.append(("name", display_name))
-    lines.append(("variant", order.customer_name))
-    lines.append(("location", f"Items: {len(order.items)}"))
-    lines.append(("price", order.status.upper() if isinstance(order.status, str) else order.status.value.upper()))
+        lines.append(("13", order.order_name, "#333333"))
+    lines.append(("12", order.customer_name, "#555555"))
+    lines.append(("11", f"Items: {len(order.items)}", "#888888"))
+    status_str = order.status.upper() if isinstance(order.status, str) else order.status.value.upper()
+    lines.append(("11", status_str, "#667eea"))
 
-    line_height = {"sku": 70, "name": 50, "variant": 42, "location": 38, "price": 38}
-    text_height = sum(line_height.get(t, 42) for t, _ in lines) + PADDING
-
-    img = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-
-    qr_x = (PAGE_W - QR_SIZE) // 2
-    qr_y = PADDING + 20
-    img.paste(qr_img, (qr_x, qr_y))
-
-    draw = ImageDraw.Draw(img)
-    y = qr_y + QR_SIZE + 40
-
-    for line_type, text in lines:
-        if line_type == "sku":
-            font = font_big
-        elif line_type == "name":
-            font = font_med
-        else:
-            font = font_sm
-
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw = bbox[2] - bbox[0]
-        x = (PAGE_W - tw) // 2
-        color = "#333333" if line_type != "price" else "#667eea"
-        draw.text((x, y), text, fill=color, font=font)
-        y += line_height.get(line_type, 42)
-
-    draw.rectangle([(20, 20), (PAGE_W - 21, PAGE_H - 21)], outline="#cccccc", width=2)
+    img = _draw_label_2x1(qr_data, lines)
 
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG", dpi=(DPI, DPI))
     buf.seek(0)
     return buf.getvalue()
 
 
 def generate_bulk_qr_page(product, variants: list) -> bytes:
-    """Generate a printable PDF with QR labels (5x7 inch pages, one per page).
-    Returns PDF bytes.
+    """Generate a printable PDF with 2x1 inch QR labels, one per page.
+    Returns PDF bytes (or PNG if single label).
     """
     pages = []
 
-    # Product label
     product_bytes = generate_qr_label(
         sku=product.sku,
         name=product.name,
@@ -219,7 +190,6 @@ def generate_bulk_qr_page(product, variants: list) -> bytes:
     )
     pages.append(Image.open(io.BytesIO(product_bytes)))
 
-    # Variant labels
     for v in variants:
         v_bytes = generate_variant_qr(v, product)
         pages.append(Image.open(io.BytesIO(v_bytes)))
@@ -227,14 +197,13 @@ def generate_bulk_qr_page(product, variants: list) -> bytes:
     if not pages:
         return product_bytes
 
-    # Single label → return PNG
     if len(pages) == 1:
         buf = io.BytesIO()
-        pages[0].save(buf, format="PNG")
+        pages[0].save(buf, format="PNG", dpi=(DPI, DPI))
         buf.seek(0)
         return buf.getvalue()
 
-    # Multiple labels → return PDF (one label per 5x7 page)
+    # Multiple labels → PDF
     buf = io.BytesIO()
     pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=DPI)
     buf.seek(0)
