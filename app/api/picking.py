@@ -69,7 +69,7 @@ def scan_qr(qr_code: str, db: Session = Depends(get_db)):
 
 @router.get("/{picking_list_id}/qrcodes")
 def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
-    """Export all QR codes for a picking list as a printable PNG page."""
+    """Export all QR codes for a picking list as a printable PDF (5x7 inch pages)."""
     import qrcode
     from PIL import Image, ImageDraw
 
@@ -80,74 +80,96 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     if not pl.items:
         raise HTTPException(400, "No items in picking list")
 
-    font_big = _get_font(18)
-    font_med = _get_font(14)
-    font_sm = _get_font(11)
+    # 5x7 inches at 300 DPI
+    DPI = 300
+    PAGE_W = int(5 * DPI)   # 1500
+    PAGE_H = int(7 * DPI)   # 2100
+    QR_LABEL_SIZE = 800
+    MARGIN = 100
 
-    labels = []
+    font_title = _get_font(48)
+    font_sku = _get_font(56)
+    font_name = _get_font(36)
+    font_detail = _get_font(28)
+    font_qr_code = _get_font(24)
+
+    pages = []
     for item in pl.items:
-        # Generate QR for each pick item
-        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=6, border=2)
+        # Generate QR code
+        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=2)
         qr.add_data(item.qr_code)
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-        qr_size = 200
-        qr_img = qr_img.resize((qr_size, qr_size), Image.NEAREST)
+        qr_img = qr_img.resize((QR_LABEL_SIZE, QR_LABEL_SIZE), Image.NEAREST)
 
-        # Build label
-        label_w = 260
-        lines = [
-            ("big", item.sku),
-            ("med", item.product_name[:25] + "..." if len(item.product_name) > 25 else item.product_name),
-        ]
+        # Create page
+        page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+        draw = ImageDraw.Draw(page)
+
+        # Center QR code horizontally, place near top
+        qr_x = (PAGE_W - QR_LABEL_SIZE) // 2
+        qr_y = MARGIN + 60
+        page.paste(qr_img, (qr_x, qr_y))
+
+        # Text below QR
+        text_y = qr_y + QR_LABEL_SIZE + 40
+
+        # SKU (large, bold)
+        _draw_centered(draw, item.sku, font_sku, PAGE_W, text_y, "#000000")
+        text_y += 70
+
+        # Product name
+        name_display = item.product_name[:35] + "..." if len(item.product_name) > 35 else item.product_name
+        _draw_centered(draw, name_display, font_name, PAGE_W, text_y, "#333333")
+        text_y += 50
+
+        # Variant
         if item.variant_label:
-            lines.append(("sm", item.variant_label))
-        lines.append(("sm", f"#{item.sequence} | {item.qr_code}"))
+            _draw_centered(draw, item.variant_label, font_detail, PAGE_W, text_y, "#555555")
+            text_y += 40
 
-        line_h = {"big": 24, "med": 20, "sm": 16}
-        text_h = sum(line_h[t] for t, _ in lines) + 8
-        total_h = qr_size + text_h + 24
+        # Sequence / unit number
+        _draw_centered(draw, f"Unit #{item.sequence}", font_detail, PAGE_W, text_y, "#667eea")
+        text_y += 50
 
-        img = Image.new("RGB", (label_w, total_h), "white")
-        qr_x = (label_w - qr_size) // 2
-        img.paste(qr_img, (qr_x, 8))
+        # QR code string (for manual entry)
+        _draw_centered(draw, item.qr_code, font_qr_code, PAGE_W, text_y, "#888888")
+        text_y += 40
 
-        draw = ImageDraw.Draw(img)
-        y = qr_size + 12
-        for lt, text in lines:
-            font = {"big": font_big, "med": font_med, "sm": font_sm}[lt]
-            bbox = draw.textbbox((0, 0), text, font=font)
-            tw = bbox[2] - bbox[0]
-            x = (label_w - tw) // 2
-            draw.text((x, y), text, fill="#333", font=font)
-            y += line_h[lt]
+        # Order info at bottom
+        from app.models.order import Order
+        order = db.query(Order).filter(Order.id == item.order_id).first()
+        if order:
+            order_info = f"Order: {order.order_number}"
+            if order.order_name:
+                order_info += f" ({order.order_name})"
+            _draw_centered(draw, order_info, font_detail, PAGE_W, text_y, "#888888")
+            text_y += 36
+            _draw_centered(draw, order.customer_name, font_detail, PAGE_W, text_y, "#888888")
 
-        draw.rectangle([(0, 0), (label_w - 1, total_h - 1)], outline="#ccc", width=1)
-        labels.append(img)
+        # Border
+        draw.rectangle([(20, 20), (PAGE_W - 21, PAGE_H - 21)], outline="#cccccc", width=2)
 
-    if not labels:
+        # Picking list number at top
+        _draw_centered(draw, pl.picking_number, font_qr_code, PAGE_W, 30, "#aaaaaa")
+
+        pages.append(page)
+
+    if not pages:
         raise HTTPException(400, "No labels generated")
 
-    # Layout: 3 columns
-    cols = 3
-    gap = 8
-    rows_count = (len(labels) + cols - 1) // cols
-    lw = labels[0].width
-    lh = max(l.height for l in labels)
-    page_w = cols * lw + (cols + 1) * gap
-    page_h = rows_count * lh + (rows_count + 1) * gap
-
-    page = Image.new("RGB", (page_w, page_h), "white")
-    for idx, label in enumerate(labels):
-        col = idx % cols
-        row = idx // cols
-        x = gap + col * (lw + gap)
-        y = gap + row * (lh + gap)
-        page.paste(label, (x, y))
-
+    # Save as multi-page PDF
     buf = io.BytesIO()
-    page.save(buf, format="PNG")
+    pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=DPI)
     buf.seek(0)
-    return StreamingResponse(buf, media_type="image/png", headers={
-        "Content-Disposition": f"inline; filename=picking-{pl.picking_number}.png"
+    return StreamingResponse(buf, media_type="application/pdf", headers={
+        "Content-Disposition": f"inline; filename=picking-{pl.picking_number}.pdf"
     })
+
+
+def _draw_centered(draw, text: str, font, page_w: int, y: int, color: str):
+    """Draw text centered horizontally on the page."""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    x = (page_w - tw) // 2
+    draw.text((x, y), text, fill=color, font=font)

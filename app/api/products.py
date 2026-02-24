@@ -294,12 +294,17 @@ def get_qrcode(product_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{product_id}/qrcode/bulk")
 def get_bulk_qrcode(product_id: str, db: Session = Depends(get_db)):
-    """Get a printable sheet with QR labels for product + all variants."""
+    """Get a printable PDF with QR labels for product + all variants (5x7in pages)."""
     product = product_service.get_product(db, product_id)
     if not product:
         raise HTTPException(404, "Product not found")
-    img_bytes = generate_bulk_qr_page(product, product.variants)
-    return Response(content=img_bytes, media_type="image/png")
+    data = generate_bulk_qr_page(product, product.variants)
+    # Detect format: PDF starts with %PDF
+    if data[:4] == b"%PDF":
+        return Response(content=data, media_type="application/pdf", headers={
+            "Content-Disposition": f"inline; filename=qr-{product.sku}-bulk.pdf"
+        })
+    return Response(content=data, media_type="image/png")
 
 
 @router.get("/variants/{variant_id}/qrcode")
