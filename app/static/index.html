@@ -64,8 +64,19 @@ tr:hover{background:#f8f9ff}
 .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .order-items-list{margin:12px 0}
 .order-item-row{display:flex;gap:10px;align-items:center;margin-bottom:8px}
-.order-item-row select,.order-item-row input{flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px}
+.order-item-row select,.order-item-row input:not(.oi-search){flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px}
 .order-item-row .btn{flex-shrink:0}
+.product-search-wrap{position:relative;flex:1;min-width:180px}
+.product-search-wrap input{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none;transition:.2s}
+.product-search-wrap input:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+.product-search-wrap .ps-dropdown{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.product-search-wrap.open .ps-dropdown{display:block}
+.ps-dropdown .ps-item{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+.ps-dropdown .ps-item:hover,.ps-dropdown .ps-item.active{background:#f0f3ff}
+.ps-dropdown .ps-item .ps-sku{font-weight:600;color:#333}
+.ps-dropdown .ps-item .ps-name{color:#888;font-size:12px;margin-left:8px}
+.ps-dropdown .ps-item .ps-qty{font-size:11px;color:#667eea;white-space:nowrap}
+.ps-dropdown .ps-empty{padding:12px;text-align:center;color:#999;font-size:13px}
 .empty{text-align:center;padding:60px;color:#999;font-size:15px}
 .toast{position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .toast-success{background:#28a745}
@@ -1096,21 +1107,73 @@ function addOrderItemRow() {
   div.className = 'order-item-row';
   div.style.flexWrap = 'wrap';
   div.innerHTML = `
-    <select class="oi-product" onchange="onProductSelect(this)">${allProducts.map(p => `<option value="${p.id}" data-variants='${JSON.stringify((p.variants||[]).map(v=>({id:v.id,sku:v.variant_sku,attrs:v.attributes,qty:v.quantity})))}'>${esc(p.sku)} - ${esc(p.name)} (${p.variants && p.variants.length > 0 ? p.variants.length + ' variants' : p.quantity})</option>`).join('')}</select>
+    <div class="product-search-wrap">
+      <input type="text" class="oi-search" placeholder="Search SKU or name..." autocomplete="off">
+      <input type="hidden" class="oi-product-id">
+      <input type="hidden" class="oi-product-variants">
+      <div class="ps-dropdown"></div>
+    </div>
     <select class="oi-variant" style="display:none"></select>
     <input type="number" class="oi-qty" value="1" min="1" style="max-width:80px" placeholder="SL">
     <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">X</button>
   `;
   document.getElementById('order-items-list').appendChild(div);
-  // Trigger initial check
-  onProductSelect(div.querySelector('.oi-product'));
+  initProductSearch(div);
 }
 
-function onProductSelect(sel) {
-  const row = sel.closest('.order-item-row');
+function initProductSearch(row) {
+  const wrap = row.querySelector('.product-search-wrap');
+  const input = wrap.querySelector('.oi-search');
+  const hiddenId = wrap.querySelector('.oi-product-id');
+  const hiddenVariants = wrap.querySelector('.oi-product-variants');
+  const dropdown = wrap.querySelector('.ps-dropdown');
+
+  function renderDropdown(filter) {
+    const q = (filter || '').toLowerCase();
+    const filtered = allProducts.filter(p => {
+      return p.sku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q);
+    });
+    if (filtered.length === 0) {
+      dropdown.innerHTML = '<div class="ps-empty">No products found</div>';
+    } else {
+      dropdown.innerHTML = filtered.map(p => {
+        const qtyLabel = p.variants && p.variants.length > 0 ? p.variants.length + ' variants' : p.quantity;
+        return `<div class="ps-item" data-id="${p.id}" data-variants='${JSON.stringify((p.variants||[]).map(v=>({id:v.id,sku:v.variant_sku,attrs:v.attributes,qty:v.quantity})))}'>
+          <span><span class="ps-sku">${esc(p.sku)}</span><span class="ps-name">${esc(p.name)}</span></span>
+          <span class="ps-qty">${qtyLabel}</span>
+        </div>`;
+      }).join('');
+    }
+    wrap.classList.add('open');
+  }
+
+  input.addEventListener('focus', () => renderDropdown(input.value));
+  input.addEventListener('input', () => {
+    hiddenId.value = '';
+    hiddenVariants.value = '[]';
+    renderDropdown(input.value);
+  });
+
+  dropdown.addEventListener('click', (e) => {
+    const item = e.target.closest('.ps-item');
+    if (!item) return;
+    const pid = item.dataset.id;
+    const variants = item.dataset.variants;
+    const p = allProducts.find(x => x.id == pid);
+    input.value = p.sku + ' - ' + p.name;
+    hiddenId.value = pid;
+    hiddenVariants.value = variants;
+    wrap.classList.remove('open');
+    onProductSearchSelect(row, JSON.parse(variants || '[]'));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!wrap.contains(e.target)) wrap.classList.remove('open');
+  });
+}
+
+function onProductSearchSelect(row, variants) {
   const variantSel = row.querySelector('.oi-variant');
-  const opt = sel.options[sel.selectedIndex];
-  const variants = JSON.parse(opt.dataset.variants || '[]');
   if (variants.length > 0) {
     variantSel.style.display = '';
     variantSel.innerHTML = variants.map(v => {
@@ -1127,8 +1190,9 @@ function onProductSelect(sel) {
 async function saveOrder() {
   const rows = document.querySelectorAll('.order-item-row');
   const items = Array.from(rows).map(r => {
+    const pid = r.querySelector('.oi-product-id');
     const item = {
-      product_id: r.querySelector('.oi-product').value,
+      product_id: pid ? pid.value : '',
       quantity: parseInt(r.querySelector('.oi-qty').value) || 1,
     };
     const variantSel = r.querySelector('.oi-variant');
@@ -1137,7 +1201,7 @@ async function saveOrder() {
     }
     return item;
   });
-  if (items.length === 0) { toast('No products selected', 'error'); return; }
+  if (items.length === 0 || items.some(i => !i.product_id)) { toast('Please select a product for all rows', 'error'); return; }
   const body = {
     order_name: document.getElementById('o-order-name').value,
     customer_name: document.getElementById('o-name').value,
@@ -1378,39 +1442,82 @@ function addSrItemRow() {
   div.className = 'order-item-row';
   div.style.flexWrap = 'wrap';
   div.innerHTML = `
-    <select class="sri-product" onchange="onSrProductSelect(this)">${allProducts.map(p => `<option value="${p.id}" data-variants='${JSON.stringify((p.variants||[]).map(v=>({id:v.id,sku:v.variant_sku,attrs:v.attributes})))}'>${esc(p.sku)} - ${esc(p.name)}</option>`).join('')}</select>
+    <div class="product-search-wrap">
+      <input type="text" class="oi-search" placeholder="Search SKU or name..." autocomplete="off">
+      <input type="hidden" class="oi-product-id">
+      <input type="hidden" class="oi-product-variants">
+      <div class="ps-dropdown"></div>
+    </div>
     <select class="sri-variant" style="display:none"></select>
     <input type="number" class="sri-qty" value="1" min="1" style="max-width:80px" placeholder="SL">
     <input type="number" class="sri-cost" value="0" step="0.01" style="max-width:100px" placeholder="Unit cost">
     <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">X</button>
   `;
   document.getElementById('sr-items-list').appendChild(div);
-  onSrProductSelect(div.querySelector('.sri-product'));
+  initProductSearchSr(div);
 }
 
-function onSrProductSelect(sel) {
-  const row = sel.closest('.order-item-row');
-  const variantSel = row.querySelector('.sri-variant');
-  const opt = sel.options[sel.selectedIndex];
-  const variants = JSON.parse(opt.dataset.variants || '[]');
-  if (variants.length > 0) {
-    variantSel.style.display = '';
-    variantSel.innerHTML = variants.map(v => {
-      const attrs = typeof v.attrs === 'string' ? JSON.parse(v.attrs) : (v.attrs || {});
-      const label = Object.values(attrs).join(' / ') || v.sku;
-      return `<option value="${v.id}">${esc(v.sku)} - ${label}</option>`;
-    }).join('');
-  } else {
-    variantSel.style.display = 'none';
-    variantSel.innerHTML = '';
+function initProductSearchSr(row) {
+  const wrap = row.querySelector('.product-search-wrap');
+  const input = wrap.querySelector('.oi-search');
+  const hiddenId = wrap.querySelector('.oi-product-id');
+  const hiddenVariants = wrap.querySelector('.oi-product-variants');
+  const dropdown = wrap.querySelector('.ps-dropdown');
+
+  function renderDropdown(filter) {
+    const q = (filter || '').toLowerCase();
+    const filtered = allProducts.filter(p => p.sku.toLowerCase().includes(q) || p.name.toLowerCase().includes(q));
+    if (filtered.length === 0) {
+      dropdown.innerHTML = '<div class="ps-empty">No products found</div>';
+    } else {
+      dropdown.innerHTML = filtered.map(p => {
+        return `<div class="ps-item" data-id="${p.id}" data-variants='${JSON.stringify((p.variants||[]).map(v=>({id:v.id,sku:v.variant_sku,attrs:v.attributes})))}'>
+          <span><span class="ps-sku">${esc(p.sku)}</span><span class="ps-name">${esc(p.name)}</span></span>
+        </div>`;
+      }).join('');
+    }
+    wrap.classList.add('open');
   }
+
+  input.addEventListener('focus', () => renderDropdown(input.value));
+  input.addEventListener('input', () => { hiddenId.value = ''; renderDropdown(input.value); });
+
+  dropdown.addEventListener('click', (e) => {
+    const item = e.target.closest('.ps-item');
+    if (!item) return;
+    const pid = item.dataset.id;
+    const variants = item.dataset.variants;
+    const p = allProducts.find(x => x.id == pid);
+    input.value = p.sku + ' - ' + p.name;
+    hiddenId.value = pid;
+    hiddenVariants.value = variants;
+    wrap.classList.remove('open');
+    const variantSel = row.querySelector('.sri-variant');
+    const parsedV = JSON.parse(variants || '[]');
+    if (parsedV.length > 0) {
+      variantSel.style.display = '';
+      variantSel.innerHTML = parsedV.map(v => {
+        const attrs = typeof v.attrs === 'string' ? JSON.parse(v.attrs) : (v.attrs || {});
+        const label = Object.values(attrs).join(' / ') || v.sku;
+        return `<option value="${v.id}">${esc(v.sku)} - ${label}</option>`;
+      }).join('');
+    } else {
+      variantSel.style.display = 'none';
+      variantSel.innerHTML = '';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!wrap.contains(e.target)) wrap.classList.remove('open');
+  });
 }
 
 async function saveStockRequest() {
   const rows = document.querySelectorAll('#sr-items-list .order-item-row');
   const items = Array.from(rows).map(r => {
+    const pid = r.querySelector('.oi-product-id');
     const item = {
-      product_id: r.querySelector('.sri-product').value,
+      product_id: pid ? pid.value : '',
       quantity_requested: parseInt(r.querySelector('.sri-qty').value) || 1,
       unit_cost: parseFloat(r.querySelector('.sri-cost').value) || 0,
     };
@@ -1420,7 +1527,7 @@ async function saveStockRequest() {
     }
     return item;
   });
-  if (items.length === 0) { toast('No products selected', 'error'); return; }
+  if (items.length === 0 || items.some(i => !i.product_id)) { toast('Please select a product for all rows', 'error'); return; }
   const body = {
     supplier: document.getElementById('sr-supplier').value,
     notes: document.getElementById('sr-notes').value,
