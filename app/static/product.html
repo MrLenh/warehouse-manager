@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>San pham - Warehouse Manager</title>
+<title>Product - Warehouse Manager</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f6f6f7;color:#1a1a1a;line-height:1.6}
@@ -127,14 +127,14 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f6f6f
 <div class="breadcrumb" id="breadcrumb">
   <a href="/">Dashboard</a>
   <span>/</span>
-  <span>San pham</span>
+  <span>Products</span>
 </div>
 
 <div class="container">
   <div id="content">
     <div class="loading">
       <div class="loading-spinner"></div>
-      <div>Dang tai thong tin san pham...</div>
+      <div>Loading product details...</div>
     </div>
   </div>
 </div>
@@ -152,7 +152,7 @@ let baseDomain = '';
 
 async function load() {
   if (!productId) {
-    document.getElementById('content').innerHTML = '<div class="error">Khong tim thay san pham</div>';
+    document.getElementById('content').innerHTML = '<div class="error">Product not found</div>';
     return;
   }
 
@@ -187,7 +187,7 @@ async function load() {
 
     render();
   } catch (err) {
-    document.getElementById('content').innerHTML = '<div class="error">Khong tim thay san pham: ' + esc(err.message) + '</div>';
+    document.getElementById('content').innerHTML = '<div class="error">Product not found: ' + esc(err.message) + '</div>';
   }
 }
 
@@ -243,9 +243,9 @@ function render() {
 
   // Stock status
   let stockClass, stockText;
-  if (displayQty <= 0) { stockClass = 'stock-out'; stockText = 'Het hang'; }
-  else if (displayQty <= 5) { stockClass = 'stock-low'; stockText = 'Sap het (' + displayQty + ' con lai)'; }
-  else { stockClass = 'stock-in'; stockText = 'Con hang (' + displayQty + ')'; }
+  if (displayQty <= 0) { stockClass = 'stock-out'; stockText = 'Out of stock'; }
+  else if (displayQty <= 5) { stockClass = 'stock-low'; stockText = 'Low stock (' + displayQty + ' left)'; }
+  else { stockClass = 'stock-in'; stockText = 'In stock (' + displayQty + ')'; }
 
   // QR code image URL (relative, for displaying on page)
   const qrImgUrl = sv
@@ -258,9 +258,14 @@ function render() {
 
   let html = '<div class="product-layout">';
 
-  // ---- Left column: QR / Media ----
+  // ---- Left column: Image / QR Media ----
   html += '<div class="media-section">';
-  html += '<div class="media-main"><img src="' + qrImgUrl + '" alt="QR Code - ' + esc(displaySku) + '"></div>';
+  const mainImg = p.image_url ? p.image_url : qrImgUrl;
+  const mainAlt = p.image_url ? esc(p.name) : 'QR Code - ' + esc(displaySku);
+  html += '<div class="media-main"><img src="' + mainImg + '" alt="' + mainAlt + '"></div>';
+  if (p.image_url) {
+    html += '<div style="margin-bottom:12px;text-align:center"><a href="' + qrImgUrl + '" target="_blank" style="font-size:13px;color:#2c6ecb;text-decoration:none">View QR Code</a></div>';
+  }
   if (baseDomain) {
     html += '<div class="qr-link-box">';
     html += '<a href="' + esc(scanUrl) + '" target="_blank">' + esc(scanUrl) + '</a>';
@@ -318,24 +323,24 @@ function render() {
 
   // Collapsible: Chi tiet san pham
   html += '<div class="collapse-section">';
-  html += '<button class="collapse-header" onclick="toggleCollapse(this)">Chi tiet san pham <span class="arrow open">&#9660;</span></button>';
+  html += '<button class="collapse-header" onclick="toggleCollapse(this)">Product Details <span class="arrow open">&#9660;</span></button>';
   html += '<div class="collapse-body open">';
   html += '<table class="info-table">';
-  html += '<tr><td>Vi tri</td><td>' + (esc(displayLoc) || '—') + '</td></tr>';
-  if (p.weight_oz) html += '<tr><td>Can nang</td><td>' + p.weight_oz + ' oz</td></tr>';
+  html += '<tr><td>Location</td><td>' + (esc(displayLoc) || '—') + '</td></tr>';
+  if (p.weight_oz) html += '<tr><td>Weight</td><td>' + p.weight_oz + ' oz</td></tr>';
   if (p.length_in && p.width_in && p.height_in) {
-    html += '<tr><td>Kich thuoc</td><td>' + p.length_in + ' × ' + p.width_in + ' × ' + p.height_in + ' in</td></tr>';
+    html += '<tr><td>Dimensions</td><td>' + p.length_in + ' × ' + p.width_in + ' × ' + p.height_in + ' in</td></tr>';
   }
-  html += '<tr><td>Ton kho</td><td>' + displayQty + '</td></tr>';
+  html += '<tr><td>Stock</td><td>' + displayQty + '</td></tr>';
   html += '</table>';
   html += '</div></div>';
 
   // Collapsible: Tat ca variants
   if (hasVariants) {
     html += '<div class="collapse-section">';
-    html += '<button class="collapse-header" onclick="toggleCollapse(this)">Tat ca variants (' + p.variants.length + ') <span class="arrow">&#9660;</span></button>';
+    html += '<button class="collapse-header" onclick="toggleCollapse(this)">All Variants (' + p.variants.length + ') <span class="arrow">&#9660;</span></button>';
     html += '<div class="collapse-body">';
-    html += '<table class="variants-table"><thead><tr><th>SKU</th><th>Thuoc tinh</th><th>Gia</th><th>Ton kho</th><th>Vi tri</th></tr></thead><tbody>';
+    html += '<table class="variants-table"><thead><tr><th>SKU</th><th>Attributes</th><th>Price</th><th>Stock</th><th>Location</th></tr></thead><tbody>';
     for (const v of p.variants) {
       const attrs = parseAttrs(v.attributes);
       const attrStr = Object.entries(attrs).map(([k, val]) => k + ': ' + val).join(', ');

@@ -23,6 +23,7 @@ class Product(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=0)
     location: Mapped[str] = mapped_column(String, default="")
     qr_code_path: Mapped[str] = mapped_column(String, default="")
+    image_url: Mapped[str] = mapped_column(String, default="")
 
     # Variant option types for this product, e.g. '["color","size"]'
     option_types: Mapped[str] = mapped_column(Text, default="[]")

@@ -32,6 +32,7 @@ def create_product(db: Session, data: ProductCreate) -> Product:
         price=data.price,
         quantity=data.quantity,
         location=data.location,
+        image_url=data.image_url,
         option_types=json.dumps(data.option_types),
     )
     db.add(product)

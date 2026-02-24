@@ -73,6 +73,7 @@ class ProductCreate(BaseModel):
     price: float = 0.0
     quantity: int = 0
     location: str = ""
+    image_url: str = ""
     option_types: list[str] = []  # e.g. ["color", "size"]
     variants: list[VariantCreate] = []
 
@@ -87,6 +88,7 @@ class ProductUpdate(BaseModel):
     height_in: float | None = None
     price: float | None = None
     location: str | None = None
+    image_url: str | None = None
     option_types: list[str] | None = None
 
 
@@ -104,6 +106,7 @@ class ProductOut(BaseModel):
     quantity: int
     location: str
     qr_code_path: str
+    image_url: str = ""
     option_types: list[str] = []
     variants: list[VariantOut] = []
     created_at: datetime

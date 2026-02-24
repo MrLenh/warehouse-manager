@@ -40,6 +40,16 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE variants ADD COLUMN {col_name} {col_type}"))
 
+    if "products" in tables:
+        existing = {col["name"] for col in inspector.get_columns("products")}
+        new_cols = {
+            "image_url": "VARCHAR DEFAULT ''",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE products ADD COLUMN {col_name} {col_type}"))
+
     if "orders" in tables:
         existing = {col["name"] for col in inspector.get_columns("orders")}
         new_cols = {

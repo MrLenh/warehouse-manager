@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -88,34 +88,34 @@ tr:hover{background:#f8f9ff}
 <div class="header">
   <h1>Warehouse Manager</h1>
   <div class="stats">
-    <span id="stat-products">0 SP</span>
-    <span id="stat-orders">0 DH</span>
+    <span id="stat-products">0 Products</span>
+    <span id="stat-orders">0 Orders</span>
     <span id="stat-low-stock">0 Low Stock</span>
   </div>
 </div>
 
 <div class="tabs">
-  <div class="tab active" data-tab="products">San pham</div>
-  <div class="tab" data-tab="orders">Don hang</div>
-  <div class="tab" data-tab="inventory">Kho hang</div>
-  <div class="tab" data-tab="reports">Bao cao</div>
+  <div class="tab active" data-tab="products">Products</div>
+  <div class="tab" data-tab="orders">Orders</div>
+  <div class="tab" data-tab="inventory">Inventory</div>
+  <div class="tab" data-tab="reports">Reports</div>
 </div>
 
 <div class="content">
   <!-- PRODUCTS PANEL -->
   <div class="panel active" id="panel-products">
     <div class="toolbar">
-      <input type="text" class="search" id="search-products" placeholder="Tim kiem san pham...">
+      <input type="text" class="search" id="search-products" placeholder="Search products...">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="loadProducts()">Lam moi</button>
-        <a href="/api/v1/products/import-template" class="btn btn-outline btn-sm" download>Tai mau CSV</a>
+        <button class="btn btn-outline btn-sm" onclick="loadProducts()">Refresh</button>
+        <a href="/api/v1/products/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <label class="btn btn-success btn-sm" style="margin:0">Import CSV<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-guide-modal').classList.add('show')" title="Huong dan import">?</button>
-        <button class="btn btn-primary" onclick="openProductModal()">+ Them san pham</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-guide-modal').classList.add('show')" title="Import guide">?</button>
+        <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
       </div>
     </div>
     <table>
-      <thead><tr><th>SKU</th><th>Ten</th><th>Danh muc</th><th>Gia</th><th>Variants</th><th>Ton kho</th><th>Vi tri</th><th>Thao tac</th></tr></thead>
+      <thead><tr><th style="width:48px"></th><th>SKU</th><th>Name</th><th>Category</th><th>Price</th><th>Variants</th><th>Stock</th><th>Location</th><th>Actions</th></tr></thead>
       <tbody id="products-body"></tbody>
     </table>
   </div>
@@ -124,9 +124,9 @@ tr:hover{background:#f8f9ff}
   <div class="panel" id="panel-orders">
     <div class="toolbar">
       <div style="display:flex;gap:10px;align-items:center">
-        <input type="text" class="search" id="search-orders" placeholder="Tim kiem don hang...">
+        <input type="text" class="search" id="search-orders" placeholder="Search orders...">
         <select id="filter-status" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
-          <option value="">Tat ca trang thai</option>
+          <option value="">All Statuses</option>
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
           <option value="processing">Processing</option>
@@ -139,14 +139,14 @@ tr:hover{background:#f8f9ff}
         </select>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-outline btn-sm" onclick="loadOrders()">Lam moi</button>
-        <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>Tai mau CSV</a>
-        <label class="btn btn-success btn-sm" style="margin:0">Import DH<input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="importOrderCSV(this)"></label>
-        <button class="btn btn-primary" onclick="openOrderModal()">+ Tao don hang</button>
+        <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
+        <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
+        <label class="btn btn-success btn-sm" style="margin:0">Import Orders<input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="importOrderCSV(this)"></label>
+        <button class="btn btn-primary" onclick="openOrderModal()">+ Create Order</button>
       </div>
     </div>
     <table>
-      <thead><tr><th>Ma DH</th><th>Ten DH</th><th>Khach hang</th><th>SP</th><th>Tong tien</th><th>Trang thai</th><th>Tracking</th><th>Ngay tao</th><th>Thao tac</th></tr></thead>
+      <thead><tr><th>Order #</th><th>Order Name</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
   </div>
@@ -155,18 +155,18 @@ tr:hover{background:#f8f9ff}
   <div class="panel" id="panel-inventory">
     <!-- Sub-tabs -->
     <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e8e8e8">
-      <div class="inv-tab active" data-inv="overview" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('overview')">Tong quan kho</div>
-      <div class="inv-tab" data-inv="stock-requests" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('stock-requests')">Phieu nhap kho</div>
+      <div class="inv-tab active" data-inv="overview" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('overview')">Overview</div>
+      <div class="inv-tab" data-inv="stock-requests" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('stock-requests')">Stock Requests</div>
     </div>
 
     <!-- Inventory Overview -->
     <div id="inv-overview" class="inv-panel">
       <div class="toolbar">
-        <input type="text" class="search" id="search-inventory" placeholder="Tim kiem theo SKU hoac ten...">
-        <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Lam moi</button>
+        <input type="text" class="search" id="search-inventory" placeholder="Search by SKU or name...">
+        <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
       </div>
       <table>
-        <thead><tr><th>SKU</th><th>Ten</th><th>Variant</th><th>Yeu cau nhap</th><th>Thuc nhan</th><th>Da ban</th><th>Dieu chinh</th><th>Ton kho</th><th>Vi tri</th></tr></thead>
+        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Sold</th><th>Adjusted</th><th>Stock</th><th>Location</th></tr></thead>
         <tbody id="inv-overview-body"></tbody>
       </table>
     </div>
@@ -175,9 +175,9 @@ tr:hover{background:#f8f9ff}
     <div id="inv-stock-requests" class="inv-panel" style="display:none">
       <div class="toolbar">
         <div style="display:flex;gap:10px;align-items:center">
-          <input type="text" class="search" id="search-sr" placeholder="Tim phieu nhap...">
+          <input type="text" class="search" id="search-sr" placeholder="Search requests...">
           <select id="filter-sr-status" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
-            <option value="">Tat ca trang thai</option>
+            <option value="">All Statuses</option>
             <option value="draft">Draft</option>
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
@@ -187,12 +187,12 @@ tr:hover{background:#f8f9ff}
           </select>
         </div>
         <div>
-          <button class="btn btn-outline btn-sm" onclick="loadStockRequests()">Lam moi</button>
-          <button class="btn btn-primary" onclick="openStockRequestModal()">+ Tao phieu nhap</button>
+          <button class="btn btn-outline btn-sm" onclick="loadStockRequests()">Refresh</button>
+          <button class="btn btn-primary" onclick="openStockRequestModal()">+ New Request</button>
         </div>
       </div>
       <table>
-        <thead><tr><th>Ma phieu</th><th>NCC</th><th>SP</th><th>Tong SL yeu cau</th><th>Tong SL nhan</th><th>Trang thai</th><th>Ngay tao</th><th>Thao tac</th></tr></thead>
+        <thead><tr><th>Request #</th><th>Supplier</th><th>Items</th><th>Total Requested</th><th>Total Received</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody id="sr-body"></tbody>
       </table>
     </div>
@@ -202,16 +202,16 @@ tr:hover{background:#f8f9ff}
   <div class="panel" id="panel-reports">
     <div class="report-grid" id="report-cards"></div>
     <div class="card">
-      <h3>Top san pham ban chay</h3>
+      <h3>Top Selling Products</h3>
       <table>
-        <thead><tr><th>#</th><th>SKU</th><th>Ten</th><th>SL ban</th><th>Doanh thu</th></tr></thead>
+        <thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Sold</th><th>Revenue</th></tr></thead>
         <tbody id="top-products-body"></tbody>
       </table>
     </div>
     <div class="card">
-      <h3>San pham sap het hang</h3>
+      <h3>Low Stock Products</h3>
       <table>
-        <thead><tr><th>SKU</th><th>Ten</th><th>Ton kho</th><th>Vi tri</th></tr></thead>
+        <thead><tr><th>SKU</th><th>Name</th><th>Stock</th><th>Location</th></tr></thead>
         <tbody id="low-stock-body"></tbody>
       </table>
     </div>
@@ -222,41 +222,42 @@ tr:hover{background:#f8f9ff}
 <div class="modal-overlay" id="product-modal">
   <div class="modal">
     <div class="modal-header">
-      <h2 id="product-modal-title">Them san pham</h2>
+      <h2 id="product-modal-title">Add Product</h2>
       <button class="modal-close" onclick="closeModal('product-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="product-edit-id">
       <div class="form-row">
-        <div class="form-group"><label>SKU *</label><input type="text" id="p-sku" placeholder="VD: SP-001"></div>
-        <div class="form-group"><label>Ten san pham *</label><input type="text" id="p-name" placeholder="Ten san pham"></div>
+        <div class="form-group"><label>SKU *</label><input type="text" id="p-sku" placeholder="e.g. SKU-001"></div>
+        <div class="form-group"><label>Product Name *</label><input type="text" id="p-name" placeholder="Product name"></div>
       </div>
-      <div class="form-group"><label>Mo ta</label><textarea id="p-desc" rows="2" placeholder="Mo ta san pham"></textarea></div>
+      <div class="form-group"><label>Description</label><textarea id="p-desc" rows="2" placeholder="Product description"></textarea></div>
+      <div class="form-group"><label>Image URL</label><input type="url" id="p-image-url" placeholder="https://example.com/image.jpg"></div>
       <div class="form-row-3">
-        <div class="form-group"><label>Danh muc</label><input type="text" id="p-category" placeholder="VD: Dien tu"></div>
-        <div class="form-group"><label>Gia (USD)</label><input type="number" step="0.01" id="p-price" placeholder="0.00"></div>
-        <div class="form-group"><label>Can nang (oz)</label><input type="number" step="0.1" id="p-weight" placeholder="0"></div>
+        <div class="form-group"><label>Category</label><input type="text" id="p-category" placeholder="e.g. Electronics"></div>
+        <div class="form-group"><label>Price (USD)</label><input type="number" step="0.01" id="p-price" placeholder="0.00"></div>
+        <div class="form-group"><label>Weight (oz)</label><input type="number" step="0.1" id="p-weight" placeholder="0"></div>
       </div>
       <div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px">
-        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:13px;color:#555">Kich thuoc dong goi (inches)</label>
+        <label style="display:block;margin-bottom:8px;font-weight:600;font-size:13px;color:#555">Package Dimensions (inches)</label>
         <div class="form-row-3">
-          <div class="form-group" style="margin:0"><label>Dai (L)</label><input type="number" step="0.1" id="p-length" placeholder="0"></div>
-          <div class="form-group" style="margin:0"><label>Rong (W)</label><input type="number" step="0.1" id="p-width" placeholder="0"></div>
-          <div class="form-group" style="margin:0"><label>Cao (H)</label><input type="number" step="0.1" id="p-height" placeholder="0"></div>
+          <div class="form-group" style="margin:0"><label>Length (L)</label><input type="number" step="0.1" id="p-length" placeholder="0"></div>
+          <div class="form-group" style="margin:0"><label>Width (W)</label><input type="number" step="0.1" id="p-width" placeholder="0"></div>
+          <div class="form-group" style="margin:0"><label>Height (H)</label><input type="number" step="0.1" id="p-height" placeholder="0"></div>
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>So luong</label><input type="number" id="p-qty" placeholder="0"></div>
-        <div class="form-group"><label>Vi tri kho</label><input type="text" id="p-location" placeholder="VD: A-01-03"></div>
+        <div class="form-group"><label>Quantity</label><input type="number" id="p-qty" placeholder="0"></div>
+        <div class="form-group"><label>Warehouse Location</label><input type="text" id="p-location" placeholder="e.g. A-01-03"></div>
       </div>
       <div class="form-group">
-        <label>Variant option types (cach nhau boi dau phay)</label>
-        <input type="text" id="p-option-types" placeholder="VD: color, size">
+        <label>Variant Option Types (comma separated)</label>
+        <input type="text" id="p-option-types" placeholder="e.g. color, size">
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('product-modal')">Huy</button>
-      <button class="btn btn-primary" onclick="saveProduct()">Luu</button>
+      <button class="btn btn-outline" onclick="closeModal('product-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Save</button>
     </div>
   </div>
 </div>
@@ -265,28 +266,28 @@ tr:hover{background:#f8f9ff}
 <div class="modal-overlay" id="order-modal">
   <div class="modal" style="width:700px">
     <div class="modal-header">
-      <h2>Tao don hang moi</h2>
+      <h2>Create New Order</h2>
       <button class="modal-close" onclick="closeModal('order-modal')">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="form-group"><label>Ten don hang</label><input type="text" id="o-order-name" placeholder="VD: Don hang #1, Don Shopee 2/2025..."></div>
+      <div class="form-group"><label>Order Name</label><input type="text" id="o-order-name" placeholder="e.g. Order #1, Shopee Feb 2025..."></div>
       <div class="form-row">
-        <div class="form-group"><label>Ten khach hang *</label><input type="text" id="o-name" placeholder="Nguyen Van A"></div>
+        <div class="form-group"><label>Customer Name *</label><input type="text" id="o-name" placeholder="John Smith"></div>
         <div class="form-group"><label>Email</label><input type="email" id="o-email" placeholder="email@example.com"></div>
       </div>
-      <div class="form-group"><label>SDT</label><input type="text" id="o-phone" placeholder="0123456789"></div>
+      <div class="form-group"><label>Phone</label><input type="text" id="o-phone" placeholder="555-1234"></div>
 
-      <h3 style="margin:16px 0 8px;font-size:15px">Dia chi giao hang</h3>
-      <div class="form-group"><label>Ten nguoi nhan *</label><input type="text" id="o-ship-name" placeholder="Nguyen Van A"></div>
-      <div class="form-group"><label>Dia chi 1 *</label><input type="text" id="o-street1" placeholder="123 Main St"></div>
-      <div class="form-group"><label>Dia chi 2</label><input type="text" id="o-street2" placeholder="Apt 4B"></div>
+      <h3 style="margin:16px 0 8px;font-size:15px">Shipping Address</h3>
+      <div class="form-group"><label>Recipient Name *</label><input type="text" id="o-ship-name" placeholder="John Smith"></div>
+      <div class="form-group"><label>Address Line 1 *</label><input type="text" id="o-street1" placeholder="123 Main St"></div>
+      <div class="form-group"><label>Address Line 2</label><input type="text" id="o-street2" placeholder="Apt 4B"></div>
       <div class="form-row-3">
-        <div class="form-group"><label>Thanh pho *</label><input type="text" id="o-city" placeholder="New York"></div>
-        <div class="form-group"><label>Bang *</label><input type="text" id="o-state" placeholder="NY"></div>
+        <div class="form-group"><label>City *</label><input type="text" id="o-city" placeholder="New York"></div>
+        <div class="form-group"><label>State *</label><input type="text" id="o-state" placeholder="NY"></div>
         <div class="form-group"><label>Zip *</label><input type="text" id="o-zip" placeholder="10001"></div>
       </div>
 
-      <h3 style="margin:16px 0 8px;font-size:15px">Van chuyen</h3>
+      <h3 style="margin:16px 0 8px;font-size:15px">Shipping</h3>
       <div class="form-row">
         <div class="form-group"><label>Carrier</label>
           <select id="o-carrier" onchange="updateServiceOptions('o-carrier','o-service')">
@@ -298,15 +299,15 @@ tr:hover{background:#f8f9ff}
         </div>
       </div>
 
-      <h3 style="margin:16px 0 8px;font-size:15px">San pham</h3>
+      <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
       <div class="order-items-list" id="order-items-list"></div>
-      <button class="btn btn-outline btn-sm" onclick="addOrderItemRow()">+ Them san pham</button>
+      <button class="btn btn-outline btn-sm" onclick="addOrderItemRow()">+ Add Product</button>
 
-      <div class="form-group" style="margin-top:16px"><label>Ghi chu</label><textarea id="o-notes" rows="2" placeholder="Ghi chu"></textarea></div>
+      <div class="form-group" style="margin-top:16px"><label>Notes</label><textarea id="o-notes" rows="2" placeholder="Notes"></textarea></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('order-modal')">Huy</button>
-      <button class="btn btn-primary" onclick="saveOrder()">Tao don hang</button>
+      <button class="btn btn-outline" onclick="closeModal('order-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveOrder()">Create Order</button>
     </div>
   </div>
 </div>
@@ -315,7 +316,7 @@ tr:hover{background:#f8f9ff}
 <div class="modal-overlay" id="order-detail-modal">
   <div class="modal" style="width:700px">
     <div class="modal-header">
-      <h2 id="order-detail-title">Chi tiet don hang</h2>
+      <h2 id="order-detail-title">Order Details</h2>
       <button class="modal-close" onclick="closeModal('order-detail-modal')">&times;</button>
     </div>
     <div class="modal-body" id="order-detail-body"></div>
@@ -327,18 +328,18 @@ tr:hover{background:#f8f9ff}
 <div class="modal-overlay" id="inventory-modal">
   <div class="modal" style="width:400px">
     <div class="modal-header">
-      <h2>Dieu chinh ton kho</h2>
+      <h2>Adjust Inventory</h2>
       <button class="modal-close" onclick="closeModal('inventory-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="inv-product-id">
-      <div class="form-group"><label>So luong (+ nhap / - xuat)</label><input type="number" id="inv-qty" placeholder="VD: 10 hoac -5"></div>
-      <div class="form-group"><label>Ly do</label><input type="text" id="inv-reason" placeholder="VD: nhap hang"></div>
-      <div class="form-group"><label>Ghi chu</label><input type="text" id="inv-note" placeholder="Chi tiet"></div>
+      <div class="form-group"><label>Quantity (+ to add / - to remove)</label><input type="number" id="inv-qty" placeholder="e.g. 10 or -5"></div>
+      <div class="form-group"><label>Reason</label><input type="text" id="inv-reason" placeholder="e.g. restock"></div>
+      <div class="form-group"><label>Note</label><input type="text" id="inv-note" placeholder="Details"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('inventory-modal')">Huy</button>
-      <button class="btn btn-success" onclick="saveInventory()">Cap nhat</button>
+      <button class="btn btn-outline" onclick="closeModal('inventory-modal')">Cancel</button>
+      <button class="btn btn-success" onclick="saveInventory()">Update</button>
     </div>
   </div>
 </div>
@@ -357,33 +358,33 @@ tr:hover{background:#f8f9ff}
         <span id="variants-option-types" style="font-size:13px;color:#667eea"></span>
       </div>
       <table>
-        <thead><tr><th>Variant SKU</th><th>Attributes</th><th>Gia</th><th>KL (oz)</th><th>KT (LxWxH)</th><th>Ton kho</th><th>Vi tri</th><th>Thao tac</th></tr></thead>
+        <thead><tr><th>Variant SKU</th><th>Attributes</th><th>Price</th><th>Wt (oz)</th><th>Dims (LxWxH)</th><th>Stock</th><th>Location</th><th>Actions</th></tr></thead>
         <tbody id="variants-body"></tbody>
       </table>
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8e8e8">
-        <h3 style="font-size:14px;margin-bottom:10px">Them variant moi</h3>
+        <h3 style="font-size:14px;margin-bottom:10px">Add New Variant</h3>
         <input type="hidden" id="v-product-id">
         <div class="form-row">
-          <div class="form-group"><label>Variant SKU *</label><input type="text" id="v-sku" placeholder="VD: SP-001-RED-M"></div>
-          <div class="form-group"><label>Gia (de 0 = gia goc)</label><input type="number" step="0.01" id="v-price" placeholder="0"></div>
+          <div class="form-group"><label>Variant SKU *</label><input type="text" id="v-sku" placeholder="e.g. SKU-001-RED-M"></div>
+          <div class="form-group"><label>Price (0 = use parent)</label><input type="number" step="0.01" id="v-price" placeholder="0"></div>
         </div>
         <div id="v-attrs-container"></div>
         <div class="form-row">
-          <div class="form-group"><label>Can nang (oz, 0 = theo SP goc)</label><input type="number" step="0.1" id="v-weight" placeholder="0"></div>
-          <div class="form-group"><label>Vi tri</label><input type="text" id="v-location" placeholder="De trong = theo SP goc"></div>
+          <div class="form-group"><label>Weight (oz, 0 = use parent)</label><input type="number" step="0.1" id="v-weight" placeholder="0"></div>
+          <div class="form-group"><label>Location</label><input type="text" id="v-location" placeholder="Leave empty = use parent"></div>
         </div>
         <div style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px">
-          <label style="display:block;margin-bottom:8px;font-weight:600;font-size:13px;color:#555">Kich thuoc (inches, 0 = theo SP goc)</label>
+          <label style="display:block;margin-bottom:8px;font-weight:600;font-size:13px;color:#555">Dimensions (inches, 0 = use parent)</label>
           <div class="form-row-3">
-            <div class="form-group" style="margin:0"><label>Dai (L)</label><input type="number" step="0.1" id="v-length" placeholder="0"></div>
-            <div class="form-group" style="margin:0"><label>Rong (W)</label><input type="number" step="0.1" id="v-width" placeholder="0"></div>
-            <div class="form-group" style="margin:0"><label>Cao (H)</label><input type="number" step="0.1" id="v-height" placeholder="0"></div>
+            <div class="form-group" style="margin:0"><label>Length (L)</label><input type="number" step="0.1" id="v-length" placeholder="0"></div>
+            <div class="form-group" style="margin:0"><label>Width (W)</label><input type="number" step="0.1" id="v-width" placeholder="0"></div>
+            <div class="form-group" style="margin:0"><label>Height (H)</label><input type="number" step="0.1" id="v-height" placeholder="0"></div>
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group"><label>So luong</label><input type="number" id="v-qty" value="0"></div>
+          <div class="form-group"><label>Quantity</label><input type="number" id="v-qty" value="0"></div>
         </div>
-        <button class="btn btn-success btn-sm" onclick="saveVariant()">Them variant</button>
+        <button class="btn btn-success btn-sm" onclick="saveVariant()">Add Variant</button>
       </div>
     </div>
   </div>
@@ -393,45 +394,45 @@ tr:hover{background:#f8f9ff}
 <div class="modal-overlay" id="import-guide-modal">
   <div class="modal" style="width:820px">
     <div class="modal-header">
-      <h2>Huong dan Import CSV</h2>
+      <h2>CSV Import Guide</h2>
       <button class="modal-close" onclick="closeModal('import-guide-modal')">&times;</button>
     </div>
     <div class="modal-body" style="font-size:13px;line-height:1.7">
-      <p><strong>Cac cot trong file CSV:</strong></p>
+      <p><strong>CSV Columns:</strong></p>
       <table style="font-size:12px;margin-bottom:16px">
         <thead>
-          <tr><th>Cot</th><th>Bat buoc</th><th>Mo ta</th></tr>
+          <tr><th>Column</th><th>Required</th><th>Description</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>sku</code></td><td>Co</td><td>Ma SKU san pham. Dong variant cung can cot nay (tro toi SP goc)</td></tr>
-          <tr><td><code>name</code></td><td>SP: Co</td><td>Ten san pham (chi can o dong SP, de trong o dong variant)</td></tr>
-          <tr><td><code>description</code></td><td>Khong</td><td>Mo ta san pham</td></tr>
-          <tr><td><code>category</code></td><td>Khong</td><td>Danh muc</td></tr>
-          <tr><td><code>weight_oz</code></td><td>Khong</td><td>Can nang (oz) cua SP goc</td></tr>
-          <tr><td><code>length_in</code>, <code>width_in</code>, <code>height_in</code></td><td>Khong</td><td>Kich thuoc (inches) cua SP goc</td></tr>
-          <tr><td><code>price</code></td><td>Khong</td><td>Gia SP goc</td></tr>
-          <tr><td><code>quantity</code></td><td>Khong</td><td>So luong ton kho (SP hoac variant)</td></tr>
-          <tr><td><code>location</code></td><td>Khong</td><td>Vi tri kho</td></tr>
-          <tr style="background:#f0f4ff"><td><code>variant_sku</code></td><td>Variant: Co</td><td>Ma SKU variant. <b>Neu co = dong variant</b>, neu trong = dong SP</td></tr>
-          <tr style="background:#f0f4ff"><td><code>attributes</code></td><td>Khong</td><td>JSON thuoc tinh, VD: <code>{"color":"Red","size":"M"}</code></td></tr>
-          <tr style="background:#f0f4ff"><td><code>price_override</code></td><td>Khong</td><td>Gia rieng variant (0 = dung gia SP goc)</td></tr>
-          <tr style="background:#f0f4ff"><td><code>weight_oz_override</code></td><td>Khong</td><td>Can nang rieng variant (0 = theo SP goc)</td></tr>
-          <tr style="background:#f0f4ff"><td><code>length_in_override</code>, <code>width_in_override</code>, <code>height_in_override</code></td><td>Khong</td><td>Kich thuoc rieng variant (0 = theo SP goc)</td></tr>
+          <tr><td><code>sku</code></td><td>Yes</td><td>Product SKU. Variant rows also need this (points to parent product)</td></tr>
+          <tr><td><code>name</code></td><td>Product: Yes</td><td>Product name (only needed on product row, leave empty on variant rows)</td></tr>
+          <tr><td><code>description</code></td><td>No</td><td>Product description</td></tr>
+          <tr><td><code>category</code></td><td>No</td><td>Category</td></tr>
+          <tr><td><code>weight_oz</code></td><td>No</td><td>Weight (oz) of parent product</td></tr>
+          <tr><td><code>length_in</code>, <code>width_in</code>, <code>height_in</code></td><td>No</td><td>Dimensions (inches) of parent product</td></tr>
+          <tr><td><code>price</code></td><td>No</td><td>Parent product price</td></tr>
+          <tr><td><code>quantity</code></td><td>No</td><td>Stock quantity (product or variant)</td></tr>
+          <tr><td><code>location</code></td><td>No</td><td>Warehouse location</td></tr>
+          <tr style="background:#f0f4ff"><td><code>variant_sku</code></td><td>Variant: Yes</td><td>Variant SKU. <b>If present = variant row</b>, if empty = product row</td></tr>
+          <tr style="background:#f0f4ff"><td><code>attributes</code></td><td>No</td><td>JSON attributes, e.g. <code>{"color":"Red","size":"M"}</code></td></tr>
+          <tr style="background:#f0f4ff"><td><code>price_override</code></td><td>No</td><td>Variant-specific price (0 = use parent price)</td></tr>
+          <tr style="background:#f0f4ff"><td><code>weight_oz_override</code></td><td>No</td><td>Variant-specific weight (0 = use parent)</td></tr>
+          <tr style="background:#f0f4ff"><td><code>length_in_override</code>, <code>width_in_override</code>, <code>height_in_override</code></td><td>No</td><td>Variant-specific dimensions (0 = use parent)</td></tr>
         </tbody>
       </table>
-      <p><strong>Quy tac:</strong></p>
+      <p><strong>Rules:</strong></p>
       <ul style="padding-left:20px;margin-bottom:16px">
-        <li>Dong <b>khong co</b> <code>variant_sku</code> = <b>san pham</b>. SKU trung se cap nhat thong tin SP.</li>
-        <li>Dong <b>co</b> <code>variant_sku</code> = <b>variant</b>. Cot <code>sku</code> tro toi SP goc (SP phai ton tai truoc).</li>
-        <li>Variant voi <code>variant_sku</code> trung se cap nhat. Moi se tao moi.</li>
-        <li>Cac truong override de <b>0</b> se dung gia tri cua SP goc.</li>
+        <li>Rows <b>without</b> <code>variant_sku</code> = <b>product</b>. Duplicate SKU will update the product.</li>
+        <li>Rows <b>with</b> <code>variant_sku</code> = <b>variant</b>. The <code>sku</code> column points to parent product (must exist first).</li>
+        <li>Existing <code>variant_sku</code> will be updated. New ones will be created.</li>
+        <li>Override fields set to <b>0</b> will use the parent product values.</li>
       </ul>
-      <p><strong>Vi du:</strong></p>
+      <p><strong>Example:</strong></p>
       <div style="overflow-x:auto;background:#f8f9fa;padding:10px;border-radius:6px;font-family:monospace;font-size:11px;white-space:pre;margin-bottom:8px">sku,name,...,variant_sku,attributes,price_override,...
-SP-002,Ao thun,...,,,,...             &larr; Dong SP
+SP-002,T-Shirt,...,,,,...             &larr; Product row
 SP-002,,,,...,SP-002-RED-M,"{""color"":""Red""}",51.99,...  &larr; Variant
-SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (gia goc)</div>
-      <p>Bam <b>"Tai mau CSV"</b> de tai file mau day du.</p>
+SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (parent price)</div>
+      <p>Click <b>"CSV Template"</b> to download a complete sample file.</p>
     </div>
   </div>
 </div>
@@ -440,21 +441,21 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (gia g
 <div class="modal-overlay" id="sr-create-modal">
   <div class="modal" style="width:700px">
     <div class="modal-header">
-      <h2>Tao phieu nhap kho</h2>
+      <h2>Create Stock Request</h2>
       <button class="modal-close" onclick="closeModal('sr-create-modal')">&times;</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="form-group"><label>Nha cung cap</label><input type="text" id="sr-supplier" placeholder="Ten NCC"></div>
-        <div class="form-group"><label>Ghi chu</label><input type="text" id="sr-notes" placeholder="Ghi chu"></div>
+        <div class="form-group"><label>Supplier</label><input type="text" id="sr-supplier" placeholder="Supplier name"></div>
+        <div class="form-group"><label>Notes</label><input type="text" id="sr-notes" placeholder="Notes"></div>
       </div>
-      <h3 style="margin:12px 0 8px;font-size:15px">San pham nhap</h3>
+      <h3 style="margin:12px 0 8px;font-size:15px">Products</h3>
       <div class="order-items-list" id="sr-items-list"></div>
-      <button class="btn btn-outline btn-sm" onclick="addSrItemRow()">+ Them san pham</button>
+      <button class="btn btn-outline btn-sm" onclick="addSrItemRow()">+ Add Product</button>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('sr-create-modal')">Huy</button>
-      <button class="btn btn-primary" onclick="saveStockRequest()">Tao phieu</button>
+      <button class="btn btn-outline" onclick="closeModal('sr-create-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStockRequest()">Create</button>
     </div>
   </div>
 </div>
@@ -463,7 +464,7 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (gia g
 <div class="modal-overlay" id="sr-detail-modal">
   <div class="modal" style="width:800px">
     <div class="modal-header">
-      <h2 id="sr-detail-title">Chi tiet phieu nhap</h2>
+      <h2 id="sr-detail-title">Stock Request Details</h2>
       <button class="modal-close" onclick="closeModal('sr-detail-modal')">&times;</button>
     </div>
     <div class="modal-body" id="sr-detail-body"></div>
@@ -480,8 +481,8 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (gia g
     </div>
     <div class="modal-body">
       <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" id="qr-print-btn" onclick="printQrPage()">In tat ca QR</button>
-        <button class="btn btn-outline btn-sm" id="qr-bulk-btn">Tai trang in (PNG)</button>
+        <button class="btn btn-primary btn-sm" id="qr-print-btn" onclick="printQrPage()">Print All QR</button>
+        <button class="btn btn-outline btn-sm" id="qr-bulk-btn">Download Print Sheet (PNG)</button>
       </div>
       <div id="qr-body" style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center"></div>
     </div>
@@ -541,7 +542,7 @@ async function loadProducts() {
   const res = await fetch(API + '/products');
   allProducts = await res.json();
   renderProducts(allProducts);
-  document.getElementById('stat-products').textContent = allProducts.length + ' SP';
+  document.getElementById('stat-products').textContent = allProducts.length + ' Products';
   const low = allProducts.filter(p => p.quantity <= 5).length;
   document.getElementById('stat-low-stock').textContent = low + ' Low Stock';
 }
@@ -550,12 +551,14 @@ function renderProducts(list) {
   const q = document.getElementById('search-products').value.toLowerCase();
   const filtered = list.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
   document.getElementById('products-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="8" class="empty">Khong co san pham nao</td></tr>'
+    ? '<tr><td colspan="9" class="empty">No products found</td></tr>'
     : filtered.map(p => {
         const vc = p.variants ? p.variants.length : 0;
         const totalQty = vc > 0 ? p.variants.reduce((s,v) => s + v.quantity, 0) : p.quantity;
         const variantInfo = vc > 0 ? `${vc} variants` : '-';
+        const imgThumb = p.image_url ? `<img src="${esc(p.image_url)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8">` : '<div style="width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>';
         return `<tr>
+        <td>${imgThumb}</td>
         <td><strong>${esc(p.sku)}</strong></td>
         <td>${esc(p.name)}</td>
         <td>${esc(p.category)}</td>
@@ -564,12 +567,12 @@ function renderProducts(list) {
         <td class="${totalQty <= 5 ? 'stock-low' : 'stock-ok'}">${totalQty}</td>
         <td>${esc(p.location)}</td>
         <td class="actions-cell">
-          <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Sua</button>
+          <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Edit</button>
           <button class="btn btn-sm btn-primary" onclick="openVariantsModal('${p.id}')">Variants</button>
-          <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Kho</button>
+          <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Stock</button>
           ${p.qr_code_path
             ? `<button class="btn btn-sm btn-success" onclick="openQrModal('${p.id}')">QR</button>`
-            : `<button class="btn btn-sm btn-danger" onclick="generateQr('${p.id}')">Tao QR</button>`}
+            : `<button class="btn btn-sm btn-danger" onclick="generateQr('${p.id}')">Gen QR</button>`}
         </td>
       </tr>`;}).join('');
 }
@@ -577,7 +580,7 @@ function renderProducts(list) {
 document.getElementById('search-products').addEventListener('input', () => renderProducts(allProducts));
 
 function openProductModal(product = null) {
-  document.getElementById('product-modal-title').textContent = product ? 'Sua san pham' : 'Them san pham';
+  document.getElementById('product-modal-title').textContent = product ? 'Edit Product' : 'Add Product';
   document.getElementById('product-edit-id').value = product ? product.id : '';
   document.getElementById('p-sku').value = product ? product.sku : '';
   document.getElementById('p-sku').disabled = !!product;
@@ -591,6 +594,7 @@ function openProductModal(product = null) {
   document.getElementById('p-height').value = product ? product.height_in : '';
   document.getElementById('p-qty').value = product ? product.quantity : '';
   document.getElementById('p-location').value = product ? product.location : '';
+  document.getElementById('p-image-url').value = product ? (product.image_url || '') : '';
   document.getElementById('p-option-types').value = product && product.option_types ? product.option_types.join(', ') : '';
   if (product) { document.getElementById('p-qty').disabled = true; }
   else { document.getElementById('p-qty').disabled = false; }
@@ -617,11 +621,12 @@ async function saveProduct() {
       width_in: parseFloat(document.getElementById('p-width').value) || 0,
       height_in: parseFloat(document.getElementById('p-height').value) || 0,
       location: document.getElementById('p-location').value,
+      image_url: document.getElementById('p-image-url').value,
       option_types: optTypes,
     };
     const res = await fetch(API + '/products/' + editId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (res.ok) { toast('Da cap nhat san pham'); closeModal('product-modal'); loadProducts(); }
-    else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+    if (res.ok) { toast('Product updated'); closeModal('product-modal'); loadProducts(); }
+    else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
   } else {
     const body = {
       sku: document.getElementById('p-sku').value,
@@ -635,11 +640,12 @@ async function saveProduct() {
       height_in: parseFloat(document.getElementById('p-height').value) || 0,
       quantity: parseInt(document.getElementById('p-qty').value) || 0,
       location: document.getElementById('p-location').value,
+      image_url: document.getElementById('p-image-url').value,
       option_types: optTypes,
     };
     const res = await fetch(API + '/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (res.ok) { toast('Da them san pham moi'); closeModal('product-modal'); loadProducts(); }
-    else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+    if (res.ok) { toast('Product created'); closeModal('product-modal'); loadProducts(); }
+    else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
   }
 }
 
@@ -652,13 +658,13 @@ async function importCSV(input) {
   const res = await fetch(API + '/products/import', { method: 'POST', body: formData });
   const result = await res.json();
   if (res.ok) {
-    let msg = `Import: ${result.created} SP moi, ${result.updated} SP cap nhat`;
-    if (result.variants_created || result.variants_updated) msg += `, ${result.variants_created || 0} variant moi, ${result.variants_updated || 0} variant cap nhat`;
-    if (result.errors.length > 0) msg += `, ${result.errors.length} loi`;
+    let msg = `Import: ${result.created} new, ${result.updated} updated`;
+    if (result.variants_created || result.variants_updated) msg += `, ${result.variants_created || 0} variants new, ${result.variants_updated || 0} variants updated`;
+    if (result.errors.length > 0) msg += `, ${result.errors.length} errors`;
     toast(msg);
     loadProducts();
   } else {
-    toast(result.detail || 'Loi import', 'error');
+    toast(result.detail || 'Import error', 'error');
   }
   input.value = '';
 }
@@ -673,13 +679,13 @@ async function importOrderCSV(input) {
     if (!res.ok) {
       let errMsg;
       try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
-      toast((errMsg || 'Loi import don hang').slice(0,200), 'error');
+      toast((errMsg || 'Order import error').slice(0,200), 'error');
       input.value = '';
       return;
     }
     const result = await res.json();
-    let msg = `Import: ${result.created} don hang moi`;
-    if (result.errors && result.errors.length > 0) msg += `, ${result.errors.length} loi`;
+    let msg = `Import: ${result.created} orders created`;
+    if (result.errors && result.errors.length > 0) msg += `, ${result.errors.length} errors`;
     toast(msg);
     if (result.created_details && result.created_details.length > 0) {
       console.log('Import details:', result.created_details);
@@ -690,10 +696,10 @@ async function importOrderCSV(input) {
     }
     if (result.errors && result.errors.length > 0) {
       console.log('Import errors:', result.errors);
-      toast('Xem Console (F12) de biet chi tiet loi', 'error');
+      toast('Check Console (F12) for error details', 'error');
     }
     loadOrders();
-  } catch(e) { toast('Loi ket noi: ' + e.message, 'error'); }
+  } catch(e) { toast('Connection error: ' + e.message, 'error'); }
   input.value = '';
 }
 
@@ -706,9 +712,9 @@ function openVariantsModal(productId) {
   const p = allProducts.find(x => x.id === productId);
   if (!p) return;
   document.getElementById('variants-modal-title').textContent = 'Variants - ' + p.name;
-  document.getElementById('variants-product-info').textContent = `SKU: ${p.sku} | Gia: $${p.price.toFixed(2)} | ${p.weight_oz}oz | ${p.length_in}x${p.width_in}x${p.height_in} in`;
+  document.getElementById('variants-product-info').textContent = `SKU: ${p.sku} | Price: $${p.price.toFixed(2)} | ${p.weight_oz}oz | ${p.length_in}x${p.width_in}x${p.height_in} in`;
   const optTypes = p.option_types || [];
-  document.getElementById('variants-option-types').textContent = optTypes.length > 0 ? optTypes.join(', ') : 'Chua thiet lap';
+  document.getElementById('variants-option-types').textContent = optTypes.length > 0 ? optTypes.join(', ') : 'Not set';
   renderVariantAttrInputs(optTypes);
   renderVariantsTable(p.variants || []);
   document.getElementById('v-sku').value = '';
@@ -747,24 +753,24 @@ function getVariantAttrs() {
 
 function renderVariantsTable(variants) {
   document.getElementById('variants-body').innerHTML = variants.length === 0
-    ? '<tr><td colspan="8" class="empty">Chua co variant</td></tr>'
+    ? '<tr><td colspan="8" class="empty">No variants yet</td></tr>'
     : variants.map(v => {
         const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
         const attrStr = Object.entries(attrs).map(([k,val]) => `${k}: ${val}`).join(', ');
-        const wt = v.weight_oz_override > 0 ? v.weight_oz_override + ' oz' : 'Goc';
+        const wt = v.weight_oz_override > 0 ? v.weight_oz_override + ' oz' : 'Parent';
         const dims = (v.length_in_override > 0 || v.width_in_override > 0 || v.height_in_override > 0)
-          ? `${v.length_in_override}x${v.width_in_override}x${v.height_in_override}` : 'Goc';
+          ? `${v.length_in_override}x${v.width_in_override}x${v.height_in_override}` : 'Parent';
         return `<tr>
           <td><strong>${esc(v.variant_sku)}</strong></td>
           <td>${esc(attrStr)}</td>
-          <td>${v.price_override > 0 ? '$'+v.price_override.toFixed(2) : 'Gia goc'}</td>
+          <td>${v.price_override > 0 ? '$'+v.price_override.toFixed(2) : 'Parent'}</td>
           <td>${wt}</td>
           <td>${dims}</td>
           <td class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${v.quantity}</td>
           <td>${esc(v.location)}</td>
           <td class="actions-cell">
-            <button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')">Kho</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')">Xoa</button>
+            <button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')">Stock</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')">Delete</button>
           </td>
         </tr>`;
       }).join('');
@@ -784,38 +790,38 @@ async function saveVariant() {
     location: document.getElementById('v-location').value,
   };
   const res = await fetch(API + '/products/' + productId + '/variants', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if (res.ok) { toast('Da them variant'); await loadProducts(); openVariantsModal(productId); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Variant added'); await loadProducts(); openVariantsModal(productId); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function deleteVariant(variantId) {
-  if (!confirm('Xoa variant nay?')) return;
+  if (!confirm('Delete this variant?')) return;
   const res = await fetch(API + '/products/variants/' + variantId, { method: 'DELETE' });
-  if (res.ok) { toast('Da xoa variant'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
-  else { toast('Loi xoa variant', 'error'); }
+  if (res.ok) { toast('Variant deleted'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
+  else { toast('Error deleting variant', 'error'); }
 }
 
 async function adjustVariantStock(variantId) {
-  const qty = prompt('Nhap so luong (+ nhap, - xuat):');
+  const qty = prompt('Enter quantity (+ to add, - to remove):');
   if (qty === null) return;
   const res = await fetch(API + '/products/variants/' + variantId + '/inventory', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ quantity: parseInt(qty) || 0, reason: 'adjustment', note: 'Manual adjustment' }),
   });
-  if (res.ok) { toast('Da cap nhat ton kho variant'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Variant stock updated'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 // QR CODES
 async function generateQr(productId) {
   const res = await fetch(API + '/products/' + productId + '/generate-qr', { method: 'POST' });
   if (res.ok) {
-    toast('Da tao QR code');
+    toast('QR code generated');
     await loadProducts();
     openQrModal(productId);
   } else {
     const e = await res.json();
-    toast(e.detail || 'Loi tao QR', 'error');
+    toast(e.detail || 'Error generating QR', 'error');
   }
 }
 
@@ -834,8 +840,8 @@ function openQrModal(productId) {
   // Product QR
   html += `<div style="text-align:center;border:1px solid #e8e8e8;border-radius:12px;padding:12px;background:#fafafa">
     <img src="${API}/products/${p.id}/qrcode" alt="QR ${esc(p.sku)}" style="max-width:280px;border-radius:8px">
-    <div style="margin-top:8px;font-size:12px;color:#888">San pham goc</div>
-    <a href="${API}/products/${p.id}/qrcode" download="${p.sku}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Tai xuong</a>
+    <div style="margin-top:8px;font-size:12px;color:#888">Parent product</div>
+    <a href="${API}/products/${p.id}/qrcode" download="${p.sku}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Download</a>
   </div>`;
 
   // Variant QRs
@@ -846,7 +852,7 @@ function openQrModal(productId) {
       html += `<div style="text-align:center;border:1px solid #e8e8e8;border-radius:12px;padding:12px;background:#fafafa">
         <img src="${API}/products/variants/${v.id}/qrcode" alt="QR ${esc(v.variant_sku)}" style="max-width:280px;border-radius:8px">
         <div style="margin-top:8px;font-size:12px;color:#888">${esc(attrStr)}</div>
-        <a href="${API}/products/variants/${v.id}/qrcode" download="${v.variant_sku}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Tai xuong</a>
+        <a href="${API}/products/variants/${v.id}/qrcode" download="${v.variant_sku}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Download</a>
       </div>`;
     }
   }
@@ -886,8 +892,8 @@ async function saveInventory() {
     note: document.getElementById('inv-note').value,
   };
   const res = await fetch(API + '/products/' + id + '/inventory', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if (res.ok) { toast('Da cap nhat ton kho'); closeModal('inventory-modal'); loadProducts(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Inventory updated'); closeModal('inventory-modal'); loadProducts(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 // ORDERS
@@ -896,29 +902,29 @@ async function loadOrders() {
   const url = status ? API + '/orders?status=' + status : API + '/orders';
   try {
     const res = await fetch(url);
-    if (!res.ok) { const txt = await res.text(); toast(txt.slice(0,100) || 'Loi tai don hang', 'error'); return; }
+    if (!res.ok) { const txt = await res.text(); toast(txt.slice(0,100) || 'Error loading orders', 'error'); return; }
     allOrders = await res.json();
     renderOrders(allOrders);
-    document.getElementById('stat-orders').textContent = allOrders.length + ' DH';
-  } catch(e) { toast('Loi ket noi server: ' + e.message, 'error'); }
+    document.getElementById('stat-orders').textContent = allOrders.length + ' Orders';
+  } catch(e) { toast('Server connection error: ' + e.message, 'error'); }
 }
 
 function renderOrders(list) {
   const q = document.getElementById('search-orders').value.toLowerCase();
   const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || (o.order_name || '').toLowerCase().includes(q));
   document.getElementById('orders-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="9" class="empty">Khong co don hang nao</td></tr>'
+    ? '<tr><td colspan="9" class="empty">No orders found</td></tr>'
     : filtered.map(o => `<tr>
         <td><strong>${esc(o.order_number)}</strong></td>
         <td>${esc(o.order_name || '-')}</td>
         <td>${esc(o.customer_name)}</td>
-        <td>${o.items.length} SP</td>
+        <td>${o.items.length} items</td>
         <td>$${o.total_price.toFixed(2)}</td>
         <td><span class="badge badge-${o.status}">${o.status}</span></td>
         <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : '-'}</td>
-        <td>${new Date(o.created_at).toLocaleDateString('vi-VN')}</td>
+        <td>${new Date(o.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
-          <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">Xem</button>
+          <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
         </td>
       </tr>`).join('');
 }
@@ -999,7 +1005,7 @@ async function saveOrder() {
     }
     return item;
   });
-  if (items.length === 0) { toast('Chua chon san pham', 'error'); return; }
+  if (items.length === 0) { toast('No products selected', 'error'); return; }
   const body = {
     order_name: document.getElementById('o-order-name').value,
     customer_name: document.getElementById('o-name').value,
@@ -1019,36 +1025,36 @@ async function saveOrder() {
     notes: document.getElementById('o-notes').value,
   };
   const res = await fetch(API + '/orders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if (res.ok) { toast('Da tao don hang'); closeModal('order-modal'); loadOrders(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi tao don hang', 'error'); }
+  if (res.ok) { toast('Order created'); closeModal('order-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Error creating order', 'error'); }
 }
 
 async function viewOrder(id) {
   const res = await fetch(API + '/orders/' + id);
   const o = await res.json();
-  document.getElementById('order-detail-title').textContent = 'Don hang ' + o.order_number;
+  document.getElementById('order-detail-title').textContent = 'Order ' + o.order_number;
   document.getElementById('order-detail-body').innerHTML = `
     <div class="detail-grid">
-      ${o.order_name ? '<div class="detail-item"><div class="label">Ten don hang</div><div class="value"><strong>' + esc(o.order_name) + '</strong></div></div>' : ''}
-      <div class="detail-item"><div class="label">Khach hang</div><div class="value">${esc(o.customer_name)}</div></div>
+      ${o.order_name ? '<div class="detail-item"><div class="label">Order Name</div><div class="value"><strong>' + esc(o.order_name) + '</strong></div></div>' : ''}
+      <div class="detail-item"><div class="label">Customer</div><div class="value">${esc(o.customer_name)}</div></div>
       <div class="detail-item"><div class="label">Email</div><div class="value">${esc(o.customer_email) || '-'}</div></div>
-      <div class="detail-item"><div class="label">Trang thai</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>
-      <div class="detail-item"><div class="label">Van chuyen</div><div class="value">${esc(o.carrier || 'USPS')} - ${esc(o.service || 'First')}</div></div>
-      <div class="detail-item"><div class="label">Tong tien</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
-      <div class="detail-item"><div class="label">Phi ship</div><div class="value">$${o.shipping_cost.toFixed(2)}</div></div>
-      <div class="detail-item"><div class="label">Tracking</div><div class="value">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : 'Chua co'}</div></div>
+      <div class="detail-item"><div class="label">Status</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>
+      <div class="detail-item"><div class="label">Shipping</div><div class="value">${esc(o.carrier || 'USPS')} - ${esc(o.service || 'First')}</div></div>
+      <div class="detail-item"><div class="label">Total</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
+      <div class="detail-item"><div class="label">Shipping Cost</div><div class="value">$${o.shipping_cost.toFixed(2)}</div></div>
+      <div class="detail-item"><div class="label">Tracking</div><div class="value">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : 'Not available'}</div></div>
     </div>
-    <h3 style="margin:16px 0 8px;font-size:15px">San pham</h3>
+    <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
     <table>
-      <thead><tr><th>SKU</th><th>Ten</th><th>Variant</th><th>SL</th><th>Don gia</th><th>Thanh tien</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
       <tbody>${o.items.map(i => `<tr><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table>
-    ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">Xem nhan van chuyen</a></div>' : ''}
-    ${o.notes ? '<div style="margin-top:12px"><strong>Ghi chu:</strong> '+esc(o.notes)+'</div>' : ''}
+    ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">View Shipping Label</a></div>' : ''}
+    ${o.notes ? '<div style="margin-top:12px"><strong>Notes:</strong> '+esc(o.notes)+'</div>' : ''}
     <div style="margin-top:16px;text-align:center">
       <h4 style="margin:0 0 8px;font-size:14px">QR Code (Picking / Packing)</h4>
       <img src="${API}/orders/${o.id}/qrcode" alt="QR ${esc(o.order_number)}" style="max-width:280px;border-radius:8px">
-      <div><a href="${API}/orders/${o.id}/qrcode" download="order-${o.order_number}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Tai QR</a></div>
+      <div><a href="${API}/orders/${o.id}/qrcode" download="order-${o.order_number}.png" class="btn btn-outline btn-sm" style="margin-top:6px">Download QR</a></div>
     </div>
   `;
 
@@ -1065,16 +1071,16 @@ async function viewOrder(id) {
       footerHtml += `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="bl-carrier" onchange="updateServiceOptions('bl-carrier','bl-service')" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${carrierOpts}</select>
         <select id="bl-service" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${serviceOpts}</select>
-        <button class="btn btn-outline" onclick="getRates('${o.id}')">Xem gia</button>
-        <button class="btn btn-primary" onclick="buyLabel('${o.id}')">Mua label</button>
+        <button class="btn btn-outline" onclick="getRates('${o.id}')">Get Rates</button>
+        <button class="btn btn-primary" onclick="buyLabel('${o.id}')">Buy Label</button>
       </div>
       <div id="rates-list" style="margin-top:8px"></div>`;
     }
     if (curIdx < statusFlow.length - 1) {
       const next = statusFlow[curIdx + 1];
-      footerHtml += `<button class="btn btn-success" onclick="updateOrderStatus('${o.id}','${next}')">Chuyen sang: ${next}</button>`;
+      footerHtml += `<button class="btn btn-success" onclick="updateOrderStatus('${o.id}','${next}')">Move to: ${next}</button>`;
     }
-    footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}')">Huy don</button>`;
+    footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}')">Cancel Order</button>`;
   }
   document.getElementById('order-detail-footer').innerHTML = footerHtml;
   document.getElementById('order-detail-modal').classList.add('show');
@@ -1082,43 +1088,43 @@ async function viewOrder(id) {
 
 async function updateOrderStatus(id, status) {
   const res = await fetch(API + '/orders/' + id + '/status', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status}) });
-  if (res.ok) { toast('Da cap nhat trang thai'); closeModal('order-detail-modal'); loadOrders(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Status updated'); closeModal('order-detail-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function cancelOrder(id) {
-  if (!confirm('Ban chac chan muon huy don hang nay?')) return;
+  if (!confirm('Are you sure you want to cancel this order?')) return;
   const res = await fetch(API + '/orders/' + id + '/cancel', { method: 'POST' });
-  if (res.ok) { toast('Da huy don hang'); closeModal('order-detail-modal'); loadOrders(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Order cancelled'); closeModal('order-detail-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 // GET RATES
 async function getRates(orderId) {
   const ratesDiv = document.getElementById('rates-list');
-  ratesDiv.innerHTML = '<em>Dang lay gia...</em>';
+  ratesDiv.innerHTML = '<em>Loading rates...</em>';
   try {
     const res = await fetch(API + '/orders/' + orderId + '/rates');
     if (!res.ok) {
       let errMsg;
       try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
-      ratesDiv.innerHTML = '<span style="color:red">' + esc(errMsg || 'Loi lay gia') + '</span>';
+      ratesDiv.innerHTML = '<span style="color:red">' + esc(errMsg || 'Error loading rates') + '</span>';
       return;
     }
     const data = await res.json();
     const rates = data.rates || [];
     if (rates.length === 0) {
-      ratesDiv.innerHTML = '<em style="color:orange">Khong co rates. Kiem tra dia chi nguoi nhan va dia chi kho (WAREHOUSE_* trong .env).</em>';
+      ratesDiv.innerHTML = '<em style="color:orange">No rates available. Check recipient address and warehouse address (WAREHOUSE_* in .env).</em>';
       return;
     }
-    ratesDiv.innerHTML = '<table style="width:100%;font-size:13px"><thead><tr><th>Carrier</th><th>Service</th><th>Gia</th><th>Ngay</th><th></th></tr></thead><tbody>' +
+    ratesDiv.innerHTML = '<table style="width:100%;font-size:13px"><thead><tr><th>Carrier</th><th>Service</th><th>Rate</th><th>Days</th><th></th></tr></thead><tbody>' +
       rates.map(r => `<tr>
         <td>${esc(r.carrier)}</td><td>${esc(r.service)}</td>
         <td><strong>$${parseFloat(r.rate).toFixed(2)}</strong></td>
         <td>${r.delivery_days ? r.delivery_days + 'd' : '-'}</td>
-        <td><button class="btn btn-sm btn-primary" onclick="document.getElementById('bl-carrier').value='${esc(r.carrier)}';updateServiceOptions('bl-carrier','bl-service','${esc(r.service)}')">Chon</button></td>
+        <td><button class="btn btn-sm btn-primary" onclick="document.getElementById('bl-carrier').value='${esc(r.carrier)}';updateServiceOptions('bl-carrier','bl-service','${esc(r.service)}')">Select</button></td>
       </tr>`).join('') + '</tbody></table>';
-  } catch(e) { ratesDiv.innerHTML = '<span style="color:red">Loi: ' + e.message + '</span>'; }
+  } catch(e) { ratesDiv.innerHTML = '<span style="color:red">Error: ' + e.message + '</span>'; }
 }
 
 // BUY LABEL
@@ -1127,20 +1133,20 @@ async function buyLabel(orderId) {
   const serviceEl = document.getElementById('bl-service');
   const carrier = carrierEl ? carrierEl.value : defaultCarrier;
   const service = serviceEl ? serviceEl.value : defaultService;
-  if (!confirm(`Mua label: ${carrier} ${service}?\nHe thong se tu dong tinh kich thuoc va can nang tu san pham.`)) return;
-  toast('Dang mua label...', 'success');
+  if (!confirm(`Buy label: ${carrier} ${service}?\nDimensions and weight will be calculated from products.`)) return;
+  toast('Purchasing label...', 'success');
   const res = await fetch(API + '/orders/' + orderId + '/buy-label', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({carrier, service}),
   });
   if (res.ok) {
-    toast(`Da mua label ${carrier} ${service} thanh cong!`);
+    toast(`Label purchased: ${carrier} ${service}`);
     closeModal('order-detail-modal');
     loadOrders();
   } else {
-    try { const e = await res.json(); toast(e.detail || 'Loi mua label', 'error'); }
-    catch { toast('Loi mua label', 'error'); }
+    try { const e = await res.json(); toast(e.detail || 'Error buying label', 'error'); }
+    catch { toast('Error buying label', 'error'); }
   }
 }
 
@@ -1170,7 +1176,7 @@ function renderInventoryOverview(data) {
   const q = (document.getElementById('search-inventory').value || '').toLowerCase();
   const filtered = data.filter(r => !q || r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q) || (r.variant_sku && r.variant_sku.toLowerCase().includes(q)));
   document.getElementById('inv-overview-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="9" class="empty">Khong co du lieu</td></tr>'
+    ? '<tr><td colspan="9" class="empty">No data available</td></tr>'
     : filtered.map(r => {
       const diff = r.requested - r.received;
       const diffClass = diff > 0 ? 'stock-low' : '';
@@ -1179,7 +1185,7 @@ function renderInventoryOverview(data) {
         <td>${esc(r.name)}</td>
         <td>${r.variant_label ? esc(r.variant_label) : '-'}</td>
         <td>${r.requested}</td>
-        <td>${r.received}${diff > 0 ? ' <span class="stock-low" style="font-size:11px">(thieu ' + diff + ')</span>' : ''}</td>
+        <td>${r.received}${diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : ''}</td>
         <td>${r.sold}</td>
         <td>${r.adjusted}</td>
         <td class="${r.current_stock <= 5 ? 'stock-low' : 'stock-ok'}">${r.current_stock}</td>
@@ -1205,7 +1211,7 @@ function renderStockRequests(list) {
   const q = (document.getElementById('search-sr').value || '').toLowerCase();
   const filtered = list.filter(sr => !q || sr.request_number.toLowerCase().includes(q) || sr.supplier.toLowerCase().includes(q));
   document.getElementById('sr-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="8" class="empty">Khong co phieu nhap nao</td></tr>'
+    ? '<tr><td colspan="8" class="empty">No stock requests found</td></tr>'
     : filtered.map(sr => {
       const totalReq = sr.items.reduce((s, i) => s + i.quantity_requested, 0);
       const totalRcv = sr.items.reduce((s, i) => s + i.quantity_received, 0);
@@ -1216,9 +1222,9 @@ function renderStockRequests(list) {
         <td>${totalReq}</td>
         <td>${totalRcv}</td>
         <td><span class="badge badge-${sr.status}">${sr.status}</span></td>
-        <td>${new Date(sr.created_at).toLocaleDateString('vi-VN')}</td>
+        <td>${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
-          <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">Xem</button>
+          <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
         </td>
       </tr>`;
     }).join('');
@@ -1243,7 +1249,7 @@ function addSrItemRow() {
     <select class="sri-product" onchange="onSrProductSelect(this)">${allProducts.map(p => `<option value="${p.id}" data-variants='${JSON.stringify((p.variants||[]).map(v=>({id:v.id,sku:v.variant_sku,attrs:v.attributes})))}'>${esc(p.sku)} - ${esc(p.name)}</option>`).join('')}</select>
     <select class="sri-variant" style="display:none"></select>
     <input type="number" class="sri-qty" value="1" min="1" style="max-width:80px" placeholder="SL">
-    <input type="number" class="sri-cost" value="0" step="0.01" style="max-width:100px" placeholder="Gia nhap">
+    <input type="number" class="sri-cost" value="0" step="0.01" style="max-width:100px" placeholder="Unit cost">
     <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">X</button>
   `;
   document.getElementById('sr-items-list').appendChild(div);
@@ -1282,21 +1288,21 @@ async function saveStockRequest() {
     }
     return item;
   });
-  if (items.length === 0) { toast('Chua chon san pham', 'error'); return; }
+  if (items.length === 0) { toast('No products selected', 'error'); return; }
   const body = {
     supplier: document.getElementById('sr-supplier').value,
     notes: document.getElementById('sr-notes').value,
     items,
   };
   const res = await fetch(API + '/stock-requests', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if (res.ok) { toast('Da tao phieu nhap kho'); closeModal('sr-create-modal'); loadStockRequests(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Stock request created'); closeModal('sr-create-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function viewStockRequest(id) {
   const res = await fetch(API + '/stock-requests/' + id);
   const sr = await res.json();
-  document.getElementById('sr-detail-title').textContent = 'Phieu nhap ' + sr.request_number;
+  document.getElementById('sr-detail-title').textContent = 'Stock Request ' + sr.request_number;
 
   const isReceiving = sr.status === 'approved' || sr.status === 'receiving';
 
@@ -1309,35 +1315,35 @@ async function viewStockRequest(id) {
       <td>${i.quantity_requested}</td>
       <td>${isReceiving
         ? '<input type="number" class="rcv-qty" data-item-id="'+i.id+'" value="'+i.quantity_received+'" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
-        : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(thieu ' + diff + ')</span>' : '')}</td>
+        : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : '')}</td>
       <td>$${i.unit_cost.toFixed(2)}</td>
     </tr>`;
   }).join('');
 
   document.getElementById('sr-detail-body').innerHTML = `
     <div class="detail-grid">
-      <div class="detail-item"><div class="label">NCC</div><div class="value">${esc(sr.supplier) || '-'}</div></div>
-      <div class="detail-item"><div class="label">Trang thai</div><div class="value"><span class="badge badge-${sr.status}">${sr.status}</span></div></div>
-      <div class="detail-item"><div class="label">Ngay tao</div><div class="value">${new Date(sr.created_at).toLocaleString('vi-VN')}</div></div>
-      <div class="detail-item"><div class="label">Ghi chu</div><div class="value">${esc(sr.notes) || '-'}</div></div>
+      <div class="detail-item"><div class="label">Supplier</div><div class="value">${esc(sr.supplier) || '-'}</div></div>
+      <div class="detail-item"><div class="label">Status</div><div class="value"><span class="badge badge-${sr.status}">${sr.status}</span></div></div>
+      <div class="detail-item"><div class="label">Created</div><div class="value">${new Date(sr.created_at).toLocaleString('en-US')}</div></div>
+      <div class="detail-item"><div class="label">Notes</div><div class="value">${esc(sr.notes) || '-'}</div></div>
     </div>
-    <h3 style="margin:16px 0 8px;font-size:15px">Danh sach san pham</h3>
+    <h3 style="margin:16px 0 8px;font-size:15px">Product List</h3>
     <table>
-      <thead><tr><th>SKU</th><th>Ten</th><th>Variant</th><th>SL yeu cau</th><th>SL thuc nhan</th><th>Gia nhap</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Unit Cost</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
   `;
 
   let footerHtml = '';
   if (sr.status === 'pending') {
-    footerHtml += `<button class="btn btn-success" onclick="approveStockRequest('${sr.id}')">Duyet phieu</button>`;
-    footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Huy phieu</button>`;
+    footerHtml += `<button class="btn btn-success" onclick="approveStockRequest('${sr.id}')">Approve</button>`;
+    footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Cancel</button>`;
   } else if (sr.status === 'approved' || sr.status === 'receiving') {
-    footerHtml += `<button class="btn btn-primary" onclick="receiveStockRequest('${sr.id}')">Luu so luong nhan</button>`;
+    footerHtml += `<button class="btn btn-primary" onclick="receiveStockRequest('${sr.id}')">Save Received Qty</button>`;
     if (sr.status === 'receiving') {
-      footerHtml += `<button class="btn btn-success" onclick="completeStockRequest('${sr.id}')">Hoan thanh</button>`;
+      footerHtml += `<button class="btn btn-success" onclick="completeStockRequest('${sr.id}')">Complete</button>`;
     }
-    footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Huy phieu</button>`;
+    footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Cancel</button>`;
   }
   document.getElementById('sr-detail-footer').innerHTML = footerHtml;
   document.getElementById('sr-detail-modal').classList.add('show');
@@ -1345,8 +1351,8 @@ async function viewStockRequest(id) {
 
 async function approveStockRequest(id) {
   const res = await fetch(API + '/stock-requests/' + id + '/approve', { method: 'POST' });
-  if (res.ok) { toast('Da duyet phieu nhap'); closeModal('sr-detail-modal'); loadStockRequests(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Request approved'); closeModal('sr-detail-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function receiveStockRequest(id) {
@@ -1359,21 +1365,21 @@ async function receiveStockRequest(id) {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ items }),
   });
-  if (res.ok) { toast('Da cap nhat so luong nhan'); closeModal('sr-detail-modal'); loadStockRequests(); loadInventoryOverview(); loadProducts(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Received quantities saved'); closeModal('sr-detail-modal'); loadStockRequests(); loadInventoryOverview(); loadProducts(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function completeStockRequest(id) {
   const res = await fetch(API + '/stock-requests/' + id + '/complete', { method: 'POST' });
-  if (res.ok) { toast('Da hoan thanh phieu nhap'); closeModal('sr-detail-modal'); loadStockRequests(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Request completed'); closeModal('sr-detail-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function cancelStockRequest(id) {
-  if (!confirm('Huy phieu nhap nay?')) return;
+  if (!confirm('Cancel this stock request?')) return;
   const res = await fetch(API + '/stock-requests/' + id + '/cancel', { method: 'POST' });
-  if (res.ok) { toast('Da huy phieu nhap'); closeModal('sr-detail-modal'); loadStockRequests(); }
-  else { const e = await res.json(); toast(e.detail || 'Loi', 'error'); }
+  if (res.ok) { toast('Request cancelled'); closeModal('sr-detail-modal'); loadStockRequests(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 // REPORTS
@@ -1390,21 +1396,21 @@ async function loadReports() {
   const low = await lowRes.json();
 
   document.getElementById('report-cards').innerHTML = `
-    <div class="report-card"><div class="number">${inv.total_products ?? 0}</div><div class="label">Tong san pham</div></div>
-    <div class="report-card"><div class="number">${inv.total_quantity ?? 0}</div><div class="label">Tong ton kho</div></div>
-    <div class="report-card"><div class="number">$${(inv.total_value ?? 0).toFixed(2)}</div><div class="label">Gia tri kho</div></div>
-    <div class="report-card"><div class="number">${ord.total_orders ?? 0}</div><div class="label">Tong don hang</div></div>
-    <div class="report-card"><div class="number">$${(ord.total_revenue ?? 0).toFixed(2)}</div><div class="label">Doanh thu</div></div>
-    <div class="report-card"><div class="number">${inv.low_stock_count ?? 0}</div><div class="label">Sap het hang</div></div>
+    <div class="report-card"><div class="number">${inv.total_products ?? 0}</div><div class="label">Total Products</div></div>
+    <div class="report-card"><div class="number">${inv.total_quantity ?? 0}</div><div class="label">Total Stock</div></div>
+    <div class="report-card"><div class="number">$${(inv.total_value ?? 0).toFixed(2)}</div><div class="label">Inventory Value</div></div>
+    <div class="report-card"><div class="number">${ord.total_orders ?? 0}</div><div class="label">Total Orders</div></div>
+    <div class="report-card"><div class="number">$${(ord.total_revenue ?? 0).toFixed(2)}</div><div class="label">Revenue</div></div>
+    <div class="report-card"><div class="number">${inv.low_stock_count ?? 0}</div><div class="label">Low Stock</div></div>
   `;
 
   const topList = Array.isArray(top) ? top : (top.products || []);
   document.getElementById('top-products-body').innerHTML = topList.length === 0
-    ? '<tr><td colspan="5" class="empty">Chua co du lieu</td></tr>'
+    ? '<tr><td colspan="5" class="empty">No data yet</td></tr>'
     : topList.map((p,i) => `<tr><td>${i+1}</td><td>${esc(p.sku||'')}</td><td>${esc(p.product_name||p.name||'')}</td><td>${p.total_sold||p.quantity_sold||0}</td><td>$${(p.total_revenue||p.revenue||0).toFixed(2)}</td></tr>`).join('');
 
   document.getElementById('low-stock-body').innerHTML = low.length === 0
-    ? '<tr><td colspan="4" class="empty">Tat ca san pham du hang</td></tr>'
+    ? '<tr><td colspan="4" class="empty">All products are well-stocked</td></tr>'
     : low.map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td class="stock-low">${p.quantity}</td><td>${esc(p.location)}</td></tr>`).join('');
 }
 
