@@ -10,7 +10,8 @@ from app.database import Base
 
 class PickingListStatus(str, PyEnum):
     ACTIVE = "active"
-    COMPLETED = "completed"
+    PROCESSING = "processing"
+    DONE = "done"
 
 
 class PickingList(Base):

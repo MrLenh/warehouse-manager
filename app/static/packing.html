@@ -35,8 +35,10 @@ tr:hover{background:#f8f9ff}
 .badge-shipped,.badge-in_transit{background:#d1ecf1;color:#0c5460}
 .badge-delivered{background:#28a745;color:#fff}
 .badge-cancelled{background:#f8d7da;color:#721c24}
+.badge-packing{background:#e8daef;color:#6c3483}
 .badge-active{background:#cce5ff;color:#004085}
-.badge-completed{background:#28a745;color:#fff}
+.badge-processing{background:#e8daef;color:#6c3483}
+.badge-done{background:#28a745;color:#fff}
 .toast{position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .toast-success{background:#28a745}
 .toast-error{background:#dc3545}
@@ -144,7 +146,7 @@ tr:hover{background:#f8f9ff}
           </label>
           <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">Export QR PDF</button>
           <button class="btn btn-outline btn-sm" onclick="refreshProgress()">Refresh</button>
-          <button class="btn btn-danger btn-sm" onclick="unpackBatch()">Unpack Batch</button>
+          <button class="btn btn-danger btn-sm" id="unpack-batch-btn" onclick="unpackBatch()">Unpack Batch</button>
         </div>
       </div>
       <div class="progress-bar">
@@ -230,10 +232,11 @@ async function loadPickingLists() {
 
   container.innerHTML = lists.map(pl => {
     const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
+    const canDelete = pl.status === 'active';
     return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" onclick="selectPickingList('${pl.id}')">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <h4>${esc(pl.picking_number)}</h4>
-        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Delete batch">&#10005;</button>
+        ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Delete batch">&#10005;</button>` : ''}
       </div>
       <div class="meta">${pl.order_count} orders, ${pl.total_items} items</div>
       <div class="progress-bar" style="height:16px;margin-top:8px">
@@ -250,6 +253,7 @@ async function selectPickingList(plId) {
   document.getElementById('pl-number').textContent = currentPL.picking_number;
   document.getElementById('header-info').textContent = currentPL.picking_number;
   document.getElementById('packing-session').style.display = '';
+  document.getElementById('unpack-batch-btn').style.display = currentPL.status === 'active' ? '' : 'none';
   document.getElementById('scan-input').focus();
 
   // Highlight selected card
@@ -261,6 +265,12 @@ async function selectPickingList(plId) {
 
 async function refreshProgress() {
   if (!currentPL) return;
+  // Re-fetch picking list to get updated status
+  const plRes = await fetch(API + '/picking-lists/' + currentPL.id);
+  if (plRes.ok) {
+    currentPL = await plRes.json();
+    document.getElementById('unpack-batch-btn').style.display = currentPL.status === 'active' ? '' : 'none';
+  }
   const res = await fetch(API + '/picking-lists/' + currentPL.id + '/progress');
   progressData = await res.json();
 
@@ -308,8 +318,10 @@ function renderOrderCards() {
         actionsHtml += ` <span style="font-size:12px;color:#888">Track: ${esc(o.tracking_number)}</span>`;
       }
     }
-    // Unpack button - remove order from batch
-    actionsHtml += ` <button class="btn btn-danger btn-sm" onclick="unpackOrder('${o.order_id}','${esc(o.order_number)}')" title="Remove from batch">Unpack</button>`;
+    // Unpack button - only for active batches
+    if (currentPL && currentPL.status === 'active') {
+      actionsHtml += ` <button class="btn btn-danger btn-sm" onclick="unpackOrder('${o.order_id}','${esc(o.order_number)}')" title="Remove from batch">Unpack</button>`;
+    }
 
     const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
       <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>

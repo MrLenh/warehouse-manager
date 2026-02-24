@@ -12,6 +12,7 @@ class OrderStatus(str, PyEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
     PROCESSING = "processing"
+    PACKING = "packing"
     PACKED = "packed"
     LABEL_PURCHASED = "label_purchased"
     DROP_OFF = "drop_off"

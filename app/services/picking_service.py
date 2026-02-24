@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models.order import Order, OrderItem
+from app.models.order import Order, OrderItem, OrderStatus
 from app.models.picking import PickingList, PickingListStatus, PickItem
 
 
@@ -19,13 +19,19 @@ def create_picking_list(db: Session, order_ids: list[str]) -> PickingList:
     if not orders:
         raise ValueError("No valid orders found")
 
-    # Check if any order is already in an active picking list
+    # Only pending orders can be added to a batch
+    non_pending = [o for o in orders if o.status != OrderStatus.PENDING]
+    if non_pending:
+        names = ", ".join(f"{o.order_number} ({o.status})" for o in non_pending)
+        raise ValueError(f"Only pending orders can be batched: {names}")
+
+    # Check if any order is already in an active batch
     already_in_batch = (
         db.query(PickItem.order_id)
         .join(PickingList)
         .filter(
             PickItem.order_id.in_(order_ids),
-            PickingList.status == PickingListStatus.ACTIVE,
+            PickingList.status.in_([PickingListStatus.ACTIVE, PickingListStatus.PROCESSING]),
         )
         .distinct()
         .all()
@@ -60,6 +66,10 @@ def create_picking_list(db: Session, order_ids: list[str]) -> PickingList:
                 )
                 db.add(pick_item)
 
+    # Move orders to processing
+    for order in orders:
+        order.status = OrderStatus.PROCESSING
+
     db.commit()
     db.refresh(picking_list)
     return picking_list
@@ -89,8 +99,11 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
     # Mark as picked
     pick_item.picked = True
     pick_item.picked_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(pick_item)
+
+    # Transition batch to processing on first scan
+    picking_list = db.query(PickingList).filter(PickingList.id == pick_item.picking_list_id).first()
+    if picking_list and picking_list.status == PickingListStatus.ACTIVE:
+        picking_list.status = PickingListStatus.PROCESSING
 
     # Check order progress in this picking list
     order_items = db.query(PickItem).filter(
@@ -100,9 +113,20 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
     order_total = len(order_items)
     order_picked = sum(1 for i in order_items if i.picked)
 
-    # Get order info
+    # Get order info and update order status
     order = db.query(Order).filter(Order.id == pick_item.order_id).first()
     order_number = order.order_number if order else ""
+
+    if order:
+        if order_picked >= order_total:
+            # All items scanned → packed
+            order.status = OrderStatus.PACKED
+        elif order.status == OrderStatus.PROCESSING:
+            # First scan for this order → packing
+            order.status = OrderStatus.PACKING
+
+    db.commit()
+    db.refresh(pick_item)
 
     return {
         "success": True,
@@ -117,19 +141,22 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
 
 
 def delete_picking_list(db: Session, picking_list_id: str) -> dict:
-    """Delete a picking list and all its pick items (unpack entire batch)."""
+    """Delete a picking list and all its pick items (unpack entire batch). Only active batches."""
     pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
     if not pl:
         raise ValueError("Picking list not found")
 
+    if pl.status != PickingListStatus.ACTIVE:
+        raise ValueError(f"Can only delete active batches (current: {pl.status})")
+
     order_ids = set(i.order_id for i in pl.items)
     item_count = len(pl.items)
 
-    # Reset orders that were marked as packed/processing back to pending
+    # Reset orders back to pending
     for order_id in order_ids:
         order = db.query(Order).filter(Order.id == order_id).first()
-        if order and order.status in ("processing", "packed"):
-            order.status = "pending"
+        if order and order.status in (OrderStatus.PROCESSING, OrderStatus.PACKING, OrderStatus.PACKED):
+            order.status = OrderStatus.PENDING
 
     # Delete picking list (cascade deletes pick items)
     db.delete(pl)
@@ -143,10 +170,13 @@ def delete_picking_list(db: Session, picking_list_id: str) -> dict:
 
 
 def remove_order_from_picking_list(db: Session, picking_list_id: str, order_id: str) -> dict:
-    """Remove a single order from a picking list (unpack order from batch)."""
+    """Remove a single order from a picking list (unpack order from batch). Only active batches."""
     pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
     if not pl:
         raise ValueError("Picking list not found")
+
+    if pl.status != PickingListStatus.ACTIVE:
+        raise ValueError(f"Can only unpack orders from active batches (current: {pl.status})")
 
     items_to_remove = db.query(PickItem).filter(
         PickItem.picking_list_id == picking_list_id,
@@ -160,10 +190,10 @@ def remove_order_from_picking_list(db: Session, picking_list_id: str, order_id: 
     for item in items_to_remove:
         db.delete(item)
 
-    # Reset order status if it was changed
+    # Reset order status back to pending
     order = db.query(Order).filter(Order.id == order_id).first()
-    if order and order.status in ("processing", "packed"):
-        order.status = "pending"
+    if order and order.status in (OrderStatus.PROCESSING, OrderStatus.PACKING, OrderStatus.PACKED):
+        order.status = OrderStatus.PENDING
 
     db.commit()
 
@@ -223,3 +253,42 @@ def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
         })
 
     return list(orders_map.values())
+
+
+def check_batch_done(db: Session, order_id: str) -> None:
+    """Check if all orders in the batch are drop_off; if so, mark batch as done."""
+    # Find the batch this order belongs to
+    pick_item = (
+        db.query(PickItem)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id == order_id,
+            PickingList.status == PickingListStatus.PROCESSING,
+        )
+        .first()
+    )
+    if not pick_item:
+        return
+
+    pl = db.query(PickingList).filter(PickingList.id == pick_item.picking_list_id).first()
+    if not pl:
+        return
+
+    # Get all unique order IDs in this batch
+    batch_order_ids = {
+        row[0] for row in
+        db.query(PickItem.order_id).filter(PickItem.picking_list_id == pl.id).distinct().all()
+    }
+
+    # Check if all orders are drop_off (or later)
+    drop_off_statuses = {OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED}
+    all_done = True
+    for oid in batch_order_ids:
+        order = db.query(Order).filter(Order.id == oid).first()
+        if not order or order.status not in drop_off_statuses:
+            all_done = False
+            break
+
+    if all_done:
+        pl.status = PickingListStatus.DONE
+        db.commit()

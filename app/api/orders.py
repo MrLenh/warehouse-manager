@@ -291,6 +291,12 @@ def update_status(
     order = order_service.update_order_status(db, order_id, data)
     if not order:
         raise HTTPException(404, "Order not found")
+
+    # Check if batch should transition to done (all orders drop_off)
+    if data.status == OrderStatus.DROP_OFF:
+        from app.services.picking_service import check_batch_done
+        check_batch_done(db, order_id)
+
     background_tasks.add_task(_fire_webhook, order)
     return order
 
