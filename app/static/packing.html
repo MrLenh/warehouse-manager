@@ -285,6 +285,9 @@ async function refreshProgress() {
   // Render order cards
   renderOrderCards();
   showActiveOrder();
+
+  // Refresh picking list selector cards too
+  loadPickingLists();
 }
 
 function renderOrderCards() {
