@@ -90,3 +90,25 @@ def get_shipping_defaults():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/api/v1/admin/clear-all-data")
+def clear_all_data():
+    """Temporary endpoint to clear all data from the database."""
+    from app.database import SessionLocal
+    from sqlalchemy import text
+
+    db = SessionLocal()
+    try:
+        tables = [
+            "order_items", "orders", "stock_request_items",
+            "stock_requests", "inventory_logs", "variants", "products",
+        ]
+        deleted = {}
+        for tbl in tables:
+            result = db.execute(text(f"DELETE FROM {tbl}"))
+            deleted[tbl] = result.rowcount
+        db.commit()
+        return {"status": "ok", "deleted": deleted}
+    finally:
+        db.close()
