@@ -4,20 +4,31 @@ import traceback
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
-from app.api import orders, picking, products, reports, stock_requests, webhooks
+from app.api import auth, orders, picking, products, reports, stock_requests, webhooks
 from app.database import init_db
+from app.services.auth_service import decode_token, ensure_default_admin
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
+
+# Pages that don't require auth
+PUBLIC_PATHS = {"/login", "/health", "/api/v1/auth/login", "/api/v1/auth/logout"}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Create default admin if no users
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        ensure_default_admin(db)
+    finally:
+        db.close()
     yield
 
 
@@ -35,6 +46,33 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Redirect to /login for page requests if not authenticated."""
+    path = request.url.path
+
+    # Allow public paths, static files, API auth endpoints, and health
+    if (
+        path in PUBLIC_PATHS
+        or path.startswith("/static/")
+        or path.startswith("/api/v1/auth/")
+        or path == "/health"
+    ):
+        return await call_next(request)
+
+    # For API requests, let the dependency handle auth (returns 401)
+    if path.startswith("/api/"):
+        return await call_next(request)
+
+    # For page requests, check cookie and redirect to login if missing/invalid
+    token = request.cookies.get("token")
+    if not token or not decode_token(token):
+        return RedirectResponse("/login", status_code=302)
+
+    return await call_next(request)
+
+
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
@@ -44,6 +82,11 @@ app.include_router(picking.router, prefix="/api/v1")
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/login")
+def login_page():
+    return FileResponse(STATIC_DIR / "login.html")
 
 
 @app.get("/")
@@ -114,6 +157,7 @@ def clear_all_data():
     db = SessionLocal()
     try:
         tables = [
+            "activity_logs",
             "pick_items", "picking_lists",
             "order_items", "orders", "stock_request_items",
             "stock_requests", "inventory_logs", "variants", "products",

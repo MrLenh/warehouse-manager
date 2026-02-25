@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Base URL for QR code links (set to your domain in production)
     BASE_URL: str = "http://localhost:8000"
 
+    # Auth
+    SECRET_KEY: str = "change-me-in-production-use-a-real-secret"
+    ACCESS_TOKEN_EXPIRE_HOURS: int = 72
+
     model_config = {"env_file": ".env"}
 
 

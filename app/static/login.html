@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - Warehouse Manager</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-card{background:#fff;border-radius:16px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,.1);width:380px;max-width:95vw}
+.login-card h1{font-size:24px;text-align:center;margin-bottom:8px;color:#1a1a2e}
+.login-card p.sub{text-align:center;color:#888;font-size:14px;margin-bottom:28px}
+label{display:block;font-size:13px;color:#555;margin-bottom:4px;font-weight:500}
+input{width:100%;padding:12px 16px;border:1px solid #ddd;border-radius:10px;font-size:15px;outline:none;transition:.2s;margin-bottom:16px}
+input:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+.btn{width:100%;padding:14px;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:16px;font-weight:600;cursor:pointer;transition:.2s}
+.btn:hover{opacity:.9;transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.error{background:#f8d7da;color:#721c24;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none}
+</style>
+</head>
+<body>
+<div class="login-card">
+  <h1>Warehouse Manager</h1>
+  <p class="sub">Sign in to continue</p>
+  <div class="error" id="error"></div>
+  <form id="login-form" onsubmit="doLogin(event)">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" autofocus required>
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required>
+    <button type="submit" class="btn">Sign In</button>
+  </form>
+</div>
+<script>
+async function doLogin(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('error');
+  errEl.style.display = 'none';
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) return;
+  try {
+    const res = await fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ username, password }),
+    });
+    if (res.ok) {
+      window.location.href = '/';
+    } else {
+      const data = await res.json().catch(() => ({}));
+      errEl.textContent = data.detail || 'Login failed';
+      errEl.style.display = 'block';
+    }
+  } catch (err) {
+    errEl.textContent = 'Network error: ' + err.message;
+    errEl.style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>

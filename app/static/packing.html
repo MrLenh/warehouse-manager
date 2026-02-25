@@ -106,7 +106,9 @@ tr:hover{background:#f8f9ff}
   <h1>Packing Station</h1>
   <div style="display:flex;gap:12px;align-items:center">
     <span id="header-info" style="font-size:13px;opacity:.8"></span>
+    <span id="current-user" style="font-size:13px;opacity:.8"></span>
     <a href="/">Dashboard</a>
+    <a href="#" onclick="doLogout()" style="color:#fff;text-decoration:none;font-size:13px;background:rgba(255,255,255,.2);padding:6px 14px;border-radius:20px">Logout</a>
   </div>
 </div>
 
@@ -683,7 +685,20 @@ async function unpackOrder(orderId, orderNumber) {
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
+// Auth
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/api/v1/auth/me');
+    if (res.ok) { const u = await res.json(); document.getElementById('current-user').textContent = u.display_name || u.username; }
+  } catch {}
+}
+async function doLogout() {
+  await fetch('/api/v1/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
 // Init
+loadCurrentUser();
 loadPickingLists();
 
 // Auto-select if URL has picking list ID

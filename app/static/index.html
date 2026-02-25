@@ -104,6 +104,8 @@ tr:hover{background:#f8f9ff}
     <span id="stat-products">0 Products</span>
     <span id="stat-orders">0 Orders</span>
     <span id="stat-low-stock">0 Low Stock</span>
+    <span id="current-user" style="cursor:pointer" onclick="showActivityModal()"></span>
+    <a href="#" onclick="doLogout()" style="color:#fff;text-decoration:none;background:rgba(255,255,255,.2);padding:4px 12px;border-radius:20px;font-size:13px">Logout</a>
   </div>
 </div>
 
@@ -1656,7 +1658,49 @@ async function loadReports() {
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
+// Auth
+async function loadCurrentUser() {
+  try {
+    const res = await fetch('/api/v1/auth/me');
+    if (res.ok) {
+      const u = await res.json();
+      document.getElementById('current-user').textContent = u.display_name || u.username;
+    }
+  } catch {}
+}
+async function doLogout() {
+  await fetch('/api/v1/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+// Activity log modal
+async function showActivityModal() {
+  let modal = document.getElementById('activity-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'activity-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal" style="width:700px">
+      <div class="modal-header"><h2>Activity Log</h2><button class="modal-close" onclick="document.getElementById('activity-modal').classList.remove('show')">&times;</button></div>
+      <div class="modal-body" id="activity-body" style="max-height:60vh;overflow-y:auto"><em>Loading...</em></div>
+    </div>`;
+    document.body.appendChild(modal);
+  }
+  modal.classList.add('show');
+  const body = document.getElementById('activity-body');
+  body.innerHTML = '<em>Loading...</em>';
+  try {
+    const res = await fetch('/api/v1/auth/activity?limit=50');
+    const logs = await res.json();
+    if (logs.length === 0) { body.innerHTML = '<p style="color:#999;text-align:center">No activity yet</p>'; return; }
+    body.innerHTML = '<table style="font-size:13px;box-shadow:none"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th><th>IP</th></tr></thead><tbody>'
+      + logs.map(l => `<tr><td style="white-space:nowrap">${new Date(l.created_at).toLocaleString()}</td><td>${esc(l.username)}</td><td><strong>${esc(l.action)}</strong></td><td>${esc(l.detail)}</td><td style="font-size:11px;color:#888">${esc(l.ip_address)}</td></tr>`).join('')
+      + '</tbody></table>';
+  } catch (err) { body.innerHTML = '<span style="color:red">' + err.message + '</span>'; }
+}
+
 // Init
+loadCurrentUser();
 loadProducts();
 loadOrders();
 </script>

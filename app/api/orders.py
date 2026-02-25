@@ -2,14 +2,16 @@ import asyncio
 import csv
 import io
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.database import get_db
 from app.models.order import OrderStatus
+from app.models.user import User
 from app.schemas.order import BuyLabelRequest, OrderCreate, OrderOut, OrderStatusUpdate
-from app.services import order_service, shipping_service
+from app.services import auth_service, order_service, shipping_service
 from app.services.webhook_service import send_webhook
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -29,11 +31,12 @@ def _fire_webhook(order):
 
 
 @router.post("", response_model=OrderOut, status_code=201)
-def create_order(data: OrderCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def create_order(data: OrderCreate, request: Request, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         order = order_service.create_order(db, data)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    auth_service.log_activity(db, user.id, user.username, "create_order", detail=f"Order {order.order_number}", ip=request.client.host if request.client else "")
     background_tasks.add_task(_fire_webhook, order)
     return order
 
@@ -285,7 +288,9 @@ def get_order_by_number(order_number: str, db: Session = Depends(get_db)):
 def update_status(
     order_id: str,
     data: OrderStatusUpdate,
+    request: Request,
     background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     order = order_service.update_order_status(db, order_id, data)
@@ -297,18 +302,20 @@ def update_status(
         from app.services.picking_service import check_batch_done
         check_batch_done(db, order_id)
 
+    auth_service.log_activity(db, user.id, user.username, "update_order_status", detail=f"{order.order_number} → {data.status}", ip=request.client.host if request.client else "")
     background_tasks.add_task(_fire_webhook, order)
     return order
 
 
 @router.post("/{order_id}/cancel", response_model=OrderOut)
-def cancel_order(order_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def cancel_order(order_id: str, request: Request, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         order = order_service.cancel_order(db, order_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
     if not order:
         raise HTTPException(404, "Order not found")
+    auth_service.log_activity(db, user.id, user.username, "cancel_order", detail=order.order_number, ip=request.client.host if request.client else "")
     background_tasks.add_task(_fire_webhook, order)
     return order
 
@@ -317,13 +324,16 @@ def cancel_order(order_id: str, background_tasks: BackgroundTasks, db: Session =
 def buy_label(
     order_id: str,
     data: BuyLabelRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     try:
         order = shipping_service.buy_label(db, order_id, carrier=data.carrier, service=data.service)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(400, str(e))
+    auth_service.log_activity(db, user.id, user.username, "buy_label", detail=f"{order.order_number} {data.carrier} {data.service}", ip=request.client.host if request.client else "")
     background_tasks.add_task(_fire_webhook, order)
     return order
 

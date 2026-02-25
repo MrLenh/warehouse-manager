@@ -127,6 +127,7 @@ def init_db():
     import app.models.inventory_log  # noqa: F401
     import app.models.stock_request  # noqa: F401
     import app.models.picking  # noqa: F401
+    import app.models.user  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_add_columns()
