@@ -78,9 +78,13 @@ def logout(response: Response):
     return {"ok": True}
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me")
 def me(user: User = Depends(get_current_user)):
-    return user
+    return UserOut(
+        id=user.id, username=user.username, display_name=user.display_name,
+        role=user.role, active=user.active,
+        created_at=user.created_at.isoformat() if user.created_at else "",
+    )
 
 
 @router.get("/users")
@@ -97,16 +101,20 @@ def list_users(user: User = Depends(get_current_user), db: Session = Depends(get
     ]
 
 
-@router.post("/users", response_model=UserOut, status_code=201)
+@router.post("/users", status_code=201)
 def create_user(data: CreateUserRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role != "admin":
         raise HTTPException(403, "Admin only")
     try:
-        new_user = auth_service.create_user(db, data.username, data.password, data.display_name, data.role)
+        u = auth_service.create_user(db, data.username, data.password, data.display_name, data.role)
     except ValueError as e:
         raise HTTPException(400, str(e))
     auth_service.log_activity(db, user.id, user.username, "create_user", detail=f"Created user: {data.username}")
-    return new_user
+    return UserOut(
+        id=u.id, username=u.username, display_name=u.display_name,
+        role=u.role, active=u.active,
+        created_at=u.created_at.isoformat() if u.created_at else "",
+    )
 
 
 class UpdateUserRequest(BaseModel):
@@ -118,7 +126,7 @@ class ChangePasswordRequest(BaseModel):
     password: str
 
 
-@router.patch("/users/{user_id}", response_model=UserOut)
+@router.patch("/users/{user_id}")
 def update_user(user_id: str, data: UpdateUserRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role != "admin":
         raise HTTPException(403, "Admin only")
@@ -132,7 +140,11 @@ def update_user(user_id: str, data: UpdateUserRequest, user: User = Depends(get_
     db.commit()
     db.refresh(target)
     auth_service.log_activity(db, user.id, user.username, "update_user", detail=f"Updated {target.username}: role={target.role}")
-    return target
+    return UserOut(
+        id=target.id, username=target.username, display_name=target.display_name,
+        role=target.role, active=target.active,
+        created_at=target.created_at.isoformat() if target.created_at else "",
+    )
 
 
 @router.patch("/users/{user_id}/active")
