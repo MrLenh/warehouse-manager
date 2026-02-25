@@ -386,8 +386,11 @@ async function doScan() {
 
   const resultEl = document.getElementById('scan-result');
 
-  // If active order, validate QR belongs to it before sending to server
-  if (activeOrderId && progressData.length > 0) {
+  // Check if this is a tracking number (shipping label scan) — skip QR validation
+  const isTrackingNumber = progressData.some(x => x.tracking_number === code);
+
+  // If active order, validate QR belongs to it before sending to server (skip for tracking numbers)
+  if (!isTrackingNumber && activeOrderId && progressData.length > 0) {
     const activeOrder = progressData.find(x => x.order_id === activeOrderId);
     if (activeOrder) {
       const belongsToActive = activeOrder.items.some(i => i.qr_code === code);
@@ -409,6 +412,21 @@ async function doScan() {
     const data = await res.json();
 
     if (data.success) {
+      // Shipping label scanned → order marked as shipped
+      if (data.label_scanned) {
+        resultEl.className = 'scan-result complete';
+        resultEl.textContent = data.message;
+        toast(`${data.order_number} marked as Shipped!`, 'success');
+        await refreshProgress();
+        // Clear active order if it was the shipped one
+        if (activeOrderId === data.order_id) {
+          clearActiveOrder();
+        }
+        input.value = '';
+        input.focus();
+        return;
+      }
+
       // Set active order on first scan
       const isFirstScan = !activeOrderId;
       if (!activeOrderId) {

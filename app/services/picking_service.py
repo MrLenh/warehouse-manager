@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.picking import PickingList, PickingListStatus, PickItem
+from app.services.order_service import _add_status_history
 
 
 def _generate_picking_number() -> str:
@@ -83,11 +84,50 @@ def list_picking_lists(db: Session, skip: int = 0, limit: int = 100) -> list[Pic
     return db.query(PickingList).order_by(PickingList.created_at.desc()).offset(skip).limit(limit).all()
 
 
+def _scan_tracking_number(db: Session, code: str) -> dict:
+    """Handle scanning a shipping label tracking number → auto move order to Shipped."""
+    order = db.query(Order).filter(Order.tracking_number == code).first()
+    if not order:
+        return {"success": False, "message": "QR code not found", "pick_item": None}
+
+    # Only allow transition from label_purchased or drop_off
+    allowed = {OrderStatus.LABEL_PURCHASED, OrderStatus.DROP_OFF}
+    current = order.status if isinstance(order.status, str) else order.status.value
+    if order.status not in allowed and current not in {s.value for s in allowed}:
+        return {
+            "success": False,
+            "message": f"Order {order.order_number} is '{current}' — cannot mark as shipped",
+            "pick_item": None,
+        }
+
+    order.status = OrderStatus.SHIPPED
+    _add_status_history(order, OrderStatus.SHIPPED, "Shipping label scanned — marked as shipped")
+
+    # Also check if batch should transition to done
+    check_batch_done(db, order.id)
+
+    db.commit()
+    db.refresh(order)
+
+    return {
+        "success": True,
+        "message": f"Shipping label scanned! Order {order.order_number} → Shipped",
+        "pick_item": None,
+        "order_id": order.id,
+        "order_number": order.order_number,
+        "order_picked": 0,
+        "order_total": 0,
+        "order_complete": False,
+        "label_scanned": True,
+    }
+
+
 def scan_pick_item(db: Session, qr_code: str) -> dict:
-    """Scan a QR code to mark item as picked. Returns scan result info."""
+    """Scan a QR code to mark item as picked, or scan a tracking number to mark order as shipped."""
     pick_item = db.query(PickItem).filter(PickItem.qr_code == qr_code).first()
     if not pick_item:
-        return {"success": False, "message": "QR code not found", "pick_item": None}
+        # Not a pick QR code — check if it's a tracking number (shipping label scan)
+        return _scan_tracking_number(db, qr_code)
 
     if pick_item.picked:
         return {
