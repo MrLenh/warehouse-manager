@@ -1459,8 +1459,8 @@ async function viewOrder(id) {
     </div>
     <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
     <table>
-      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
-      <tbody>${o.items.map(i => `<tr><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
+      <thead><tr><th></th><th>SKU</th><th>Name</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
+      <tbody>${o.items.map(i => `<tr><td style="width:40px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px">' : '<span style="display:inline-block;width:36px;height:36px;background:#f0f0f0;border-radius:4px;text-align:center;line-height:36px;color:#ccc;font-size:16px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table>
     ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">View Shipping Label</a></div>' : ''}
     ${o.notes ? '<div style="margin-top:12px"><strong>Notes:</strong> '+esc(o.notes)+'</div>' : ''}

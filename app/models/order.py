@@ -96,3 +96,8 @@ class OrderItem(Base):
     unit_price: Mapped[float] = mapped_column(Float, default=0.0)
 
     order: Mapped["Order"] = relationship("Order", back_populates="items")
+    product: Mapped["Product"] = relationship("Product", lazy="joined")
+
+    @property
+    def image_url(self) -> str:
+        return self.product.image_url if self.product else ""
