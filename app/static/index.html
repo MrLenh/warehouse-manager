@@ -1481,13 +1481,32 @@ async function viewOrder(id) {
       const oService = o.service || defaultService;
       const carrierOpts = Object.keys(CARRIERS).map(c => `<option value="${c}" ${c===oCarrier?'selected':''}>${c}</option>`).join('');
       const serviceOpts = (CARRIERS[oCarrier]||[]).map(s => `<option value="${s}" ${s===oService?'selected':''}>${s}</option>`).join('');
-      footerHtml += `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      footerHtml += `
+      <div id="parcel-info" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:8px 12px;background:#f8f9fa;border-radius:8px;font-size:13px">
+        <span style="font-weight:600;color:#555">Package:</span>
+        <label style="display:flex;align-items:center;gap:3px">Wt(oz)<input id="bl-weight" type="number" step="0.1" min="0.1" style="width:70px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">L(in)<input id="bl-length" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">W(in)<input id="bl-width" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">H(in)<input id="bl-height" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="bl-carrier" onchange="updateServiceOptions('bl-carrier','bl-service')" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${carrierOpts}</select>
         <select id="bl-service" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${serviceOpts}</select>
         <button class="btn btn-outline" onclick="getRates('${o.id}')">Get Rates</button>
-        <button class="btn btn-primary" onclick="buyLabel('${o.id}')">Buy Label</button>
+        <button id="btn-buy-label" class="btn btn-primary" onclick="buyLabel('${o.id}')">Buy Label</button>
       </div>
       <div id="rates-list" style="margin-top:8px"></div>`;
+      // Load calculated parcel info
+      fetch(API + '/orders/' + o.id + '/parcel-info').then(r=>r.json()).then(p=>{
+        const wEl = document.getElementById('bl-weight');
+        const lEl = document.getElementById('bl-length');
+        const wiEl = document.getElementById('bl-width');
+        const hEl = document.getElementById('bl-height');
+        if(wEl) wEl.value = p.weight || 0;
+        if(lEl) lEl.value = p.length || 0;
+        if(wiEl) wiEl.value = p.width || 0;
+        if(hEl) hEl.value = p.height || 0;
+      }).catch(()=>{});
     }
     if (curIdx < statusFlow.length - 1) {
       const next = statusFlow[curIdx + 1];
@@ -1513,11 +1532,25 @@ async function cancelOrder(id) {
 }
 
 // GET RATES
+function _getParcelParams() {
+  const w = parseFloat(document.getElementById('bl-weight')?.value) || 0;
+  const l = parseFloat(document.getElementById('bl-length')?.value) || 0;
+  const wi = parseFloat(document.getElementById('bl-width')?.value) || 0;
+  const h = parseFloat(document.getElementById('bl-height')?.value) || 0;
+  const params = new URLSearchParams();
+  if (w > 0) params.set('weight_oz', w);
+  if (l > 0) params.set('length_in', l);
+  if (wi > 0) params.set('width_in', wi);
+  if (h > 0) params.set('height_in', h);
+  return params.toString();
+}
+
 async function getRates(orderId) {
   const ratesDiv = document.getElementById('rates-list');
   ratesDiv.innerHTML = '<em>Loading rates...</em>';
   try {
-    const res = await fetch(API + '/orders/' + orderId + '/rates');
+    const qs = _getParcelParams();
+    const res = await fetch(API + '/orders/' + orderId + '/rates' + (qs ? '?' + qs : ''));
     if (!res.ok) {
       let errMsg;
       try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
@@ -1541,25 +1574,44 @@ async function getRates(orderId) {
 }
 
 // BUY LABEL
+let _buyingLabel = false;
 async function buyLabel(orderId) {
+  if (_buyingLabel) return;
   const carrierEl = document.getElementById('bl-carrier');
   const serviceEl = document.getElementById('bl-service');
   const carrier = carrierEl ? carrierEl.value : defaultCarrier;
   const service = serviceEl ? serviceEl.value : defaultService;
-  if (!confirm(`Buy label: ${carrier} ${service}?\nDimensions and weight will be calculated from products.`)) return;
-  toast('Purchasing label...', 'success');
-  const res = await fetch(API + '/orders/' + orderId + '/buy-label', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({carrier, service}),
-  });
-  if (res.ok) {
-    toast(`Label purchased: ${carrier} ${service}`);
-    closeModal('order-detail-modal');
-    loadOrders();
-  } else {
-    try { const e = await res.json(); toast(e.detail || 'Error buying label', 'error'); }
-    catch { toast('Error buying label', 'error'); }
+  const w = parseFloat(document.getElementById('bl-weight')?.value) || 0;
+  const l = parseFloat(document.getElementById('bl-length')?.value) || 0;
+  const wi = parseFloat(document.getElementById('bl-width')?.value) || 0;
+  const h = parseFloat(document.getElementById('bl-height')?.value) || 0;
+  const dimStr = w > 0 ? `\nWeight: ${w}oz` + (l > 0 ? ` | ${l} x ${wi} x ${h} in` : '') : '';
+  if (!confirm(`Buy label: ${carrier} ${service}?${dimStr}`)) return;
+
+  _buyingLabel = true;
+  const btn = document.getElementById('btn-buy-label');
+  if (btn) { btn.disabled = true; btn.textContent = 'Purchasing...'; }
+
+  try {
+    toast('Purchasing label...', 'success');
+    const body = {carrier, service};
+    if (w > 0) { body.weight_oz = w; body.length_in = l; body.width_in = wi; body.height_in = h; }
+    const res = await fetch(API + '/orders/' + orderId + '/buy-label', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      toast(`Label purchased: ${carrier} ${service}`);
+      closeModal('order-detail-modal');
+      loadOrders();
+    } else {
+      try { const e = await res.json(); toast(e.detail || 'Error buying label', 'error'); }
+      catch { toast('Error buying label', 'error'); }
+    }
+  } finally {
+    _buyingLabel = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Buy Label'; }
   }
 }
 

@@ -98,3 +98,7 @@ class OrderOut(BaseModel):
 class BuyLabelRequest(BaseModel):
     carrier: str = ""  # empty = use order's carrier or config default
     service: str = ""  # empty = use order's service or config default
+    weight_oz: float = 0
+    length_in: float = 0
+    width_in: float = 0
+    height_in: float = 0

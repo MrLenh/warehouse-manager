@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.order import Order, OrderStatus
-from app.models.product import Product
+from app.models.product import Product, Variant
 from app.services.order_service import _add_status_history
 
 
@@ -22,21 +22,23 @@ def _calc_parcel(order: Order, db: Session) -> dict:
 
     for item in order.items:
         product = db.query(Product).filter(Product.id == item.product_id).first()
-        if product and product.weight_oz > 0:
-            total_weight_oz += product.weight_oz * item.quantity
-        else:
-            total_weight_oz += 8.0 * item.quantity  # fallback 8oz
+        variant = db.query(Variant).filter(Variant.id == item.variant_id).first() if item.variant_id else None
 
-        if product:
-            max_length = max(max_length, product.length_in)
-            max_width = max(max_width, product.width_in)
-            total_height += product.height_in * item.quantity
+        w = (variant.effective_weight_oz if variant else (product.weight_oz if product else 0)) or 0
+        total_weight_oz += (w if w > 0 else 8.0) * item.quantity
 
-    parcel = {"weight": total_weight_oz}
+        l = variant.effective_length_in if variant else (product.length_in if product else 0)
+        wi = variant.effective_width_in if variant else (product.width_in if product else 0)
+        h = variant.effective_height_in if variant else (product.height_in if product else 0)
+        max_length = max(max_length, l)
+        max_width = max(max_width, wi)
+        total_height += h * item.quantity
+
+    parcel = {"weight": round(total_weight_oz, 2)}
     if max_length > 0 and max_width > 0 and total_height > 0:
-        parcel["length"] = max_length
-        parcel["width"] = max_width
-        parcel["height"] = total_height
+        parcel["length"] = round(max_length, 2)
+        parcel["width"] = round(max_width, 2)
+        parcel["height"] = round(total_height, 2)
 
     return parcel
 
@@ -109,9 +111,9 @@ def _get_from_address(order: Order) -> dict:
     }
 
 
-def _create_shipment(client, order: Order, db: Session):
+def _create_shipment(client, order: Order, db: Session, parcel_override: dict | None = None):
     """Create EasyPost shipment for an order."""
-    parcel = _calc_parcel(order, db)
+    parcel = parcel_override if parcel_override else _calc_parcel(order, db)
     from_addr = _get_from_address(order)
 
     # Validate to_address has required fields
@@ -133,7 +135,8 @@ def _create_shipment(client, order: Order, db: Session):
     )
 
 
-def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") -> Order:
+def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "",
+              parcel_override: dict | None = None) -> Order:
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise ValueError("Order not found")
@@ -145,7 +148,7 @@ def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") 
     service = service or order.service or settings.DEFAULT_SERVICE
 
     client = _get_client()
-    shipment = _create_shipment(client, order, db)
+    shipment = _create_shipment(client, order, db, parcel_override=parcel_override)
 
     if not shipment.rates:
         raise ValueError("No shipping rates available. Check addresses and parcel dimensions.")
@@ -177,14 +180,22 @@ def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "") 
     return order
 
 
-def get_rates(order_id: str, db: Session) -> list[dict]:
+def get_parcel_info(order_id: str, db: Session) -> dict:
+    """Get calculated parcel weight and dimensions for an order."""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise ValueError("Order not found")
+    return _calc_parcel(order, db)
+
+
+def get_rates(order_id: str, db: Session, parcel_override: dict | None = None) -> list[dict]:
     """Get shipping rates without purchasing."""
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise ValueError("Order not found")
 
     client = _get_client()
-    shipment = _create_shipment(client, order, db)
+    shipment = _create_shipment(client, order, db, parcel_override=parcel_override)
 
     return sorted(
         [

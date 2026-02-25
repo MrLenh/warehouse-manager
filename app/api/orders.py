@@ -320,6 +320,15 @@ def cancel_order(order_id: str, request: Request, background_tasks: BackgroundTa
     return order
 
 
+@router.get("/{order_id}/parcel-info")
+def parcel_info(order_id: str, db: Session = Depends(get_db)):
+    try:
+        info = shipping_service.get_parcel_info(order_id, db)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return info
+
+
 @router.post("/{order_id}/buy-label", response_model=OrderOut)
 def buy_label(
     order_id: str,
@@ -329,8 +338,16 @@ def buy_label(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    parcel_override = None
+    if data.weight_oz > 0:
+        parcel_override = {"weight": data.weight_oz}
+        if data.length_in > 0 and data.width_in > 0 and data.height_in > 0:
+            parcel_override["length"] = data.length_in
+            parcel_override["width"] = data.width_in
+            parcel_override["height"] = data.height_in
     try:
-        order = shipping_service.buy_label(db, order_id, carrier=data.carrier, service=data.service)
+        order = shipping_service.buy_label(db, order_id, carrier=data.carrier, service=data.service,
+                                           parcel_override=parcel_override)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(400, str(e))
     auth_service.log_activity(db, user.id, user.username, "buy_label", detail=f"{order.order_number} {data.carrier} {data.service}", ip=request.client.host if request.client else "")
@@ -339,9 +356,17 @@ def buy_label(
 
 
 @router.get("/{order_id}/rates")
-def get_rates(order_id: str, db: Session = Depends(get_db)):
+def get_rates(order_id: str, weight_oz: float = 0, length_in: float = 0,
+              width_in: float = 0, height_in: float = 0, db: Session = Depends(get_db)):
+    parcel_override = None
+    if weight_oz > 0:
+        parcel_override = {"weight": weight_oz}
+        if length_in > 0 and width_in > 0 and height_in > 0:
+            parcel_override["length"] = length_in
+            parcel_override["width"] = width_in
+            parcel_override["height"] = height_in
     try:
-        rates = shipping_service.get_rates(order_id, db)
+        rates = shipping_service.get_rates(order_id, db, parcel_override=parcel_override)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(400, str(e))
     return {"rates": rates}
