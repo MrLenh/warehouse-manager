@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 logger = logging.getLogger(__name__)
 
 from app.api import auth, orders, picking, products, reports, stock_requests, webhooks
+from app.config import settings
 from app.database import init_db
 from app.services.auth_service import decode_token, ensure_default_admin
 
@@ -19,9 +20,44 @@ STATIC_DIR = pathlib.Path(__file__).parent / "static"
 PUBLIC_PATHS = {"/login", "/health", "/api/v1/auth/login", "/api/v1/auth/logout"}
 
 
+def _migrate_uploads():
+    """Move images from old app/static/uploads/ to persistent UPLOAD_DIR.
+    Also updates image_url in DB from /static/uploads/X to /uploads/X."""
+    import shutil
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models.product import Product
+
+    old_dir = pathlib.Path(__file__).parent / "static" / "uploads"
+    new_dir = pathlib.Path(settings.UPLOAD_DIR)
+    new_dir.mkdir(parents=True, exist_ok=True)
+
+    # Move files from old location
+    if old_dir.exists():
+        for f in old_dir.iterdir():
+            if f.is_file() and f.name != ".gitkeep":
+                dest = new_dir / f.name
+                if not dest.exists():
+                    shutil.copy2(f, dest)
+
+    # Fix image_url in DB: /static/uploads/X → /uploads/X
+    db = SessionLocal()
+    try:
+        products = db.query(Product).filter(Product.image_url.like("/static/uploads/%")).all()
+        for p in products:
+            p.image_url = p.image_url.replace("/static/uploads/", "/uploads/")
+        if products:
+            db.commit()
+            logger.info("Migrated %d product image URLs to /uploads/", len(products))
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    _migrate_uploads()
     # Create default admin if no users
     from app.database import SessionLocal
     db = SessionLocal()
@@ -51,10 +87,11 @@ async def auth_middleware(request: Request, call_next):
     """Redirect to /login for page requests if not authenticated."""
     path = request.url.path
 
-    # Allow public paths, static files, API auth endpoints, and health
+    # Allow public paths, static files, uploads, API auth endpoints, and health
     if (
         path in PUBLIC_PATHS
         or path.startswith("/static/")
+        or path.startswith("/uploads/")
         or path.startswith("/api/v1/auth/")
         or path == "/health"
     ):
@@ -80,6 +117,11 @@ app.include_router(stock_requests.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
 app.include_router(picking.router, prefix="/api/v1")
 
+
+# Mount persistent uploads directory (survives deploys)
+_upload_dir = pathlib.Path(settings.UPLOAD_DIR)
+_upload_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_upload_dir), name="uploads")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

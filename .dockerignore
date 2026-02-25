@@ -4,6 +4,7 @@ __pycache__/
 .env
 warehouse.db
 qrcodes/
+uploads/
 .git/
 .venv/
 venv/

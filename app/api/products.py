@@ -180,14 +180,18 @@ def import_products(file: UploadFile, db: Session = Depends(get_db)):
     return {"created": created, "updated": updated, "variants_created": variants_created, "variants_updated": variants_updated, "errors": errors}
 
 
-UPLOAD_DIR = pathlib.Path(__file__).parent.parent / "static" / "uploads"
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
+def _get_upload_dir() -> pathlib.Path:
+    from app.config import settings
+    return pathlib.Path(settings.UPLOAD_DIR)
+
+
 @router.post("/{product_id}/upload-image", response_model=ProductOut)
 def upload_product_image(product_id: str, file: UploadFile, db: Session = Depends(get_db)):
-    """Upload an image file for a product. Saves to static/uploads and sets image_url."""
+    """Upload an image file for a product. Saves to UPLOAD_DIR and sets image_url."""
     product = product_service.get_product(db, product_id)
     if not product:
         raise HTTPException(404, "Product not found")
@@ -203,12 +207,13 @@ def upload_product_image(product_id: str, file: UploadFile, db: Session = Depend
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, f"File too large. Max {MAX_FILE_SIZE // 1024 // 1024}MB")
 
+    upload_dir = _get_upload_dir()
     filename = f"{product.sku}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = UPLOAD_DIR / filename
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    filepath = upload_dir / filename
+    upload_dir.mkdir(parents=True, exist_ok=True)
     filepath.write_bytes(content)
 
-    image_url = f"/static/uploads/{filename}"
+    image_url = f"/uploads/{filename}"
     product.image_url = image_url
     db.commit()
     db.refresh(product)
