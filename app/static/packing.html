@@ -174,6 +174,13 @@ tr:hover{background:#f8f9ff}
     <div class="modal-body">
       <p style="margin-bottom:12px"><strong>Order:</strong> <span id="lm-order-number"></span></p>
       <p style="margin-bottom:16px;color:#28a745;font-weight:600">All items picked! Ready for label.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:#f8f9fa;border-radius:8px;font-size:13px">
+        <span style="font-weight:600;color:#555">Package:</span>
+        <label style="display:flex;align-items:center;gap:3px">Wt(oz)<input id="lm-weight" type="number" step="0.1" min="0.1" style="width:70px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">L(in)<input id="lm-length" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">W(in)<input id="lm-width" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">H(in)<input id="lm-height" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+      </div>
       <div style="display:flex;gap:12px;margin-bottom:12px">
         <div style="flex:1">
           <label style="font-size:13px;color:#555;display:block;margin-bottom:4px">Carrier</label>
@@ -191,7 +198,7 @@ tr:hover{background:#f8f9ff}
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeLabelModal()">Cancel</button>
       <button class="btn btn-outline" onclick="getLmRates()">Get Rates</button>
-      <button class="btn btn-primary" onclick="buyLmLabel()">Buy Label</button>
+      <button id="btn-lm-buy" class="btn btn-primary" onclick="buyLmLabel()">Buy Label</button>
     </div>
   </div>
 </div>
@@ -542,7 +549,22 @@ function openLabelModal(orderId, orderNumber) {
   document.getElementById('lm-carrier').value = 'USPS';
   updateLmService();
   document.getElementById('lm-rates').innerHTML = '';
+  // Reset parcel fields
+  document.getElementById('lm-weight').value = 0;
+  document.getElementById('lm-length').value = 0;
+  document.getElementById('lm-width').value = 0;
+  document.getElementById('lm-height').value = 0;
+  // Reset buy button state
+  const btn = document.getElementById('btn-lm-buy');
+  if (btn) { btn.disabled = false; btn.textContent = 'Buy Label'; }
   document.getElementById('label-modal').classList.add('show');
+  // Load parcel info
+  fetch(API + '/orders/' + orderId + '/parcel-info').then(r => r.json()).then(p => {
+    document.getElementById('lm-weight').value = p.weight || 0;
+    document.getElementById('lm-length').value = p.length || 0;
+    document.getElementById('lm-width').value = p.width || 0;
+    document.getElementById('lm-height').value = p.height || 0;
+  }).catch(() => {});
 }
 
 function closeLabelModal() {
@@ -555,11 +577,25 @@ function updateLmService() {
   document.getElementById('lm-service').innerHTML = services.map(s => `<option value="${s}">${s}</option>`).join('');
 }
 
+function _getLmParcelParams() {
+  const w = parseFloat(document.getElementById('lm-weight')?.value) || 0;
+  const l = parseFloat(document.getElementById('lm-length')?.value) || 0;
+  const wi = parseFloat(document.getElementById('lm-width')?.value) || 0;
+  const h = parseFloat(document.getElementById('lm-height')?.value) || 0;
+  const params = new URLSearchParams();
+  if (w > 0) params.set('weight_oz', w);
+  if (l > 0) params.set('length_in', l);
+  if (wi > 0) params.set('width_in', wi);
+  if (h > 0) params.set('height_in', h);
+  return params.toString();
+}
+
 async function getLmRates() {
   const div = document.getElementById('lm-rates');
   div.innerHTML = '<em>Loading rates...</em>';
   try {
-    const res = await fetch(API + '/orders/' + labelOrderId + '/rates');
+    const qs = _getLmParcelParams();
+    const res = await fetch(API + '/orders/' + labelOrderId + '/rates' + (qs ? '?' + qs : ''));
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
       div.innerHTML = '<span style="color:red">' + esc(e.detail || 'Error') + '</span>';
@@ -574,15 +610,29 @@ async function getLmRates() {
   } catch (err) { div.innerHTML = '<span style="color:red">' + err.message + '</span>'; }
 }
 
+let _buyingLmLabel = false;
 async function buyLmLabel() {
+  if (_buyingLmLabel) return;
   const carrier = document.getElementById('lm-carrier').value;
   const service = document.getElementById('lm-service').value;
-  if (!confirm(`Buy label: ${carrier} ${service}?`)) return;
-  toast('Purchasing label...');
+  const w = parseFloat(document.getElementById('lm-weight')?.value) || 0;
+  const l = parseFloat(document.getElementById('lm-length')?.value) || 0;
+  const wi = parseFloat(document.getElementById('lm-width')?.value) || 0;
+  const h = parseFloat(document.getElementById('lm-height')?.value) || 0;
+  const dimStr = w > 0 ? `\nWeight: ${w}oz` + (l > 0 ? ` | ${l} x ${wi} x ${h} in` : '') : '';
+  if (!confirm(`Buy label: ${carrier} ${service}?${dimStr}`)) return;
+
+  _buyingLmLabel = true;
+  const btn = document.getElementById('btn-lm-buy');
+  if (btn) { btn.disabled = true; btn.textContent = 'Purchasing...'; }
+
   try {
+    toast('Purchasing label...');
+    const body = { carrier, service };
+    if (w > 0) { body.weight_oz = w; body.length_in = l; body.width_in = wi; body.height_in = h; }
     const res = await fetch(API + '/orders/' + labelOrderId + '/buy-label', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ carrier, service }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       toast('Label purchased!');
@@ -593,6 +643,10 @@ async function buyLmLabel() {
       toast(e.detail || 'Error buying label', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally {
+    _buyingLmLabel = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Buy Label'; }
+  }
 }
 
 async function printAndDropOff(orderId, labelUrl) {
