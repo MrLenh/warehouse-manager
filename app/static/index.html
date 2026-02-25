@@ -134,6 +134,9 @@ tr:hover{background:#f8f9ff}
 .user-dropdown-menu hr{border:none;border-top:1px solid #eee;margin:4px 0}
 #global-scan::placeholder{color:rgba(255,255,255,.6)}
 #global-scan:focus{background:rgba(255,255,255,.4);box-shadow:0 0 0 3px rgba(255,255,255,.2)}
+.img-zoom-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out}
+.img-zoom-overlay.show{display:flex}
+.img-zoom-overlay img{max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
 </style>
 </head>
 <body>
@@ -732,6 +735,11 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
       <div id="qr-body" style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center"></div>
     </div>
   </div>
+</div>
+
+<!-- IMAGE ZOOM OVERLAY -->
+<div class="img-zoom-overlay" id="img-zoom-overlay" onclick="closeImageZoom()">
+  <img id="img-zoom-target" src="" alt="Zoom">
 </div>
 
 <script>
@@ -1465,7 +1473,7 @@ async function viewOrder(id) {
     <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
     <table>
       <thead><tr><th></th><th>SKU</th><th>Name</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
-      <tbody>${o.items.map(i => `<tr><td style="width:40px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px">' : '<span style="display:inline-block;width:36px;height:36px;background:#f0f0f0;border-radius:4px;text-align:center;line-height:36px;color:#ccc;font-size:16px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
+      <tbody>${o.items.map(i => `<tr><td style="width:64px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;transition:transform .15s" onclick="openImageZoom(this.src)" onmouseenter="this.style.transform=\'scale(1.1)\'" onmouseleave="this.style.transform=\'scale(1)\'">' : '<span style="display:inline-block;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table>
     ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">View Shipping Label</a></div>' : ''}
     ${o.notes ? '<div style="margin-top:12px"><strong>Notes:</strong> '+esc(o.notes)+'</div>' : ''}
@@ -2195,6 +2203,21 @@ async function loadActivityLogs() {
     </tr>`).join('');
   } catch (err) { body.innerHTML = '<tr><td colspan="5" style="color:red">' + err.message + '</td></tr>'; }
 }
+
+// === IMAGE ZOOM ===
+function openImageZoom(src) {
+  document.getElementById('img-zoom-target').src = src;
+  document.getElementById('img-zoom-overlay').classList.add('show');
+}
+function closeImageZoom() {
+  document.getElementById('img-zoom-overlay').classList.remove('show');
+  document.getElementById('img-zoom-target').src = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('img-zoom-overlay').classList.contains('show')) {
+    closeImageZoom();
+  }
+});
 
 // === GLOBAL QR SCANNER ===
 function switchTab(name) {
