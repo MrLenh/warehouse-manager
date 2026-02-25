@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     QR_CODE_DIR: str = "./qrcodes"
 
     # Base URL for QR code links (set to your domain in production)
-    BASE_URL: str = "http://localhost:8000"
+    BASE_URL: str = "https://warehouse.expeditee.com"
 
     # Auth
     SECRET_KEY: str = "change-me-in-production-use-a-real-secret"
