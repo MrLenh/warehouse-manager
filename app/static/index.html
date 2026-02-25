@@ -132,6 +132,8 @@ tr:hover{background:#f8f9ff}
 .user-dropdown-menu a{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:13px;color:#333;text-decoration:none;transition:.15s}
 .user-dropdown-menu a:hover{background:#f0f3ff;color:#667eea}
 .user-dropdown-menu hr{border:none;border-top:1px solid #eee;margin:4px 0}
+#global-scan::placeholder{color:rgba(255,255,255,.6)}
+#global-scan:focus{background:rgba(255,255,255,.4);box-shadow:0 0 0 3px rgba(255,255,255,.2)}
 </style>
 </head>
 <body>
@@ -139,6 +141,7 @@ tr:hover{background:#f8f9ff}
 <div class="header">
   <h1>Warehouse Manager</h1>
   <div class="stats">
+    <input type="text" id="global-scan" placeholder="Scan QR..." style="width:180px;padding:6px 12px;border:none;border-radius:20px;font-size:13px;background:rgba(255,255,255,.25);color:#fff;outline:none" autocomplete="off">
     <span id="stat-products">0 Products</span>
     <span id="stat-orders">0 Orders</span>
     <span id="stat-low-stock">0 Low Stock</span>
@@ -2190,6 +2193,100 @@ async function loadActivityLogs() {
     </tr>`).join('');
   } catch (err) { body.innerHTML = '<tr><td colspan="5" style="color:red">' + err.message + '</td></tr>'; }
 }
+
+// === GLOBAL QR SCANNER ===
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const tab = document.querySelector(`.tab[data-tab="${name}"]`);
+  if (tab) tab.classList.add('active');
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.classList.add('active');
+}
+
+async function handleGlobalScan(raw) {
+  const code = raw.trim();
+  if (!code) return;
+
+  // 1. URL-based QR: .../product/{id}?variant={id} or .../order/{id}
+  const productMatch = code.match(/\/product\/([a-f0-9-]+)/i);
+  const orderMatch = code.match(/\/order\/([a-f0-9-]+)/i);
+
+  if (productMatch) {
+    const productId = productMatch[1];
+    try {
+      const res = await fetch(API + '/products/' + productId);
+      if (res.ok) {
+        const p = await res.json();
+        switchTab('products');
+        openProductModal(p);
+        toast('Product: ' + p.name);
+        return;
+      }
+    } catch {}
+    toast('Product not found', 'error');
+    return;
+  }
+
+  if (orderMatch) {
+    const orderId = orderMatch[1];
+    try {
+      await viewOrder(orderId);
+      toast('Order loaded');
+    } catch { toast('Order not found', 'error'); }
+    return;
+  }
+
+  // 2. Order number: ORD-...
+  if (code.startsWith('ORD-')) {
+    try {
+      const res = await fetch(API + '/orders/by-number/' + encodeURIComponent(code));
+      if (res.ok) {
+        const o = await res.json();
+        await viewOrder(o.id);
+        toast('Order: ' + o.order_number);
+        return;
+      }
+    } catch {}
+    toast('Order not found: ' + code, 'error');
+    return;
+  }
+
+  // 3. SKU lookup (product or variant)
+  try {
+    const res = await fetch(API + '/products/qr/lookup?sku=' + encodeURIComponent(code));
+    if (res.ok) {
+      const info = await res.json();
+      const pRes = await fetch(API + '/products/' + info.product_id);
+      if (pRes.ok) {
+        const p = await pRes.json();
+        switchTab('products');
+        openProductModal(p);
+        toast('Product: ' + p.name);
+        return;
+      }
+    }
+  } catch {}
+
+  toast('Not found: ' + code, 'error');
+}
+
+document.getElementById('global-scan').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const val = this.value;
+    this.value = '';
+    handleGlobalScan(val);
+  }
+});
+
+// Keyboard shortcut: press "/" to focus scanner
+document.addEventListener('keydown', function(e) {
+  if (e.key === '/' && !e.ctrlKey && !e.metaKey && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    document.getElementById('global-scan').focus();
+  }
+});
 
 // Init
 loadCurrentUser();
