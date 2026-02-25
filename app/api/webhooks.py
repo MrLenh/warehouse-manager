@@ -14,9 +14,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
 # EasyPost tracking status → internal order status mapping
+# Maps EasyPost status to the order statuses it should trigger (in order)
 _TRACKING_TO_ORDER_STATUS = {
     "in_transit": OrderStatus.IN_TRANSIT,
+    "out_for_delivery": OrderStatus.IN_TRANSIT,
     "delivered": OrderStatus.DELIVERED,
+}
+
+# Statuses that haven't been "shipped" yet — need SHIPPED step first
+_PRE_SHIPPED = {
+    OrderStatus.LABEL_PURCHASED, OrderStatus.DROP_OFF,
+    "label_purchased", "drop_off",
 }
 
 
@@ -73,15 +81,22 @@ async def easypost_webhook(request: Request, db: Session = Depends(get_db)):
         order.tracking_url = public_url
 
     # Auto-update order status based on tracking status
-    new_order_status = _TRACKING_TO_ORDER_STATUS.get(tracking_status)
+    current = order.status if isinstance(order.status, str) else order.status.value
     order_status_updated = False
-    if new_order_status:
-        current = order.status if isinstance(order.status, str) else order.status.value
-        new_val = new_order_status.value
-        if current != new_val:
-            order.status = new_order_status
-            _add_status_history(order, new_order_status, f"Auto-updated from EasyPost tracking: {tracking_status} ({status_detail})")
-            order_status_updated = True
+
+    # If order hasn't been marked as shipped yet, first transition to SHIPPED
+    if order.status in _PRE_SHIPPED or current in _PRE_SHIPPED:
+        order.status = OrderStatus.SHIPPED
+        _add_status_history(order, OrderStatus.SHIPPED, f"First carrier scan from EasyPost: {tracking_status} ({status_detail})")
+        order_status_updated = True
+        current = OrderStatus.SHIPPED.value
+
+    # Then apply the target status (in_transit, delivered, etc.)
+    new_order_status = _TRACKING_TO_ORDER_STATUS.get(tracking_status)
+    if new_order_status and current != new_order_status.value:
+        order.status = new_order_status
+        _add_status_history(order, new_order_status, f"EasyPost tracking: {tracking_status} ({status_detail})")
+        order_status_updated = True
 
     db.commit()
     db.refresh(order)
