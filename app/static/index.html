@@ -42,6 +42,11 @@ tr:hover{background:#f8f9ff}
 .badge-delivered{background:#28a745;color:#fff}
 .badge-cancelled{background:#f8d7da;color:#721c24}
 .badge-drop_off{background:#17a2b8;color:#fff}
+.badge-pre_transit{background:#e2e3e5;color:#383d41}
+.badge-out_for_delivery{background:#17a2b8;color:#fff}
+.badge-return_to_sender,.badge-failure,.badge-error{background:#f8d7da;color:#721c24}
+.badge-available_for_pickup{background:#cce5ff;color:#004085}
+.badge-unknown{background:#e2e3e5;color:#383d41}
 .badge-draft{background:#e2e3e5;color:#383d41}
 .badge-approved{background:#d4edda;color:#155724}
 .badge-receiving{background:#cce5ff;color:#004085}
@@ -1253,7 +1258,7 @@ function renderOrders(list) {
         <td>${o.items.length} items</td>
         <td>$${o.total_price.toFixed(2)}</td>
         <td><span class="badge badge-${o.status}">${o.status}</span></td>
-        <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : '-'}</td>
+        <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? '<br><span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px;margin-top:2px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
         <td>${new Date(o.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
@@ -1469,6 +1474,8 @@ async function viewOrder(id) {
       <div class="detail-item"><div class="label">Total</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
       <div class="detail-item"><div class="label">Shipping Cost</div><div class="value">$${o.shipping_cost.toFixed(2)}</div></div>
       <div class="detail-item"><div class="label">Tracking</div><div class="value">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : 'Not available'}</div></div>
+      ${o.tracking_status ? '<div class="detail-item"><div class="label">Tracking Status</div><div class="value"><span class="badge badge-'+esc(o.tracking_status)+'">'+esc(o.tracking_status)+'</span></div></div>' : ''}
+      ${o.easypost_shipment_id ? '<div class="detail-item"><div class="label">Shipment ID</div><div class="value" style="font-size:12px;color:#888">'+esc(o.easypost_shipment_id)+'</div></div>' : ''}
     </div>
     <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
     <table>

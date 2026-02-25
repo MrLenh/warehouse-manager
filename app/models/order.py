@@ -67,6 +67,7 @@ class Order(Base):
     # EasyPost
     easypost_shipment_id: Mapped[str] = mapped_column(String, default="")
     tracking_number: Mapped[str] = mapped_column(String, default="")
+    tracking_status: Mapped[str] = mapped_column(String, default="")  # e.g. pre_transit, in_transit, delivered, ...
     tracking_url: Mapped[str] = mapped_column(String, default="")
     label_url: Mapped[str] = mapped_column(String, default="")
 

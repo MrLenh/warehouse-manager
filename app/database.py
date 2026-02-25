@@ -77,6 +77,7 @@ def _migrate_add_columns():
             "total_price": "FLOAT DEFAULT 0.0",
             "easypost_shipment_id": "VARCHAR DEFAULT ''",
             "tracking_number": "VARCHAR DEFAULT ''",
+            "tracking_status": "VARCHAR DEFAULT ''",
             "tracking_url": "VARCHAR DEFAULT ''",
             "label_url": "VARCHAR DEFAULT ''",
             "webhook_url": "VARCHAR DEFAULT ''",

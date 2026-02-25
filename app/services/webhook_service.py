@@ -23,6 +23,7 @@ def _build_payload(order: Order) -> dict:
         },
         "tracking": {
             "tracking_number": order.tracking_number,
+            "tracking_status": order.tracking_status,
             "tracking_url": order.tracking_url,
             "carrier_label_url": order.label_url,
         },

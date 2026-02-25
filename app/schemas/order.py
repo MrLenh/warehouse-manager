@@ -77,8 +77,10 @@ class OrderOut(BaseModel):
     processing_fee: float
     total_price: float
     tracking_number: str
+    tracking_status: str = ""
     tracking_url: str
     label_url: str
+    easypost_shipment_id: str = ""
     qr_code_path: Optional[str] = ""
     notes: str
     created_at: datetime
