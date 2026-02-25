@@ -69,7 +69,11 @@ def login(data: LoginRequest, request: Request, response: Response, db: Session 
     token = auth_service.create_access_token(user.id, user.username)
     response.set_cookie("token", token, httponly=True, samesite="lax", max_age=3600 * 72)
     auth_service.log_activity(db, user.id, user.username, "login", ip=request.client.host if request.client else "")
-    return {"token": token, "user": UserOut.model_validate(user)}
+    return {"token": token, "user": UserOut(
+        id=user.id, username=user.username, display_name=user.display_name,
+        role=user.role, active=user.active,
+        created_at=user.created_at.isoformat() if user.created_at else "",
+    )}
 
 
 @router.post("/logout")
