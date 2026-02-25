@@ -114,6 +114,7 @@ tr:hover{background:#f8f9ff}
   <div class="tab" data-tab="orders">Orders</div>
   <div class="tab" data-tab="inventory">Inventory</div>
   <div class="tab" data-tab="reports">Reports</div>
+  <div class="tab" data-tab="users" id="tab-users" style="display:none">Users</div>
 </div>
 
 <div class="content">
@@ -232,6 +233,85 @@ tr:hover{background:#f8f9ff}
         <thead><tr><th>SKU</th><th>Name</th><th>Stock</th><th>Location</th></tr></thead>
         <tbody id="low-stock-body"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- USERS PANEL (admin only) -->
+  <div class="panel" id="panel-users">
+    <div class="toolbar">
+      <h2>User Management</h2>
+      <div class="toolbar-actions">
+        <button class="btn btn-primary" onclick="openCreateUserModal()">+ New User</button>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>Username</th><th>Display Name</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="users-body"></tbody>
+    </table>
+
+    <div style="margin-top:24px">
+      <h3 style="margin-bottom:12px">Activity Log</h3>
+      <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="activity-user-filter" onchange="loadActivityLogs()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          <option value="">All users</option>
+        </select>
+        <select id="activity-limit" onchange="loadActivityLogs()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          <option value="50">Last 50</option>
+          <option value="100">Last 100</option>
+          <option value="200">Last 200</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="loadActivityLogs()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th><th>IP</th></tr></thead>
+        <tbody id="activity-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE USER MODAL -->
+<div class="modal-overlay" id="create-user-modal">
+  <div class="modal" style="width:450px">
+    <div class="modal-header">
+      <h2 id="user-modal-title">New User</h2>
+      <button class="modal-close" onclick="closeModal('create-user-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="user-edit-id">
+      <div class="form-group"><label>Username *</label><input type="text" id="u-username" placeholder="Username"></div>
+      <div class="form-group"><label>Display Name</label><input type="text" id="u-display-name" placeholder="Display Name"></div>
+      <div class="form-group"><label>Password *</label><input type="password" id="u-password" placeholder="Password"></div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="u-role" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px">
+          <option value="staff">Staff</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('create-user-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD MODAL -->
+<div class="modal-overlay" id="reset-pw-modal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <h2>Reset Password</h2>
+      <button class="modal-close" onclick="closeModal('reset-pw-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:12px">Reset password for: <strong id="reset-pw-user"></strong></p>
+      <div class="form-group"><label>New Password *</label><input type="password" id="reset-pw-input" placeholder="New password"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('reset-pw-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doResetPassword()">Reset Password</button>
     </div>
   </div>
 </div>
@@ -552,6 +632,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'reports') loadReports();
     if (tab.dataset.tab === 'inventory') { loadInventoryOverview(); loadStockRequests(); }
+    if (tab.dataset.tab === 'users') { loadUsers(); loadActivityLogs(); }
   });
 });
 
@@ -1659,12 +1740,17 @@ async function loadReports() {
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 
 // Auth
+let currentUser = null;
 async function loadCurrentUser() {
   try {
     const res = await fetch('/api/v1/auth/me');
     if (res.ok) {
-      const u = await res.json();
-      document.getElementById('current-user').textContent = u.display_name || u.username;
+      currentUser = await res.json();
+      document.getElementById('current-user').textContent = currentUser.display_name || currentUser.username;
+      // Show Users tab for admin
+      if (currentUser.role === 'admin') {
+        document.getElementById('tab-users').style.display = '';
+      }
     }
   } catch {}
 }
@@ -1673,30 +1759,151 @@ async function doLogout() {
   window.location.href = '/login';
 }
 
-// Activity log modal
-async function showActivityModal() {
-  let modal = document.getElementById('activity-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'activity-modal';
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `<div class="modal" style="width:700px">
-      <div class="modal-header"><h2>Activity Log</h2><button class="modal-close" onclick="document.getElementById('activity-modal').classList.remove('show')">&times;</button></div>
-      <div class="modal-body" id="activity-body" style="max-height:60vh;overflow-y:auto"><em>Loading...</em></div>
-    </div>`;
-    document.body.appendChild(modal);
-  }
-  modal.classList.add('show');
-  const body = document.getElementById('activity-body');
-  body.innerHTML = '<em>Loading...</em>';
+// ---- User Management ----
+let usersData = [];
+
+async function loadUsers() {
   try {
-    const res = await fetch('/api/v1/auth/activity?limit=50');
+    const res = await fetch(API + '/auth/users');
+    if (!res.ok) return;
+    usersData = await res.json();
+    renderUsers();
+    // Populate activity filter dropdown
+    const filter = document.getElementById('activity-user-filter');
+    const cur = filter.value;
+    filter.innerHTML = '<option value="">All users</option>' + usersData.map(u => `<option value="${u.id}">${esc(u.username)}</option>`).join('');
+    filter.value = cur;
+  } catch {}
+}
+
+function renderUsers() {
+  document.getElementById('users-body').innerHTML = usersData.length === 0
+    ? '<tr><td colspan="6" class="empty">No users</td></tr>'
+    : usersData.map(u => {
+      const isSelf = currentUser && currentUser.id === u.id;
+      return `<tr style="${!u.active ? 'opacity:.5' : ''}">
+        <td><strong>${esc(u.username)}</strong>${isSelf ? ' <span style="font-size:11px;color:#667eea">(you)</span>' : ''}</td>
+        <td>${esc(u.display_name)}</td>
+        <td><span class="badge badge-${u.role === 'admin' ? 'processing' : 'pending'}">${u.role}</span></td>
+        <td><span class="badge badge-${u.active ? 'delivered' : 'cancelled'}">${u.active ? 'Active' : 'Disabled'}</span></td>
+        <td style="font-size:12px;color:#888">${u.created_at ? new Date(u.created_at).toLocaleDateString() : ''}</td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="openEditUserModal('${u.id}')">Edit</button>
+          <button class="btn btn-outline btn-sm" onclick="openResetPwModal('${u.id}','${esc(u.username)}')">Reset PW</button>
+          ${!isSelf ? `<button class="btn btn-sm ${u.active ? 'btn-danger' : 'btn-success'}" onclick="toggleUserActive('${u.id}')">${u.active ? 'Disable' : 'Enable'}</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+function openCreateUserModal() {
+  document.getElementById('user-modal-title').textContent = 'New User';
+  document.getElementById('user-edit-id').value = '';
+  document.getElementById('u-username').value = '';
+  document.getElementById('u-username').disabled = false;
+  document.getElementById('u-display-name').value = '';
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-role').value = 'staff';
+  openModal('create-user-modal');
+}
+
+function openEditUserModal(userId) {
+  const u = usersData.find(x => x.id === userId);
+  if (!u) return;
+  document.getElementById('user-modal-title').textContent = 'Edit User';
+  document.getElementById('user-edit-id').value = u.id;
+  document.getElementById('u-username').value = u.username;
+  document.getElementById('u-username').disabled = true;
+  document.getElementById('u-display-name').value = u.display_name;
+  document.getElementById('u-password').value = '';
+  document.getElementById('u-role').value = u.role;
+  openModal('create-user-modal');
+}
+
+async function saveUser() {
+  const editId = document.getElementById('user-edit-id').value;
+  const username = document.getElementById('u-username').value.trim();
+  const displayName = document.getElementById('u-display-name').value.trim();
+  const password = document.getElementById('u-password').value;
+  const role = document.getElementById('u-role').value;
+
+  if (!editId) {
+    // Create new user
+    if (!username || !password) { toast('Username and password required', 'error'); return; }
+    try {
+      const res = await fetch(API + '/auth/users', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ username, password, display_name: displayName || username, role }),
+      });
+      if (res.ok) { toast('User created'); closeModal('create-user-modal'); loadUsers(); }
+      else { const e = await res.json().catch(()=>({})); toast(e.detail || 'Error', 'error'); }
+    } catch (err) { toast(err.message, 'error'); }
+  } else {
+    // Update existing user
+    try {
+      const res = await fetch(API + '/auth/users/' + editId, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ display_name: displayName, role }),
+      });
+      if (res.ok) { toast('User updated'); closeModal('create-user-modal'); loadUsers(); }
+      else { const e = await res.json().catch(()=>({})); toast(e.detail || 'Error', 'error'); }
+    } catch (err) { toast(err.message, 'error'); }
+  }
+}
+
+async function toggleUserActive(userId) {
+  const u = usersData.find(x => x.id === userId);
+  if (!u) return;
+  const action = u.active ? 'Disable' : 'Enable';
+  if (!confirm(`${action} user "${u.username}"?`)) return;
+  try {
+    const res = await fetch(API + '/auth/users/' + userId + '/active', { method: 'PATCH' });
+    if (res.ok) { toast(`User ${action.toLowerCase()}d`); loadUsers(); }
+    else { const e = await res.json().catch(()=>({})); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+let resetPwUserId = '';
+function openResetPwModal(userId, username) {
+  resetPwUserId = userId;
+  document.getElementById('reset-pw-user').textContent = username;
+  document.getElementById('reset-pw-input').value = '';
+  openModal('reset-pw-modal');
+}
+
+async function doResetPassword() {
+  const pw = document.getElementById('reset-pw-input').value;
+  if (!pw) { toast('Password required', 'error'); return; }
+  try {
+    const res = await fetch(API + '/auth/users/' + resetPwUserId + '/reset-password', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ password: pw }),
+    });
+    if (res.ok) { toast('Password reset'); closeModal('reset-pw-modal'); }
+    else { const e = await res.json().catch(()=>({})); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// Activity logs in Users panel
+async function loadActivityLogs() {
+  const userId = document.getElementById('activity-user-filter').value;
+  const limit = document.getElementById('activity-limit').value;
+  const body = document.getElementById('activity-body');
+  body.innerHTML = '<tr><td colspan="5"><em>Loading...</em></td></tr>';
+  try {
+    let url = API + '/auth/activity?limit=' + limit;
+    if (userId) url += '&user_id=' + userId;
+    const res = await fetch(url);
     const logs = await res.json();
-    if (logs.length === 0) { body.innerHTML = '<p style="color:#999;text-align:center">No activity yet</p>'; return; }
-    body.innerHTML = '<table style="font-size:13px;box-shadow:none"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th><th>IP</th></tr></thead><tbody>'
-      + logs.map(l => `<tr><td style="white-space:nowrap">${new Date(l.created_at).toLocaleString()}</td><td>${esc(l.username)}</td><td><strong>${esc(l.action)}</strong></td><td>${esc(l.detail)}</td><td style="font-size:11px;color:#888">${esc(l.ip_address)}</td></tr>`).join('')
-      + '</tbody></table>';
-  } catch (err) { body.innerHTML = '<span style="color:red">' + err.message + '</span>'; }
+    if (logs.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty">No activity</td></tr>'; return; }
+    body.innerHTML = logs.map(l => `<tr>
+      <td style="white-space:nowrap;font-size:12px">${new Date(l.created_at).toLocaleString()}</td>
+      <td>${esc(l.username)}</td>
+      <td><strong>${esc(l.action)}</strong></td>
+      <td style="font-size:13px">${esc(l.detail)}</td>
+      <td style="font-size:11px;color:#888">${esc(l.ip_address)}</td>
+    </tr>`).join('');
+  } catch (err) { body.innerHTML = '<tr><td colspan="5" style="color:red">' + err.message + '</td></tr>'; }
 }
 
 // Init

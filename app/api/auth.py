@@ -19,6 +19,8 @@ class UserOut(BaseModel):
     username: str
     display_name: str
     role: str
+    active: bool = True
+    created_at: str = ""
 
     model_config = {"from_attributes": True}
 
@@ -81,11 +83,18 @@ def me(user: User = Depends(get_current_user)):
     return user
 
 
-@router.get("/users", response_model=list[UserOut])
+@router.get("/users")
 def list_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role != "admin":
         raise HTTPException(403, "Admin only")
-    return auth_service.list_users(db)
+    users = auth_service.list_users(db)
+    return [
+        UserOut(
+            id=u.id, username=u.username, display_name=u.display_name,
+            role=u.role, active=u.active,
+            created_at=u.created_at.isoformat() if u.created_at else "",
+        ) for u in users
+    ]
 
 
 @router.post("/users", response_model=UserOut, status_code=201)
@@ -98,6 +107,70 @@ def create_user(data: CreateUserRequest, user: User = Depends(get_current_user),
         raise HTTPException(400, str(e))
     auth_service.log_activity(db, user.id, user.username, "create_user", detail=f"Created user: {data.username}")
     return new_user
+
+
+class UpdateUserRequest(BaseModel):
+    display_name: str | None = None
+    role: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    password: str
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+def update_user(user_id: str, data: UpdateUserRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.role != "admin":
+        raise HTTPException(403, "Admin only")
+    target = auth_service.get_user_by_id(db, user_id)
+    if not target:
+        raise HTTPException(404, "User not found")
+    if data.display_name is not None:
+        target.display_name = data.display_name
+    if data.role is not None:
+        target.role = data.role
+    db.commit()
+    db.refresh(target)
+    auth_service.log_activity(db, user.id, user.username, "update_user", detail=f"Updated {target.username}: role={target.role}")
+    return target
+
+
+@router.patch("/users/{user_id}/active")
+def toggle_user_active(user_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.role != "admin":
+        raise HTTPException(403, "Admin only")
+    target = auth_service.get_user_by_id(db, user_id)
+    if not target:
+        raise HTTPException(404, "User not found")
+    if target.id == user.id:
+        raise HTTPException(400, "Cannot disable yourself")
+    target.active = not target.active
+    db.commit()
+    db.refresh(target)
+    status = "enabled" if target.active else "disabled"
+    auth_service.log_activity(db, user.id, user.username, "toggle_user", detail=f"{target.username} → {status}")
+    return {"id": target.id, "active": target.active}
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_password(user_id: str, data: ChangePasswordRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.role != "admin":
+        raise HTTPException(403, "Admin only")
+    target = auth_service.get_user_by_id(db, user_id)
+    if not target:
+        raise HTTPException(404, "User not found")
+    target.password_hash = auth_service.hash_password(data.password)
+    db.commit()
+    auth_service.log_activity(db, user.id, user.username, "reset_password", detail=f"Reset password for {target.username}")
+    return {"ok": True}
+
+
+@router.post("/change-password")
+def change_own_password(data: ChangePasswordRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user.password_hash = auth_service.hash_password(data.password)
+    db.commit()
+    auth_service.log_activity(db, user.id, user.username, "change_password")
+    return {"ok": True}
 
 
 @router.get("/activity", response_model=list[ActivityLogOut])
