@@ -199,6 +199,7 @@ const API = '/api/v1';
 let currentPL = null; // current picking list
 let progressData = []; // per-order progress
 let activeOrderId = null; // order currently being packed
+let refreshTimer = null; // auto-refresh interval
 
 const CARRIERS = {
   'USPS': ['GroundAdvantage', 'Priority', 'Express', 'ParcelSelect', 'LibraryMail', 'MediaMail', 'First'],
@@ -233,7 +234,7 @@ async function loadPickingLists() {
   container.innerHTML = lists.map(pl => {
     const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
     const canDelete = pl.status === 'active';
-    return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" onclick="selectPickingList('${pl.id}')">
+    return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" data-pl-id="${pl.id}" onclick="selectPickingList('${pl.id}')">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <h4>${esc(pl.picking_number)}</h4>
         ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Delete batch">&#10005;</button>` : ''}
@@ -257,10 +258,10 @@ async function selectPickingList(plId) {
   document.getElementById('scan-input').focus();
 
   // Highlight selected card
-  document.querySelectorAll('.pl-card').forEach(c => c.classList.remove('active'));
-  event.target.closest('.pl-card')?.classList.add('active');
+  document.querySelectorAll('.pl-card').forEach(c => c.classList.toggle('active', c.dataset.plId === plId));
 
   await refreshProgress();
+  startAutoRefresh();
 }
 
 async function refreshProgress() {
@@ -288,6 +289,15 @@ async function refreshProgress() {
 
   // Refresh picking list selector cards too
   loadPickingLists();
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  refreshTimer = setInterval(() => { if (currentPL) refreshProgress(); }, 5000);
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
 }
 
 function renderOrderCards() {
@@ -614,6 +624,7 @@ async function deleteBatch(plId, plNumber) {
       toast(`Batch deleted: ${data.orders_released} orders released`);
       if (currentPL && currentPL.id === plId) {
         currentPL = null;
+        stopAutoRefresh();
         document.getElementById('packing-session').style.display = 'none';
         document.getElementById('header-info').textContent = '';
       }
@@ -635,6 +646,7 @@ async function unpackBatch() {
       const data = await res.json();
       toast(`Batch unpacked: ${data.orders_released} orders released, ${data.items_removed} items removed`);
       currentPL = null;
+      stopAutoRefresh();
       document.getElementById('packing-session').style.display = 'none';
       document.getElementById('header-info').textContent = '';
       await loadPickingLists();
@@ -657,6 +669,7 @@ async function unpackOrder(orderId, orderNumber) {
       if (data.picking_list_deleted) {
         toast('Picking list deleted (no more orders)');
         currentPL = null;
+        stopAutoRefresh();
         document.getElementById('packing-session').style.display = 'none';
         document.getElementById('header-info').textContent = '';
         await loadPickingLists();
@@ -685,6 +698,7 @@ if (pathParts.length >= 3 && pathParts[1] === 'packing' && pathParts[2]) {
       document.getElementById('packing-session').style.display = '';
       document.getElementById('scan-input').focus();
       refreshProgress();
+      startAutoRefresh();
     }
   }).catch(() => {});
 }
