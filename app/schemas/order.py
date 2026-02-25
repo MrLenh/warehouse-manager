@@ -62,10 +62,17 @@ class OrderOut(BaseModel):
     order_name: str
     customer_name: str
     customer_email: str
+    customer_phone: str = ""
     status: str
     carrier: str = "USPS"
     service: str = "GroundAdvantage"
     items: list[OrderItemOut]
+    ship_to_street1: str = ""
+    ship_to_street2: str = ""
+    ship_to_city: str = ""
+    ship_to_state: str = ""
+    ship_to_zip: str = ""
+    ship_to_country: str = "US"
     shipping_cost: float
     processing_fee: float
     total_price: float

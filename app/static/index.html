@@ -1454,6 +1454,8 @@ async function viewOrder(id) {
       ${o.order_name ? '<div class="detail-item"><div class="label">Order Name</div><div class="value"><strong>' + esc(o.order_name) + '</strong></div></div>' : ''}
       <div class="detail-item"><div class="label">Customer</div><div class="value">${esc(o.customer_name)}</div></div>
       <div class="detail-item"><div class="label">Email</div><div class="value">${esc(o.customer_email) || '-'}</div></div>
+      <div class="detail-item"><div class="label">Phone</div><div class="value">${esc(o.customer_phone) || '-'}</div></div>
+      <div class="detail-item"><div class="label">Ship To</div><div class="value">${[o.ship_to_street1, o.ship_to_street2].filter(Boolean).map(s => esc(s)).join(', ') || '-'}<br>${[o.ship_to_city, o.ship_to_state, o.ship_to_zip].filter(Boolean).map(s => esc(s)).join(', ')}${o.ship_to_country && o.ship_to_country !== 'US' ? ', ' + esc(o.ship_to_country) : ''}</div></div>
       <div class="detail-item"><div class="label">Status</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>
       <div class="detail-item"><div class="label">Shipping</div><div class="value">${esc(o.carrier || 'USPS')} - ${esc(o.service || 'First')}</div></div>
       <div class="detail-item"><div class="label">Total</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
