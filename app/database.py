@@ -109,14 +109,21 @@ def _migrate_order_status_enum():
     if not settings.DATABASE_URL.startswith("postgresql"):
         return
     try:
+        new_values = [
+            ("packing", "processing"),
+            ("packed", "packing"),
+            ("drop_off", "label_purchased"),
+        ]
         with engine.begin() as conn:
-            # Check if drop_off already exists
-            result = conn.execute(text(
-                "SELECT 1 FROM pg_enum WHERE enumlabel = 'drop_off' "
-                "AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'orderstatus')"
-            ))
-            if not result.fetchone():
-                conn.execute(text("ALTER TYPE orderstatus ADD VALUE IF NOT EXISTS 'drop_off' AFTER 'label_purchased'"))
+            for val, after in new_values:
+                result = conn.execute(text(
+                    "SELECT 1 FROM pg_enum WHERE enumlabel = :val "
+                    "AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'orderstatus')"
+                ), {"val": val})
+                if not result.fetchone():
+                    conn.execute(text(
+                        f"ALTER TYPE orderstatus ADD VALUE IF NOT EXISTS '{val}' AFTER '{after}'"
+                    ))
     except Exception:
         pass  # SQLite or enum already exists
 
