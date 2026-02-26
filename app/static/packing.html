@@ -488,7 +488,11 @@ async function doScan() {
       let msg = data.message;
       msg += ` | Order: ${data.order_number} (${data.order_picked}/${data.order_total})`;
       if (data.order_complete) {
-        msg += ' | ORDER COMPLETE - Ready for shipping label!';
+        if (data.has_label) {
+          msg += ' | ORDER COMPLETE - Label ready! Opening print...';
+        } else {
+          msg += ' | ORDER COMPLETE - Ready for shipping label!';
+        }
       }
       resultEl.textContent = msg;
       await refreshProgress();
@@ -497,6 +501,15 @@ async function doScan() {
       if (isFirstScan) {
         printOrderLabel(data.order_id);
         toast('Print order label for packing cover');
+      }
+
+      // Auto print & drop-off if order complete and label already purchased
+      if (data.order_complete && data.has_label) {
+        const orderProgress = progressData.find(x => x.order_id === data.order_id);
+        if (orderProgress && orderProgress.label_url) {
+          toast('Label already purchased — printing & marking drop off', 'success');
+          await printAndDropOff(data.order_id, orderProgress.label_url);
+        }
       }
 
       // Update scanner placeholder

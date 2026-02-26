@@ -160,11 +160,14 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
     # Get order info and update order status
     order = db.query(Order).filter(Order.id == pick_item.order_id).first()
     order_number = order.order_number if order else ""
+    has_label = bool(order and order.label_url)
 
     if order:
         if order_picked >= order_total:
-            # All items scanned → packed
-            order.status = OrderStatus.PACKED
+            # All items scanned → packed (but don't regress if label already purchased)
+            if order.status not in (OrderStatus.LABEL_PURCHASED, OrderStatus.DROP_OFF,
+                                    OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED):
+                order.status = OrderStatus.PACKED
         elif order.status == OrderStatus.PROCESSING:
             # First scan for this order → packing
             order.status = OrderStatus.PACKING
@@ -181,6 +184,7 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
         "order_picked": order_picked,
         "order_total": order_total,
         "order_complete": order_picked >= order_total,
+        "has_label": has_label,
     }
 
 

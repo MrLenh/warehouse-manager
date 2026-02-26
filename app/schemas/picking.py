@@ -48,4 +48,5 @@ class ScanResult(BaseModel):
     order_picked: int = 0
     order_total: int = 0
     order_complete: bool = False
+    has_label: bool = False
     label_scanned: bool = False
