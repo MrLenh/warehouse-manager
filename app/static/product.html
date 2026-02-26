@@ -288,7 +288,7 @@ function render() {
   html += '<div class="media-section">';
   const mainImg = p.image_url ? p.image_url : qrImgUrl;
   const mainAlt = p.image_url ? esc(p.name) : 'QR Code - ' + esc(displaySku);
-  html += '<div class="media-main"><img src="' + mainImg + '" alt="' + mainAlt + '"></div>';
+  html += '<div class="media-main"><img src="' + mainImg + '" alt="' + mainAlt + '"' + (p.image_url ? ' onerror="this.src=\'' + qrImgUrl + '\'"' : '') + '></div>';
   // Update image button / inline editor
   html += '<div id="img-edit-area" style="text-align:center">';
   html += '<div id="img-edit-display">';

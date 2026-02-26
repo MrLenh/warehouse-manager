@@ -73,6 +73,46 @@ def download_import_template():
     )
 
 
+@router.get("/export")
+def export_products(db: Session = Depends(get_db)):
+    """Export all products (with variants) as CSV for bulk editing."""
+    products = product_service.list_products(db, skip=0, limit=10000)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(CSV_COLUMNS)
+
+    for p in products:
+        attrs = p.option_types
+        if isinstance(attrs, str):
+            attrs = json.loads(attrs)
+        # Product row
+        writer.writerow([
+            p.sku, p.name, p.description, p.category,
+            p.weight_oz, p.length_in, p.width_in, p.height_in,
+            p.price, p.quantity, p.location,
+            "", "", "", "", "", "", "",
+        ])
+        # Variant rows
+        for v in (p.variants or []):
+            v_attrs = v.attributes
+            if isinstance(v_attrs, str):
+                v_attrs = json.loads(v_attrs)
+            writer.writerow([
+                p.sku, "", "", "", "", "", "", "",
+                "", v.quantity, v.location,
+                v.variant_sku, json.dumps(v_attrs) if v_attrs else "",
+                v.price_override, v.weight_oz_override,
+                v.length_in_override, v.width_in_override, v.height_in_override,
+            ])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=products_export.csv"},
+    )
+
+
 @router.post("/import")
 def import_products(file: UploadFile, db: Session = Depends(get_db)):
     if not file.filename or not file.filename.endswith(".csv"):

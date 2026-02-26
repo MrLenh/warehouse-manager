@@ -185,6 +185,7 @@ tr:hover{background:#f8f9ff}
       <input type="text" class="search" id="search-products" placeholder="Search products...">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadProducts()">Refresh</button>
+        <a href="/api/v1/products/export" class="btn btn-outline btn-sm" download>Export CSV</a>
         <a href="/api/v1/products/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <label class="btn btn-success btn-sm" style="margin:0">Import CSV<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-guide-modal').classList.add('show')" title="Import guide">?</button>
@@ -816,7 +817,7 @@ function renderProducts(list) {
         const vc = p.variants ? p.variants.length : 0;
         const totalQty = vc > 0 ? p.variants.reduce((s,v) => s + v.quantity, 0) : p.quantity;
         const variantInfo = vc > 0 ? `${vc} variants` : '-';
-        const imgThumb = p.image_url ? `<img src="${esc(p.image_url)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8">` : '<div style="width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>';
+        const imgThumb = p.image_url ? `<img src="${esc(p.image_url)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><div style="display:none;width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>` : '<div style="width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>';
         return `<tr>
         <td>${imgThumb}</td>
         <td><strong>${esc(p.sku)}</strong></td>
@@ -1520,7 +1521,7 @@ async function viewOrder(id) {
     <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
     <table>
       <thead><tr><th></th><th>SKU</th><th>Name</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
-      <tbody>${o.items.map(i => `<tr><td style="width:64px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;transition:transform .15s" onclick="openImageZoom(this.src)" onmouseenter="this.style.transform=\'scale(1.1)\'" onmouseleave="this.style.transform=\'scale(1)\'">' : '<span style="display:inline-block;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
+      <tbody>${o.items.map(i => `<tr><td style="width:64px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;transition:transform .15s" onclick="openImageZoom(this.src)" onmouseenter="this.style.transform=\'scale(1.1)\'" onmouseleave="this.style.transform=\'scale(1)\'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\'"><span style="display:none;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>' : '<span style="display:inline-block;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table>
     ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">View Shipping Label</a></div>' : ''}
     ${o.notes ? '<div style="margin-top:12px"><strong>Notes:</strong> '+esc(o.notes)+'</div>' : ''}

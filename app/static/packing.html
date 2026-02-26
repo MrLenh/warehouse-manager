@@ -348,7 +348,7 @@ function renderOrderCards() {
 
     const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
       <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
-      <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8">` : '<span style="display:inline-block;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>'}</td>
+      <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><span style="display:none;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>` : '<span style="display:inline-block;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>'}</td>
       <td><strong>${esc(i.sku)}</strong></td>
       <td>${esc(i.product_name)}</td>
       <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
@@ -543,7 +543,7 @@ function showActiveOrder() {
 
   const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
     <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
-    <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8">` : '<span style="display:inline-block;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>'}</td>
+    <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><span style="display:none;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>` : '<span style="display:inline-block;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>'}</td>
     <td><strong>${esc(i.sku)}</strong></td>
     <td>${esc(i.product_name)}</td>
     <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
