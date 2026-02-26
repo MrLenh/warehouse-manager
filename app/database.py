@@ -89,6 +89,12 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE orders ADD COLUMN {col_name} {col_type}"))
 
+    if "orders" in tables:
+        existing = {col["name"] for col in inspector.get_columns("orders")}
+        if "invoice_id" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE orders ADD COLUMN invoice_id VARCHAR DEFAULT NULL"))
+
     if "order_items" in tables:
         existing = {col["name"] for col in inspector.get_columns("order_items")}
         new_cols = {
@@ -136,6 +142,8 @@ def init_db():
     import app.models.stock_request  # noqa: F401
     import app.models.picking  # noqa: F401
     import app.models.user  # noqa: F401
+    import app.models.customer  # noqa: F401
+    import app.models.invoice  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_add_columns()

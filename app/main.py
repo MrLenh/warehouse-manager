@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
-from app.api import auth, orders, picking, products, reports, stock_requests, webhooks
+from app.api import auth, customers, orders, picking, products, reports, stock_requests, webhooks
 from app.config import settings
 from app.database import init_db
 from app.services.auth_service import decode_token, ensure_default_admin
@@ -116,6 +116,7 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(stock_requests.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
 app.include_router(picking.router, prefix="/api/v1")
+app.include_router(customers.router, prefix="/api/v1")
 
 
 # Mount persistent uploads directory (survives deploys)
@@ -146,6 +147,12 @@ def product_detail_page(product_id: str):
 def order_detail_page(order_id: str):
     """Order detail page - landing for QR code scans."""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/customers")
+def customers_page():
+    """Customer & Invoice management page."""
+    return FileResponse(STATIC_DIR / "customer.html")
 
 
 @app.get("/packing")
@@ -201,8 +208,10 @@ def clear_all_data():
         tables = [
             "activity_logs",
             "pick_items", "picking_lists",
+            "invoices",
             "order_items", "orders", "stock_request_items",
             "stock_requests", "inventory_logs", "variants", "products",
+            "customers",
         ]
         deleted = {}
         for tbl in tables:

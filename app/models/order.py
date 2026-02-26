@@ -76,10 +76,12 @@ class Order(Base):
 
     notes: Mapped[str] = mapped_column(Text, default="")
     qr_code_path: Mapped[str] = mapped_column(String, default="")
+    invoice_id: Mapped[str | None] = mapped_column(String, ForeignKey("invoices.id"), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     items: Mapped[list["OrderItem"]] = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    invoice: Mapped["Invoice | None"] = relationship("Invoice", back_populates="orders")
 
 
 class OrderItem(Base):
@@ -102,3 +104,7 @@ class OrderItem(Base):
     @property
     def image_url(self) -> str:
         return self.product.image_url if self.product else ""
+
+
+# Avoid circular import
+from app.models.invoice import Invoice  # noqa: E402, F401

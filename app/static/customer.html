@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customers & Invoices</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
+.header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header h1{font-size:20px;font-weight:600}
+.header .stats{display:flex;gap:20px;font-size:13px}
+.header .stats span{background:rgba(255,255,255,.2);padding:4px 12px;border-radius:20px}
+.header a{color:#fff;text-decoration:none;font-size:13px;background:rgba(255,255,255,.2);padding:6px 14px;border-radius:20px;transition:.2s}
+.header a:hover{background:rgba(255,255,255,.35)}
+.tabs{display:flex;background:#fff;border-bottom:2px solid #e8e8e8;padding:0 24px;gap:0}
+.tab{padding:14px 24px;cursor:pointer;font-weight:500;color:#666;border-bottom:3px solid transparent;transition:.2s}
+.tab:hover{color:#667eea}
+.tab.active{color:#667eea;border-bottom-color:#667eea}
+.content{max-width:1400px;margin:0 auto;padding:20px}
+.panel{display:none}.panel.active{display:block}
+.toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.search{padding:10px 16px;border:1px solid #ddd;border-radius:8px;width:300px;font-size:14px;outline:none;transition:.2s}
+.search:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+.btn{padding:10px 20px;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:#667eea;color:#fff}.btn-primary:hover{background:#5a6fd6}
+.btn-success{background:#28a745;color:#fff}.btn-success:hover{background:#218838}
+.btn-danger{background:#dc3545;color:#fff}.btn-danger:hover{background:#c82333}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-outline{background:transparent;border:1px solid #667eea;color:#667eea}.btn-outline:hover{background:#667eea;color:#fff}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+thead{background:#f8f9fa}
+th{padding:12px 16px;text-align:left;font-weight:600;font-size:13px;color:#555;border-bottom:2px solid #e8e8e8}
+td{padding:12px 16px;border-bottom:1px solid #f0f0f0;font-size:14px}
+tr:hover{background:#f8f9ff}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase}
+.badge-pending{background:#fff3cd;color:#856404}
+.badge-delivered{background:#28a745;color:#fff}
+.badge-cancelled{background:#f8d7da;color:#721c24}
+.empty{text-align:center;padding:60px;color:#999;font-size:15px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:16px;padding:0;width:700px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-header{padding:20px 24px;border-bottom:1px solid #e8e8e8;display:flex;justify-content:space-between;align-items:center}
+.modal-header h2{font-size:18px}
+.modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#999;padding:0 4px}
+.modal-close:hover{color:#333}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:10px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;margin-bottom:6px;font-weight:500;font-size:13px;color:#555}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;transition:.2s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px}
+.card h3{margin-bottom:12px;font-size:16px;color:#333}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.detail-item{padding:8px 0}
+.detail-item .label{font-size:12px;color:#888;margin-bottom:2px}
+.detail-item .value{font-size:14px;font-weight:500}
+.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.report-card{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.report-card .number{font-size:28px;font-weight:700;color:#667eea}
+.report-card .label{font-size:13px;color:#888;margin-top:4px}
+.toast{position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast-success{background:#28a745}
+.toast-error{background:#dc3545}
+.toast-info{background:#667eea}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+.actions-cell{display:flex;gap:6px}
+.summary-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+.summary-table td{padding:8px 12px;border-bottom:1px solid #f0f0f0}
+.summary-table td:last-child{text-align:right;font-weight:600}
+.summary-table tr.total td{border-top:2px solid #333;font-size:16px;font-weight:700;color:#667eea}
+.inv-orders-table{width:100%;font-size:13px;margin-top:12px}
+.inv-orders-table th{padding:8px 10px;font-size:12px}
+.inv-orders-table td{padding:8px 10px;font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:16px">
+    <h1>Customers & Invoices</h1>
+    <div class="stats">
+      <span id="stat-customers">0 Customers</span>
+      <span id="stat-invoices">0 Invoices</span>
+    </div>
+  </div>
+  <a href="/">Back to Dashboard</a>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('customers')">Customers</div>
+  <div class="tab" onclick="switchTab('invoices')">Invoices</div>
+</div>
+
+<div class="content">
+
+  <!-- CUSTOMERS PANEL -->
+  <div id="panel-customers" class="panel active">
+    <div class="toolbar">
+      <input class="search" id="cust-search" placeholder="Search customers..." oninput="loadCustomers()">
+      <button class="btn btn-primary" onclick="openCustModal()">+ New Customer</button>
+    </div>
+    <div id="cust-table-wrap"></div>
+  </div>
+
+  <!-- INVOICES PANEL -->
+  <div id="panel-invoices" class="panel">
+    <div class="toolbar">
+      <select id="inv-filter-cust" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;min-width:200px" onchange="loadInvoices()">
+        <option value="">All Customers</option>
+      </select>
+      <button class="btn btn-primary" onclick="openInvModal()">+ New Invoice</button>
+    </div>
+    <div id="inv-table-wrap"></div>
+  </div>
+
+</div>
+
+<!-- Customer Modal -->
+<div class="modal-overlay" id="cust-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="cust-modal-title">New Customer</h2>
+      <button class="modal-close" onclick="closeCustModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cust-edit-id">
+      <div class="form-group"><label>Name *</label><input id="cust-name"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Email</label><input id="cust-email" type="email"></div>
+        <div class="form-group"><label>Phone</label><input id="cust-phone"></div>
+      </div>
+      <div class="form-group"><label>Company</label><input id="cust-company"></div>
+      <div class="form-group"><label>Notes</label><textarea id="cust-notes" rows="3"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCustModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCust()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice Create Modal -->
+<div class="modal-overlay" id="inv-modal">
+  <div class="modal" style="width:800px">
+    <div class="modal-header">
+      <h2>Create Invoice</h2>
+      <button class="modal-close" onclick="closeInvModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Customer *</label>
+          <select id="inv-customer"></select>
+        </div>
+        <div class="form-group">
+          <label>Date To *</label>
+          <input id="inv-date-to" type="date">
+        </div>
+      </div>
+      <div class="form-group"><label>Invoice Name *</label><input id="inv-name" placeholder="e.g. January 2026 Invoice"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Processing Fee / item ($)</label><input id="inv-proc-fee" type="number" step="0.01" min="0"></div>
+        <div class="form-group"><label>Stocking Fee / item ($)</label><input id="inv-stock-fee" type="number" step="0.01" min="0"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><textarea id="inv-notes" rows="2"></textarea></div>
+      <div style="text-align:center;margin:16px 0">
+        <button class="btn btn-outline" onclick="previewInvoice()">Preview Orders</button>
+      </div>
+      <div id="inv-preview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeInvModal()">Cancel</button>
+      <button class="btn btn-primary" id="btn-create-inv" onclick="createInvoice()" disabled>Create Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice Detail Modal -->
+<div class="modal-overlay" id="inv-detail-modal">
+  <div class="modal" style="width:850px">
+    <div class="modal-header">
+      <h2 id="inv-detail-title">Invoice</h2>
+      <button class="modal-close" onclick="closeInvDetail()">&times;</button>
+    </div>
+    <div class="modal-body" id="inv-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeInvDetail()">Close</button>
+      <button class="btn btn-danger btn-sm" id="btn-del-inv" onclick="deleteInvoice()">Delete Invoice</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/v1';
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// ---- Tabs ----
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', (tab === 'customers' && i === 0) || (tab === 'invoices' && i === 1));
+  });
+  document.getElementById('panel-customers').classList.toggle('active', tab === 'customers');
+  document.getElementById('panel-invoices').classList.toggle('active', tab === 'invoices');
+  if (tab === 'invoices') { loadInvoiceFilterCustomers(); loadInvoices(); }
+}
+
+// ===========================================================================
+// CUSTOMERS
+// ===========================================================================
+let allCustomers = [];
+
+async function loadCustomers() {
+  const q = document.getElementById('cust-search').value;
+  try {
+    const res = await fetch(API + '/customers?q=' + encodeURIComponent(q) + '&limit=200');
+    const data = await res.json();
+    allCustomers = data.customers || [];
+    document.getElementById('stat-customers').textContent = (data.total || 0) + ' Customers';
+    renderCustomers();
+  } catch (e) { console.error(e); }
+}
+
+function renderCustomers() {
+  const wrap = document.getElementById('cust-table-wrap');
+  if (!allCustomers.length) { wrap.innerHTML = '<div class="empty">No customers found</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Created</th><th></th></tr></thead><tbody>` +
+    allCustomers.map(c => `<tr>
+      <td><strong>${esc(c.name)}</strong></td>
+      <td>${esc(c.email)}</td>
+      <td>${esc(c.phone)}</td>
+      <td>${esc(c.company)}</td>
+      <td>${new Date(c.created_at).toLocaleDateString()}</td>
+      <td class="actions-cell">
+        <button class="btn btn-sm btn-outline" onclick="editCust('${c.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteCust('${c.id}','${esc(c.name)}')">Delete</button>
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+function openCustModal(cust) {
+  document.getElementById('cust-modal-title').textContent = cust ? 'Edit Customer' : 'New Customer';
+  document.getElementById('cust-edit-id').value = cust ? cust.id : '';
+  document.getElementById('cust-name').value = cust ? cust.name : '';
+  document.getElementById('cust-email').value = cust ? cust.email : '';
+  document.getElementById('cust-phone').value = cust ? cust.phone : '';
+  document.getElementById('cust-company').value = cust ? cust.company : '';
+  document.getElementById('cust-notes').value = cust ? cust.notes : '';
+  document.getElementById('cust-modal').classList.add('show');
+}
+
+function closeCustModal() { document.getElementById('cust-modal').classList.remove('show'); }
+
+async function saveCust() {
+  const id = document.getElementById('cust-edit-id').value;
+  const body = {
+    name: document.getElementById('cust-name').value.trim(),
+    email: document.getElementById('cust-email').value.trim(),
+    phone: document.getElementById('cust-phone').value.trim(),
+    company: document.getElementById('cust-company').value.trim(),
+    notes: document.getElementById('cust-notes').value.trim(),
+  };
+  if (!body.name) { toast('Name is required', 'error'); return; }
+  try {
+    const res = await fetch(API + '/customers' + (id ? '/' + id : ''), {
+      method: id ? 'PATCH' : 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    toast(id ? 'Customer updated' : 'Customer created');
+    closeCustModal();
+    loadCustomers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function editCust(id) {
+  try {
+    const res = await fetch(API + '/customers/' + id);
+    const c = await res.json();
+    openCustModal(c);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteCust(id, name) {
+  if (!confirm('Delete customer "' + name + '"?')) return;
+  try {
+    const res = await fetch(API + '/customers/' + id, {method: 'DELETE'});
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    toast('Customer deleted');
+    loadCustomers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ===========================================================================
+// INVOICES
+// ===========================================================================
+let currentInvId = '';
+
+async function loadInvoiceFilterCustomers() {
+  try {
+    const res = await fetch(API + '/customers?limit=500');
+    const data = await res.json();
+    const sel = document.getElementById('inv-filter-cust');
+    const val = sel.value;
+    sel.innerHTML = '<option value="">All Customers</option>' +
+      (data.customers || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    sel.value = val;
+
+    // Also populate the create-invoice customer dropdown
+    const invSel = document.getElementById('inv-customer');
+    invSel.innerHTML = '<option value="">-- Select --</option>' +
+      (data.customers || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function loadInvoices() {
+  const custId = document.getElementById('inv-filter-cust').value;
+  try {
+    const res = await fetch(API + '/customers/invoices?customer_id=' + encodeURIComponent(custId) + '&limit=200');
+    const data = await res.json();
+    document.getElementById('stat-invoices').textContent = (data.total || 0) + ' Invoices';
+    renderInvoices(data.invoices || []);
+  } catch (e) { console.error(e); }
+}
+
+function renderInvoices(invoices) {
+  const wrap = document.getElementById('inv-table-wrap');
+  if (!invoices.length) { wrap.innerHTML = '<div class="empty">No invoices found</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr><th>Invoice #</th><th>Name</th><th>Customer</th><th>Date To</th><th>Orders</th><th>Items</th><th>Total</th><th>Created</th><th></th></tr></thead><tbody>` +
+    invoices.map(inv => `<tr>
+      <td><strong>${esc(inv.invoice_number)}</strong></td>
+      <td>${esc(inv.invoice_name)}</td>
+      <td>${esc(inv.customer_name)}</td>
+      <td>${inv.date_to}</td>
+      <td>${inv.order_count}</td>
+      <td>${inv.item_count}</td>
+      <td><strong>$${inv.total_price.toFixed(2)}</strong></td>
+      <td>${new Date(inv.created_at).toLocaleDateString()}</td>
+      <td class="actions-cell">
+        <button class="btn btn-sm btn-outline" onclick="viewInvoice('${inv.id}')">View</button>
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+// ---- Create Invoice Modal ----
+function openInvModal() {
+  loadInvoiceFilterCustomers();
+  document.getElementById('inv-customer').value = '';
+  document.getElementById('inv-date-to').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('inv-name').value = '';
+  document.getElementById('inv-proc-fee').value = '';
+  document.getElementById('inv-stock-fee').value = '';
+  document.getElementById('inv-notes').value = '';
+  document.getElementById('inv-preview').innerHTML = '';
+  document.getElementById('btn-create-inv').disabled = true;
+  document.getElementById('inv-modal').classList.add('show');
+  // Load defaults
+  fetch(API + '/customers/invoices/preview?customer_id=_none_&date_to=2000-01-01').catch(() => {});
+}
+
+function closeInvModal() { document.getElementById('inv-modal').classList.remove('show'); }
+
+async function previewInvoice() {
+  const custId = document.getElementById('inv-customer').value;
+  const dateTo = document.getElementById('inv-date-to').value;
+  if (!custId || !dateTo) { toast('Select customer and date', 'error'); return; }
+
+  const params = new URLSearchParams({customer_id: custId, date_to: dateTo});
+  const pf = document.getElementById('inv-proc-fee').value;
+  const sf = document.getElementById('inv-stock-fee').value;
+  if (pf !== '') params.set('processing_fee_unit', pf);
+  if (sf !== '') params.set('stocking_fee_unit', sf);
+
+  const div = document.getElementById('inv-preview');
+  div.innerHTML = '<em>Loading preview...</em>';
+
+  try {
+    const res = await fetch(API + '/customers/invoices/preview?' + params.toString());
+    if (!res.ok) { const e = await res.json().catch(() => ({})); div.innerHTML = '<span style="color:red">' + esc(e.detail || 'Error') + '</span>'; return; }
+    const p = await res.json();
+    if (!p.orders.length) {
+      div.innerHTML = '<div class="empty" style="padding:20px">No invoiceable orders found for this customer and date range</div>';
+      document.getElementById('btn-create-inv').disabled = true;
+      return;
+    }
+    document.getElementById('btn-create-inv').disabled = false;
+    div.innerHTML = renderPreview(p);
+  } catch (e) { div.innerHTML = '<span style="color:red">' + e.message + '</span>'; }
+}
+
+function renderPreview(p) {
+  return `
+    <div class="card" style="margin-top:0">
+      <h3>Invoice Summary</h3>
+      <table class="summary-table">
+        <tr><td>Orders</td><td>${p.order_count}</td></tr>
+        <tr><td>Total Items</td><td>${p.item_count}</td></tr>
+        <tr><td>Processing Fee (${p.item_count} items x $${p.processing_fee_unit.toFixed(2)})</td><td>$${p.processing_fee_total.toFixed(2)}</td></tr>
+        <tr><td>Shipping Fee</td><td>$${p.shipping_fee_total.toFixed(2)}</td></tr>
+        <tr><td>Stocking Fee (${p.item_count} items x $${p.stocking_fee_unit.toFixed(2)})</td><td>$${p.stocking_fee_total.toFixed(2)}</td></tr>
+        <tr class="total"><td>Total</td><td>$${p.total_price.toFixed(2)}</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Orders (${p.orders.length})</h3>
+      <table class="inv-orders-table"><thead><tr><th>Order #</th><th>Name</th><th>Status</th><th>Items</th><th>Shipping</th><th>Created</th></tr></thead><tbody>` +
+    p.orders.map(o => `<tr>
+      <td><strong>${esc(o.order_number)}</strong></td>
+      <td>${esc(o.order_name)}</td>
+      <td><span class="badge badge-${o.status}">${o.status}</span></td>
+      <td>${o.item_count}</td>
+      <td>$${o.shipping_cost.toFixed(2)}</td>
+      <td>${new Date(o.created_at).toLocaleDateString()}</td>
+    </tr>`).join('') +
+    '</tbody></table></div>';
+}
+
+async function createInvoice() {
+  const custId = document.getElementById('inv-customer').value;
+  const dateTo = document.getElementById('inv-date-to').value;
+  const name = document.getElementById('inv-name').value.trim();
+  if (!custId || !dateTo || !name) { toast('Fill all required fields', 'error'); return; }
+
+  const body = {customer_id: custId, date_to: dateTo, invoice_name: name, notes: document.getElementById('inv-notes').value.trim()};
+  const pf = document.getElementById('inv-proc-fee').value;
+  const sf = document.getElementById('inv-stock-fee').value;
+  if (pf !== '') body.processing_fee_unit = parseFloat(pf);
+  if (sf !== '') body.stocking_fee_unit = parseFloat(sf);
+
+  try {
+    const res = await fetch(API + '/customers/invoices', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    const inv = await res.json();
+    toast('Invoice ' + inv.invoice_number + ' created');
+    closeInvModal();
+    loadInvoices();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ---- Invoice Detail ----
+async function viewInvoice(id) {
+  currentInvId = id;
+  try {
+    const res = await fetch(API + '/customers/invoices/' + id);
+    if (!res.ok) { toast('Error loading invoice', 'error'); return; }
+    const inv = await res.json();
+    document.getElementById('inv-detail-title').textContent = inv.invoice_number + ' - ' + inv.invoice_name;
+    document.getElementById('inv-detail-body').innerHTML = `
+      <div class="detail-grid" style="margin-bottom:16px">
+        <div class="detail-item"><div class="label">Customer</div><div class="value">${esc(inv.customer_name)}</div></div>
+        <div class="detail-item"><div class="label">Date To</div><div class="value">${inv.date_to}</div></div>
+        <div class="detail-item"><div class="label">Created</div><div class="value">${new Date(inv.created_at).toLocaleString()}</div></div>
+        <div class="detail-item"><div class="label">Notes</div><div class="value">${esc(inv.notes) || '-'}</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <h3>Summary</h3>
+        <table class="summary-table">
+          <tr><td>Orders</td><td>${inv.order_count}</td></tr>
+          <tr><td>Total Items</td><td>${inv.item_count}</td></tr>
+          <tr><td>Processing Fee (${inv.item_count} x $${inv.processing_fee_unit.toFixed(2)})</td><td>$${inv.processing_fee_total.toFixed(2)}</td></tr>
+          <tr><td>Shipping Fee</td><td>$${inv.shipping_fee_total.toFixed(2)}</td></tr>
+          <tr><td>Stocking Fee (${inv.item_count} x $${inv.stocking_fee_unit.toFixed(2)})</td><td>$${inv.stocking_fee_total.toFixed(2)}</td></tr>
+          <tr class="total"><td>Total</td><td>$${inv.total_price.toFixed(2)}</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Orders (${inv.orders.length})</h3>
+        <table class="inv-orders-table"><thead><tr><th>Order #</th><th>Name</th><th>Customer</th><th>Status</th><th>Items</th><th>Shipping</th><th>Created</th></tr></thead><tbody>` +
+      inv.orders.map(o => `<tr>
+        <td><strong>${esc(o.order_number)}</strong></td>
+        <td>${esc(o.order_name)}</td>
+        <td>${esc(o.customer_name)}</td>
+        <td><span class="badge badge-${o.status}">${o.status}</span></td>
+        <td>${o.item_count}</td>
+        <td>$${o.shipping_cost.toFixed(2)}</td>
+        <td>${new Date(o.created_at).toLocaleDateString()}</td>
+      </tr>`).join('') +
+      '</tbody></table></div>';
+    document.getElementById('inv-detail-modal').classList.add('show');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function closeInvDetail() { document.getElementById('inv-detail-modal').classList.remove('show'); }
+
+async function deleteInvoice() {
+  if (!currentInvId) return;
+  if (!confirm('Delete this invoice? Orders will be unlinked and can be re-invoiced.')) return;
+  try {
+    const res = await fetch(API + '/customers/invoices/' + currentInvId, {method: 'DELETE'});
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    toast('Invoice deleted');
+    closeInvDetail();
+    loadInvoices();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ---- Init ----
+loadCustomers();
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     EASYPOST_API_KEY: str = ""
 
     PROCESSING_FEE_PER_ITEM: float = 0.5
+    STOCKING_FEE_PER_ITEM: float = 0.0
 
     # Default shipping carrier & service
     DEFAULT_CARRIER: str = "USPS"
