@@ -131,10 +131,13 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
         return _scan_tracking_number(db, qr_code)
 
     if pick_item.picked:
+        order = db.query(Order).filter(Order.id == pick_item.order_id).first()
         return {
             "success": False,
             "message": f"Already picked at {pick_item.picked_at.strftime('%H:%M:%S') if pick_item.picked_at else 'unknown'}",
             "pick_item": pick_item,
+            "order_id": pick_item.order_id,
+            "order_number": order.order_number if order else "",
         }
 
     # Mark as picked

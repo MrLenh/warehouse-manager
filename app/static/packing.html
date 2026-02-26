@@ -42,6 +42,7 @@ tr:hover{background:#f8f9ff}
 .toast{position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .toast-success{background:#28a745}
 .toast-error{background:#dc3545}
+.toast-info{background:#17a2b8}
 @keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
 
 /* Scanner */
@@ -380,6 +381,30 @@ document.getElementById('scan-input').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') { e.preventDefault(); doScan(); }
 });
 
+// Global barcode capture — redirect keystrokes to scan input without needing focus
+document.addEventListener('keydown', function(e) {
+  const input = document.getElementById('scan-input');
+  if (document.activeElement === input) return; // already focused
+  // Ignore if user is typing in another input, textarea, select, or contenteditable
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (document.activeElement?.isContentEditable) return;
+  // Ignore modifier combos (Ctrl+C, etc) except Shift
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Only capture printable characters and Enter
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    input.focus();
+    doScan();
+    return;
+  }
+  if (e.key.length === 1) {
+    e.preventDefault();
+    input.focus();
+    input.value += e.key;
+  }
+});
+
 async function doScan() {
   const input = document.getElementById('scan-input');
   const code = input.value.trim();
@@ -397,10 +422,27 @@ async function doScan() {
       const belongsToActive = activeOrder.items.some(i => i.qr_code === code);
       if (!belongsToActive) {
         const otherOrder = progressData.find(x => x.order_id !== activeOrderId && x.items.some(i => i.qr_code === code));
-        resultEl.className = 'scan-result error';
-        resultEl.textContent = otherOrder
-          ? `Wrong order! This item belongs to ${otherOrder.order_number}. Finish packing ${activeOrder.order_number} first.`
-          : `This QR code does not belong to order ${activeOrder.order_number}.`;
+        if (otherOrder) {
+          // If item is already picked, switch to that order (recall order for handling)
+          const otherItem = otherOrder.items.find(i => i.qr_code === code);
+          if (otherItem && otherItem.picked) {
+            activeOrderId = otherOrder.order_id;
+            resultEl.className = 'scan-result success';
+            resultEl.textContent = `Switched to order ${otherOrder.order_number} (item already picked)`;
+            toast(`Switched to ${otherOrder.order_number}`, 'info');
+            showActiveOrder();
+            renderOrders();
+            input.value = '';
+            input.focus();
+            return;
+          }
+          // Unpicked item from another order — block
+          resultEl.className = 'scan-result error';
+          resultEl.textContent = `Wrong order! This item belongs to ${otherOrder.order_number}. Finish packing ${activeOrder.order_number} first.`;
+        } else {
+          resultEl.className = 'scan-result error';
+          resultEl.textContent = `This QR code does not belong to order ${activeOrder.order_number}.`;
+        }
         input.value = '';
         input.focus();
         return;
@@ -463,8 +505,18 @@ async function doScan() {
         input.placeholder = `Scan next item for ${ao.order_number} (${ao.picked}/${ao.total})...`;
       }
     } else {
-      resultEl.className = 'scan-result error';
-      resultEl.textContent = data.message;
+      // Already picked — switch to that order (recall order for handling)
+      if (data.order_id) {
+        activeOrderId = data.order_id;
+        resultEl.className = 'scan-result success';
+        resultEl.textContent = `${data.message} — Switched to order ${data.order_number}`;
+        toast(`Switched to ${data.order_number}`, 'info');
+        showActiveOrder();
+        renderOrders();
+      } else {
+        resultEl.className = 'scan-result error';
+        resultEl.textContent = data.message;
+      }
     }
   } catch (err) {
     resultEl.className = 'scan-result error';
