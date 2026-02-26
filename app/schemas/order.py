@@ -67,6 +67,7 @@ class OrderOut(BaseModel):
     carrier: str = "USPS"
     service: str = "GroundAdvantage"
     items: list[OrderItemOut]
+    ship_to_name: str = ""
     ship_to_street1: str = ""
     ship_to_street2: str = ""
     ship_to_city: str = ""
@@ -102,6 +103,16 @@ class OrderOut(BaseModel):
     @classmethod
     def service_default(cls, v):
         return v or "GroundAdvantage"
+
+
+class AddressUpdate(BaseModel):
+    name: str | None = None
+    street1: str | None = None
+    street2: str | None = None
+    city: str | None = None
+    state: str | None = None
+    zip: str | None = None
+    country: str | None = None
 
 
 class BuyLabelRequest(BaseModel):

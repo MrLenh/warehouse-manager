@@ -249,6 +249,16 @@ def cancel_order(db: Session, order_id: str) -> Order | None:
     if order.status in (OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED):
         raise ValueError(f"Cannot cancel order in {order.status} status")
 
+    # Refund EasyPost label if purchased
+    refund_note = ""
+    if order.easypost_shipment_id and order.label_url:
+        try:
+            from app.services.shipping_service import refund_shipment
+            status = refund_shipment(db, order)
+            refund_note = f" | Label refund: {status}"
+        except Exception as e:
+            refund_note = f" | Label refund failed: {e}"
+
     # Restore inventory
     for item in order.items:
         if item.variant_id:
@@ -279,7 +289,7 @@ def cancel_order(db: Session, order_id: str) -> Order | None:
                 db.add(log)
 
     order.status = OrderStatus.CANCELLED
-    _add_status_history(order, OrderStatus.CANCELLED, "Order cancelled")
+    _add_status_history(order, OrderStatus.CANCELLED, "Order cancelled" + refund_note)
     db.commit()
     db.refresh(order)
     return order

@@ -10,7 +10,7 @@ from app.api.auth import get_current_user
 from app.database import get_db
 from app.models.order import OrderStatus
 from app.models.user import User
-from app.schemas.order import BuyLabelRequest, OrderCreate, OrderOut, OrderStatusUpdate
+from app.schemas.order import AddressUpdate, BuyLabelRequest, OrderCreate, OrderOut, OrderStatusUpdate
 from easypost.errors import EasyPostError
 
 from app.services import auth_service, order_service, shipping_service
@@ -354,6 +354,42 @@ def parcel_info(order_id: str, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(400, str(e))
     return info
+
+
+@router.patch("/{order_id}/address", response_model=OrderOut)
+def update_address(
+    order_id: str,
+    data: AddressUpdate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update shipping address. Only allowed before label is purchased."""
+    order = order_service.get_order(db, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.label_url or order.easypost_shipment_id:
+        raise HTTPException(400, "Cannot change address after label is purchased. Cancel and re-create the order.")
+
+    if data.name is not None:
+        order.ship_to_name = data.name
+    if data.street1 is not None:
+        order.ship_to_street1 = data.street1
+    if data.street2 is not None:
+        order.ship_to_street2 = data.street2
+    if data.city is not None:
+        order.ship_to_city = data.city
+    if data.state is not None:
+        order.ship_to_state = data.state
+    if data.zip is not None:
+        order.ship_to_zip = data.zip
+    if data.country is not None:
+        order.ship_to_country = data.country
+
+    db.commit()
+    db.refresh(order)
+    auth_service.log_activity(db, user.id, user.username, "update_address", detail=order.order_number, ip=request.client.host if request.client else "")
+    return order
 
 
 @router.post("/{order_id}/buy-label", response_model=OrderOut)

@@ -181,6 +181,29 @@ def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "",
     return order
 
 
+def refund_shipment(db: Session, order: Order) -> str:
+    """Request EasyPost refund for a purchased label. Returns refund status."""
+    if not order.easypost_shipment_id:
+        raise ValueError("No shipment to refund")
+
+    client = _get_client()
+    result = client.shipment.refund(order.easypost_shipment_id)
+
+    refund_status = getattr(result, "refund_status", "") or "submitted"
+    order.label_url = ""
+    order.tracking_number = ""
+    order.tracking_url = ""
+    order.tracking_status = ""
+    order.shipping_cost = 0.0
+    # Recalculate total without shipping
+    items_subtotal = sum(i.quantity * i.unit_price for i in order.items)
+    order.total_price = items_subtotal + order.processing_fee
+
+    db.commit()
+    db.refresh(order)
+    return refund_status
+
+
 def get_parcel_info(order_id: str, db: Session) -> dict:
     """Get calculated parcel weight and dimensions for an order."""
     order = db.query(Order).filter(Order.id == order_id).first()

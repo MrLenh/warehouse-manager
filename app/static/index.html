@@ -1527,7 +1527,24 @@ async function viewOrder(id) {
       <div class="detail-item"><div class="label">Customer</div><div class="value">${esc(o.customer_name)}</div></div>
       <div class="detail-item"><div class="label">Email</div><div class="value">${esc(o.customer_email) || '-'}</div></div>
       <div class="detail-item"><div class="label">Phone</div><div class="value">${esc(o.customer_phone) || '-'}</div></div>
-      <div class="detail-item"><div class="label">Ship To</div><div class="value">${[o.ship_to_street1, o.ship_to_street2].filter(Boolean).map(s => esc(s)).join(', ') || '-'}<br>${[o.ship_to_city, o.ship_to_state, o.ship_to_zip].filter(Boolean).map(s => esc(s)).join(', ')}${o.ship_to_country && o.ship_to_country !== 'US' ? ', ' + esc(o.ship_to_country) : ''}</div></div>
+      <div class="detail-item"><div class="label">Ship To${!o.label_url && o.status !== 'cancelled' ? ' <button class="btn btn-sm btn-outline" style="padding:1px 6px;font-size:11px;margin-left:4px" onclick="openEditAddress(\''+o.id+'\')">Edit</button>' : ''}</div><div class="value" id="ship-to-display">${esc(o.ship_to_name || '')}${o.ship_to_name ? '<br>' : ''}${[o.ship_to_street1, o.ship_to_street2].filter(Boolean).map(s => esc(s)).join(', ') || '-'}<br>${[o.ship_to_city, o.ship_to_state, o.ship_to_zip].filter(Boolean).map(s => esc(s)).join(', ')}${o.ship_to_country && o.ship_to_country !== 'US' ? ', ' + esc(o.ship_to_country) : ''}</div></div>
+      <div id="edit-address-form" style="display:none;grid-column:1/-1;padding:12px;background:#f8f9fa;border-radius:8px;margin:-4px 0 4px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <input id="ea-name" placeholder="Name" style="flex:1;min-width:150px;padding:6px 8px;border:1px solid #ddd;border-radius:6px" value="${esc(o.ship_to_name || '')}">
+          <input id="ea-country" placeholder="Country" style="width:60px;padding:6px 8px;border:1px solid #ddd;border-radius:6px" value="${esc(o.ship_to_country || 'US')}">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <input id="ea-street1" placeholder="Street 1" style="flex:2;min-width:200px;padding:6px 8px;border:1px solid #ddd;border-radius:6px" value="${esc(o.ship_to_street1 || '')}">
+          <input id="ea-street2" placeholder="Street 2" style="flex:1;min-width:100px;padding:6px 8px;border:1px solid #ddd;border-radius:6px" value="${esc(o.ship_to_street2 || '')}">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="ea-city" placeholder="City" style="flex:2;min-width:120px;padding:6px 8px;border:1px solid #ddd;border-radius:6px" value="${esc(o.ship_to_city || '')}">
+          <input id="ea-state" placeholder="State" style="width:60px;padding:6px 8px;border:1px solid #ddd;border-radius:6px" value="${esc(o.ship_to_state || '')}">
+          <input id="ea-zip" placeholder="ZIP" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px" value="${esc(o.ship_to_zip || '')}">
+          <button class="btn btn-primary btn-sm" onclick="saveAddress('${o.id}')">Save</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('edit-address-form').style.display='none'">Cancel</button>
+        </div>
+      </div>
       <div class="detail-item"><div class="label">Status</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>
       <div class="detail-item"><div class="label">Shipping</div><div class="value">${esc(o.carrier || 'USPS')} - ${esc(o.service || 'First')}</div></div>
       <div class="detail-item"><div class="label">Total</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
@@ -1592,7 +1609,7 @@ async function viewOrder(id) {
       const next = statusFlow[curIdx + 1];
       footerHtml += `<button class="btn btn-success" onclick="updateOrderStatus('${o.id}','${next}')">Move to: ${next}</button>`;
     }
-    footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}')">Cancel Order</button>`;
+    footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}', ${!!o.label_url})">Cancel Order</button>`;
   }
   if (currentUser && currentUser.role === 'admin') {
     footerHtml += `<button class="btn btn-danger" style="background:#721c24" onclick="deleteOrder('${o.id}','${esc(o.order_number)}')">Delete Order</button>`;
@@ -1607,11 +1624,51 @@ async function updateOrderStatus(id, status) {
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
-async function cancelOrder(id) {
-  if (!confirm('Are you sure you want to cancel this order?')) return;
+async function cancelOrder(id, hasLabel) {
+  const msg = hasLabel
+    ? 'This order has a purchased label. Cancelling will request a refund from EasyPost.\n\nAre you sure?'
+    : 'Are you sure you want to cancel this order?';
+  if (!confirm(msg)) return;
   const res = await fetch(API + '/orders/' + id + '/cancel', { method: 'POST' });
-  if (res.ok) { toast('Order cancelled'); closeModal('order-detail-modal'); loadOrders(); }
+  if (res.ok) {
+    const o = await res.json();
+    toast(hasLabel ? 'Order cancelled & label refund requested' : 'Order cancelled');
+    closeModal('order-detail-modal'); loadOrders();
+  }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+function openEditAddress(orderId) {
+  document.getElementById('edit-address-form').style.display = '';
+}
+
+async function saveAddress(orderId) {
+  const body = {
+    name: document.getElementById('ea-name').value.trim(),
+    street1: document.getElementById('ea-street1').value.trim(),
+    street2: document.getElementById('ea-street2').value.trim(),
+    city: document.getElementById('ea-city').value.trim(),
+    state: document.getElementById('ea-state').value.trim(),
+    zip: document.getElementById('ea-zip').value.trim(),
+    country: document.getElementById('ea-country').value.trim() || 'US',
+  };
+  if (!body.street1 || !body.city || !body.state || !body.zip) {
+    toast('Street, city, state, and ZIP are required', 'error'); return;
+  }
+  try {
+    const res = await fetch(API + '/orders/' + orderId + '/address', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      toast('Address updated');
+      viewOrder(orderId); // Refresh detail view
+      loadOrders();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error updating address', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
 async function deleteOrder(id, orderNumber) {
