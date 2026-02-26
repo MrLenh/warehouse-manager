@@ -431,7 +431,7 @@ async function doScan() {
             resultEl.textContent = `Switched to order ${otherOrder.order_number} (item already picked)`;
             toast(`Switched to ${otherOrder.order_number}`, 'info');
             showActiveOrder();
-            renderOrders();
+            renderOrderCards();
             input.value = '';
             input.focus();
             return;
@@ -512,7 +512,7 @@ async function doScan() {
         resultEl.textContent = `${data.message} — Switched to order ${data.order_number}`;
         toast(`Switched to ${data.order_number}`, 'info');
         showActiveOrder();
-        renderOrders();
+        renderOrderCards();
       } else {
         resultEl.className = 'scan-result error';
         resultEl.textContent = data.message;
