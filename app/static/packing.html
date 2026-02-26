@@ -347,6 +347,7 @@ function renderOrderCards() {
 
     const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
       <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
+      <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8">` : '<span style="display:inline-block;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>'}</td>
       <td><strong>${esc(i.sku)}</strong></td>
       <td>${esc(i.product_name)}</td>
       <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
@@ -367,7 +368,7 @@ function renderOrderCards() {
         <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${o.picked}/${o.total}</div>
       </div>
       <table style="margin-top:8px;box-shadow:none">
-        <thead><tr><th style="width:30px"></th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th></tr></thead>
+        <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th></tr></thead>
         <tbody>${itemsHtml}</tbody>
       </table>
     </div>`;
@@ -490,6 +491,7 @@ function showActiveOrder() {
 
   const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
     <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
+    <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8">` : '<span style="display:inline-block;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>'}</td>
     <td><strong>${esc(i.sku)}</strong></td>
     <td>${esc(i.product_name)}</td>
     <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
@@ -541,7 +543,7 @@ function showActiveOrder() {
       <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${pct}%</div>
     </div>
     <table style="margin-top:12px;box-shadow:none;font-size:13px">
-      <thead><tr><th style="width:30px"></th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th></tr></thead>
+      <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
     ${bottomHtml}

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.picking import PickingList, PickingListStatus, PickItem
+from app.models.product import Product
 from app.services.order_service import _add_status_history
 
 
@@ -263,6 +264,7 @@ def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
 
     # Group by order
     orders_map: dict[str, dict] = {}
+    product_cache: dict[str, Product] = {}
     for item in items:
         if item.order_id not in orders_map:
             order = db.query(Order).filter(Order.id == item.order_id).first()
@@ -281,6 +283,10 @@ def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
         orders_map[item.order_id]["total"] += 1
         if item.picked:
             orders_map[item.order_id]["picked"] += 1
+        # Get product image
+        if item.product_id not in product_cache:
+            product_cache[item.product_id] = db.query(Product).filter(Product.id == item.product_id).first()
+        product = product_cache.get(item.product_id)
         orders_map[item.order_id]["items"].append({
             "id": item.id,
             "sku": item.sku,
@@ -290,6 +296,7 @@ def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
             "qr_code": item.qr_code,
             "picked": item.picked,
             "picked_at": item.picked_at.isoformat() if item.picked_at else None,
+            "image_url": product.image_url if product and product.image_url else "",
         })
 
     return list(orders_map.values())
