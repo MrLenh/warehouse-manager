@@ -1262,6 +1262,7 @@ function renderOrders(list) {
         <td>${new Date(o.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
+          ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
         </td>
       </tr>`).join('');
   updateSelectedCount();
@@ -1534,6 +1535,9 @@ async function viewOrder(id) {
     }
     footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}')">Cancel Order</button>`;
   }
+  if (currentUser && currentUser.role === 'admin') {
+    footerHtml += `<button class="btn btn-danger" style="background:#721c24" onclick="deleteOrder('${o.id}','${esc(o.order_number)}')">Delete Order</button>`;
+  }
   document.getElementById('order-detail-footer').innerHTML = footerHtml;
   document.getElementById('order-detail-modal').classList.add('show');
 }
@@ -1548,6 +1552,13 @@ async function cancelOrder(id) {
   if (!confirm('Are you sure you want to cancel this order?')) return;
   const res = await fetch(API + '/orders/' + id + '/cancel', { method: 'POST' });
   if (res.ok) { toast('Order cancelled'); closeModal('order-detail-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function deleteOrder(id, orderNumber) {
+  if (!confirm('Permanently delete order ' + orderNumber + '? This cannot be undone.')) return;
+  const res = await fetch(API + '/orders/' + id, { method: 'DELETE' });
+  if (res.ok) { toast('Order deleted'); closeModal('order-detail-modal'); loadOrders(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
@@ -2321,9 +2332,11 @@ document.addEventListener('keydown', function(e) {
 });
 
 // Init
-loadCurrentUser();
-loadProducts();
-loadOrders();
+(async () => {
+  await loadCurrentUser();
+  loadProducts();
+  loadOrders();
+})();
 </script>
 </body>
 </html>

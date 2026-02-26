@@ -190,6 +190,50 @@ def update_order_status(db: Session, order_id: str, data: OrderStatusUpdate) -> 
     return order
 
 
+def delete_order(db: Session, order_id: str) -> bool:
+    """Permanently delete an order and restore inventory (admin only)."""
+    order = get_order(db, order_id)
+    if not order:
+        return False
+
+    # Restore inventory if order was not cancelled (already restored) or delivered
+    if order.status not in (OrderStatus.CANCELLED,):
+        for item in order.items:
+            if item.variant_id:
+                variant = db.query(Variant).filter(Variant.id == item.variant_id).first()
+                if variant:
+                    variant.quantity += item.quantity
+                    db.add(InventoryLog(
+                        product_id=item.product_id,
+                        change=item.quantity,
+                        reason="order_deleted",
+                        reference_id=order.id,
+                        balance_after=variant.quantity,
+                        note=f"[Variant {variant.variant_sku}] Restored from deleted order {order.order_number}",
+                    ))
+            else:
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+                if product:
+                    product.quantity += item.quantity
+                    db.add(InventoryLog(
+                        product_id=product.id,
+                        change=item.quantity,
+                        reason="order_deleted",
+                        reference_id=order.id,
+                        balance_after=product.quantity,
+                        note=f"Restored from deleted order {order.order_number}",
+                    ))
+
+    # Delete related pick_items
+    from app.models.picking import PickItem
+    db.query(PickItem).filter(PickItem.order_id == order.id).delete()
+
+    # Delete the order (order_items cascade-deleted automatically)
+    db.delete(order)
+    db.commit()
+    return True
+
+
 def cancel_order(db: Session, order_id: str) -> Order | None:
     order = get_order(db, order_id)
     if not order:

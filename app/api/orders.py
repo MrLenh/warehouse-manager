@@ -320,6 +320,20 @@ def cancel_order(order_id: str, request: Request, background_tasks: BackgroundTa
     return order
 
 
+@router.delete("/{order_id}", status_code=204)
+def delete_order(order_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Permanently delete an order. Admin only."""
+    if user.role != "admin":
+        raise HTTPException(403, "Admin only")
+    order = order_service.get_order(db, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    order_number = order.order_number
+    if not order_service.delete_order(db, order_id):
+        raise HTTPException(500, "Failed to delete order")
+    auth_service.log_activity(db, user.id, user.username, "delete_order", detail=order_number, ip=request.client.host if request.client else "")
+
+
 @router.get("/{order_id}/parcel-info")
 def parcel_info(order_id: str, db: Session = Depends(get_db)):
     try:
