@@ -67,8 +67,9 @@ def _draw_label_2x1(qr_data: str, lines: list[tuple[str, str, str]]) -> Image.Im
         # Truncate if too wide
         while text and draw.textbbox((0, 0), text, font=font)[2] > text_area_w and len(text) > 3:
             text = text[:-4] + "..."
-        rendered_lines.append((font, text, color, sz + 4))
-        total_text_h += sz + 4
+        line_h = sz + max(6, sz // 4)
+        rendered_lines.append((font, text, color, line_h))
+        total_text_h += line_h
 
     y = max(PADDING, (LABEL_H - total_text_h) // 2)
 
@@ -100,15 +101,15 @@ def generate_qr_label(
 
     display_sku = variant_sku or sku
     lines = [
-        ("22", display_sku, "#000000"),
-        ("14", name, "#333333"),
+        ("38", display_sku, "#000000"),
+        ("28", name, "#333333"),
     ]
     if variant_label:
-        lines.append(("12", variant_label, "#555555"))
+        lines.append(("22", variant_label, "#555555"))
     if location:
-        lines.append(("11", f"Loc: {location}", "#888888"))
+        lines.append(("20", f"Loc: {location}", "#888888"))
     if price > 0:
-        lines.append(("12", f"${price:.2f}", "#667eea"))
+        lines.append(("24", f"${price:.2f}", "#667eea"))
 
     img = _draw_label_2x1(qr_data, lines)
 
@@ -158,14 +159,14 @@ def generate_order_qr(order) -> bytes:
     qr_data = f"{base}/order/{order.id}"
 
     lines = [
-        ("22", order.order_number, "#000000"),
+        ("40", order.order_number, "#000000"),
     ]
     if order.order_name:
-        lines.append(("13", order.order_name, "#333333"))
-    lines.append(("12", order.customer_name, "#555555"))
-    lines.append(("11", f"Items: {len(order.items)}", "#888888"))
+        lines.append(("28", order.order_name, "#333333"))
+    lines.append(("24", order.customer_name, "#555555"))
+    lines.append(("22", f"Items: {len(order.items)}", "#888888"))
     status_str = order.status.upper() if isinstance(order.status, str) else order.status.value.upper()
-    lines.append(("11", status_str, "#667eea"))
+    lines.append(("22", status_str, "#667eea"))
 
     img = _draw_label_2x1(qr_data, lines)
 

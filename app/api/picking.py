@@ -123,17 +123,17 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
 
         # Build text lines for right side
         lines = [
-            ("20", item.sku, "#000000"),
-            ("12", item.product_name, "#333333"),
+            ("36", item.sku, "#000000"),
+            ("26", item.product_name, "#333333"),
         ]
         if item.variant_label:
-            lines.append(("10", item.variant_label, "#555555"))
-        lines.append(("10", f"#{item.sequence} | {item.qr_code}", "#888888"))
+            lines.append(("20", item.variant_label, "#555555"))
+        lines.append(("20", f"#{item.sequence} | {item.qr_code}", "#888888"))
         if order:
             order_label = order.order_number
             if order.order_name:
                 order_label += f" ({order.order_name})"
-            lines.append(("9", order_label, "#888888"))
+            lines.append(("18", order_label, "#888888"))
 
         label_img = _draw_label_2x1(item.qr_code, lines)
         pages.append(label_img)
