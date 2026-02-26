@@ -1,4 +1,5 @@
 import io
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -99,7 +100,7 @@ def remove_order_from_picking_list(picking_list_id: str, order_id: str, request:
 
 @router.get("/{picking_list_id}/qrcodes")
 def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
-    """Export all QR codes for a picking list as a printable PDF (2x1 inch labels)."""
+    """Export all QR codes for a picking list as a printable PDF (2x1 inch labels), sorted by SKU."""
     from app.models.order import Order
 
     pl = picking_service.get_picking_list(db, picking_list_id)
@@ -109,11 +110,14 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     if not pl.items:
         raise HTTPException(400, "No items in picking list")
 
+    # Sort items by SKU then sequence for faster label sticking
+    sorted_items = sorted(pl.items, key=lambda i: (i.sku, i.variant_label or "", i.sequence))
+
     # Cache order info to avoid repeated queries
     order_cache = {}
     pages = []
 
-    for item in pl.items:
+    for item in sorted_items:
         # Get order info
         if item.order_id not in order_cache:
             order = db.query(Order).filter(Order.id == item.order_id).first()
@@ -147,4 +151,175 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/pdf", headers={
         "Content-Disposition": f"inline; filename=picking-{pl.picking_number}.pdf"
+    })
+
+
+@router.get("/{picking_list_id}/picking-summary")
+def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
+    """Export A4 picking summary PDF — aggregated SKU quantities with thumbnail, location."""
+    from PIL import Image, ImageDraw
+
+    from app.models.product import Product, Variant
+
+    pl = picking_service.get_picking_list(db, picking_list_id)
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+
+    if not pl.items:
+        raise HTTPException(400, "No items in picking list")
+
+    # Aggregate by (sku, variant_label)
+    sku_map: dict[str, dict] = {}
+    for item in pl.items:
+        key = item.sku
+        if key not in sku_map:
+            sku_map[key] = {
+                "sku": item.sku,
+                "product_name": item.product_name,
+                "variant_label": item.variant_label,
+                "product_id": item.product_id,
+                "qty": 0,
+            }
+        sku_map[key]["qty"] += 1
+
+    # Fetch product/variant info for location + image
+    product_cache: dict[str, Product] = {}
+    variant_cache: dict[str, Variant | None] = {}
+    rows = sorted(sku_map.values(), key=lambda r: r["sku"])
+
+    for row in rows:
+        pid = row["product_id"]
+        if pid not in product_cache:
+            product_cache[pid] = db.query(Product).filter(Product.id == pid).first()
+        product = product_cache[pid]
+
+        # Find variant by variant_sku matching row["sku"]
+        location = ""
+        image_url = ""
+        if product:
+            image_url = product.image_url or ""
+            location = product.location or ""
+            # Check if this SKU is a variant SKU
+            if row["sku"] != product.sku:
+                cache_key = row["sku"]
+                if cache_key not in variant_cache:
+                    variant_cache[cache_key] = db.query(Variant).filter(
+                        Variant.product_id == pid, Variant.variant_sku == row["sku"]
+                    ).first()
+                variant = variant_cache[cache_key]
+                if variant and variant.location:
+                    location = variant.location
+
+        row["location"] = location
+        row["image_url"] = image_url
+
+    # --- Generate A4 PDF with table ---
+    A4_W, A4_H = 2480, 3508  # A4 at 300 DPI
+    MARGIN = 120
+    ROW_H = 100
+    HEADER_H = 140
+    THUMB_SIZE = 70
+    COL_WIDTHS = [100, 400, 600, 400, 150, 490]  # thumbnail, sku, product, variant, qty, location
+    TABLE_W = sum(COL_WIDTHS)
+
+    font_h = _get_font(36)
+    font_b = _get_font(32)
+    font_title = _get_font(52)
+    font_small = _get_font(28)
+
+    pages = []
+    rows_per_page = (A4_H - MARGIN * 2 - HEADER_H - 80) // ROW_H
+
+    for page_idx in range(0, len(rows), rows_per_page):
+        page_rows = rows[page_idx:page_idx + rows_per_page]
+        img = Image.new("RGB", (A4_W, A4_H), "white")
+        draw = ImageDraw.Draw(img)
+
+        # Title
+        y = MARGIN
+        draw.text((MARGIN, y), f"Picking Summary - {pl.picking_number}", fill="#000", font=font_title)
+        draw.text((MARGIN, y + 58), f"{len(rows)} SKUs, {sum(r['qty'] for r in rows)} total units", fill="#888", font=font_small)
+        if page_idx > 0:
+            draw.text((A4_W - MARGIN - 300, y), f"Page {page_idx // rows_per_page + 1}", fill="#888", font=font_small)
+        y += HEADER_H
+
+        # Table header
+        headers = ["", "SKU", "Product Name", "Variant", "Qty", "Location"]
+        x = MARGIN
+        draw.rectangle([(MARGIN, y), (MARGIN + TABLE_W, y + ROW_H)], fill="#f0f0f0")
+        for i, h in enumerate(headers):
+            draw.text((x + 12, y + 30), h, fill="#333", font=font_h)
+            x += COL_WIDTHS[i]
+        draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#ccc", width=2)
+        y += ROW_H
+
+        # Table rows
+        for row in page_rows:
+            x = MARGIN
+
+            # Thumbnail placeholder
+            thumb_x = x + (COL_WIDTHS[0] - THUMB_SIZE) // 2
+            thumb_y = y + (ROW_H - THUMB_SIZE) // 2
+            draw.rectangle([(thumb_x, thumb_y), (thumb_x + THUMB_SIZE, thumb_y + THUMB_SIZE)],
+                           fill="#f5f5f5", outline="#ddd")
+
+            # Try to load thumbnail from URL if it's a local path
+            if row["image_url"]:
+                try:
+                    img_path = row["image_url"]
+                    if img_path.startswith("/"):
+                        # Try relative to static dir
+                        for base in ["app/static", "."]:
+                            full = os.path.join(base, img_path.lstrip("/"))
+                            if os.path.exists(full):
+                                img_path = full
+                                break
+                    if os.path.exists(img_path):
+                        thumb = Image.open(img_path).convert("RGB")
+                        thumb = thumb.resize((THUMB_SIZE, THUMB_SIZE), Image.LANCZOS)
+                        img.paste(thumb, (thumb_x, thumb_y))
+                except Exception:
+                    pass
+
+            x += COL_WIDTHS[0]
+
+            # SKU
+            draw.text((x + 12, y + 32), row["sku"], fill="#000", font=font_b)
+            x += COL_WIDTHS[1]
+
+            # Product name (truncate if needed)
+            name = row["product_name"]
+            while name and draw.textbbox((0, 0), name, font=font_b)[2] > COL_WIDTHS[2] - 24:
+                name = name[:-4] + "..."
+            draw.text((x + 12, y + 32), name, fill="#333", font=font_b)
+            x += COL_WIDTHS[2]
+
+            # Variant
+            draw.text((x + 12, y + 32), row["variant_label"] or "-", fill="#555", font=font_b)
+            x += COL_WIDTHS[3]
+
+            # Qty (bold, larger)
+            qty_font = _get_font(40)
+            draw.text((x + 12, y + 28), str(row["qty"]), fill="#000", font=qty_font)
+            x += COL_WIDTHS[4]
+
+            # Location
+            loc = row["location"] or "-"
+            draw.text((x + 12, y + 32), loc, fill="#555", font=font_b)
+
+            # Row border
+            draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#e8e8e8", width=1)
+            y += ROW_H
+
+        # Table outer border
+        table_bottom = MARGIN + HEADER_H + ROW_H * (len(page_rows) + 1)
+        draw.rectangle([(MARGIN, MARGIN + HEADER_H), (MARGIN + TABLE_W, table_bottom)], outline="#ccc", width=2)
+
+        pages.append(img)
+
+    buf = io.BytesIO()
+    pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=300)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/pdf", headers={
+        "Content-Disposition": f"inline; filename=picking-summary-{pl.picking_number}.pdf"
     })

@@ -147,7 +147,8 @@ tr:hover{background:#f8f9ff}
             <input type="checkbox" id="filter-needs-packing" onchange="renderOrderCards()" checked>
             Only needs packing
           </label>
-          <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">Export QR PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportPickingSummary()">Picking Summary</button>
+          <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">QR Labels (by SKU)</button>
           <button class="btn btn-outline btn-sm" onclick="refreshProgress()">Refresh</button>
           <button class="btn btn-danger btn-sm" id="unpack-batch-btn" onclick="unpackBatch()">Unpack Batch</button>
         </div>
@@ -631,6 +632,11 @@ function printOrderLabel(orderId) {
 function exportQrCodes() {
   if (!currentPL) return;
   window.open(API + '/picking-lists/' + currentPL.id + '/qrcodes', '_blank');
+}
+
+function exportPickingSummary() {
+  if (!currentPL) return;
+  window.open(API + '/picking-lists/' + currentPL.id + '/picking-summary', '_blank');
 }
 
 // Label modal
