@@ -11,6 +11,8 @@ from app.database import get_db
 from app.models.order import OrderStatus
 from app.models.user import User
 from app.schemas.order import BuyLabelRequest, OrderCreate, OrderOut, OrderStatusUpdate
+from easypost.errors import EasyPostError
+
 from app.services import auth_service, order_service, shipping_service
 from app.services.webhook_service import send_webhook
 
@@ -375,6 +377,8 @@ def buy_label(
                                            parcel_override=parcel_override)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(400, str(e))
+    except EasyPostError as e:
+        raise HTTPException(400, f"Shipping API error: {e}")
     auth_service.log_activity(db, user.id, user.username, "buy_label", detail=f"{order.order_number} {data.carrier} {data.service}", ip=request.client.host if request.client else "")
     background_tasks.add_task(_fire_webhook, order)
     return order
@@ -394,6 +398,8 @@ def get_rates(order_id: str, weight_oz: float = 0, length_in: float = 0,
         rates = shipping_service.get_rates(order_id, db, parcel_override=parcel_override)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(400, str(e))
+    except EasyPostError as e:
+        raise HTTPException(400, f"Shipping API error: {e}")
     return {"rates": rates}
 
 

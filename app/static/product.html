@@ -400,19 +400,20 @@ function render() {
     html += '<div class="collapse-section">';
     html += '<button class="collapse-header" onclick="toggleCollapse(this)">All Variants (' + p.variants.length + ') <span class="arrow">&#9660;</span></button>';
     html += '<div class="collapse-body">';
-    html += '<table class="variants-table"><thead><tr><th>SKU</th><th>Attributes</th><th>Price</th><th>Stock</th><th>Location</th></tr></thead><tbody>';
+    html += '<table class="variants-table"><thead><tr><th>SKU</th><th>Attributes</th><th>Price</th><th>Stock</th><th>Location</th><th></th></tr></thead><tbody>';
     for (const v of p.variants) {
       const attrs = parseAttrs(v.attributes);
       const attrStr = Object.entries(attrs).map(([k, val]) => k + ': ' + val).join(', ');
       const isActive = sv && sv.id === v.id;
       const vPrice = v.price_override > 0 ? '$' + v.price_override.toFixed(2) : '$' + p.price.toFixed(2);
       const rowClass = isActive ? ' class="variant-row-active"' : '';
-      html += '<tr' + rowClass + '>';
+      html += '<tr' + rowClass + ' id="vrow-' + v.id + '">';
       html += '<td><a href="/product/' + p.id + '?variant=' + v.id + '">' + esc(v.variant_sku) + '</a></td>';
       html += '<td>' + esc(attrStr) + '</td>';
-      html += '<td>' + vPrice + '</td>';
+      html += '<td id="vprice-' + v.id + '">' + vPrice + '</td>';
       html += '<td class="' + (v.quantity <= 5 ? (v.quantity <= 0 ? 'stock-out' : 'stock-low') : '') + '" style="color:' + (v.quantity <= 0 ? '#c62828' : v.quantity <= 5 ? '#856404' : '#1a7d2f') + ';font-weight:500">' + v.quantity + '</td>';
       html += '<td>' + esc(v.location || p.location) + '</td>';
+      html += '<td><button class="option-btn" style="padding:4px 10px;font-size:12px" onclick="editVariantPrice(\'' + v.id + '\',' + (v.price_override || 0) + ',' + p.price + ')">Edit</button></td>';
       html += '</tr>';
     }
     html += '</tbody></table>';
@@ -554,6 +555,43 @@ async function removeImage() {
   } else {
     const e = await res.json();
     toast(e.detail || 'Error removing image', 'error');
+  }
+}
+
+function editVariantPrice(variantId, currentOverride, basePrice) {
+  const cell = document.getElementById('vprice-' + variantId);
+  if (!cell) return;
+  const val = currentOverride > 0 ? currentOverride : basePrice;
+  cell.innerHTML = '<div style="display:flex;gap:4px;align-items:center">' +
+    '<input type="number" step="0.01" min="0" value="' + val.toFixed(2) + '" id="vpinput-' + variantId + '" style="width:80px;padding:4px 6px;border:1px solid #c9cccf;border-radius:6px;font-size:13px">' +
+    '<button class="btn-save" style="padding:4px 8px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:#2c6ecb;color:#fff" onclick="saveVariantPrice(\'' + variantId + '\')">Save</button>' +
+    '<button class="btn-cancel" style="padding:4px 8px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:#f0f0f0;color:#333" onclick="render()">X</button>' +
+    '</div>';
+  document.getElementById('vpinput-' + variantId).focus();
+}
+
+async function saveVariantPrice(variantId) {
+  const input = document.getElementById('vpinput-' + variantId);
+  if (!input) return;
+  const price = parseFloat(input.value) || 0;
+  try {
+    const res = await fetch(API + '/products/variants/' + variantId, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ price_override: price }),
+    });
+    if (res.ok) {
+      // Update local data
+      const v = productData.variants.find(v => v.id === variantId);
+      if (v) v.price_override = price;
+      toast('Price updated');
+      render();
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Error updating price', 'error');
+    }
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
   }
 }
 

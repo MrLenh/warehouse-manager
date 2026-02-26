@@ -23,7 +23,8 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 
 
 def _find_invoiceable_orders(db: Session, customer: Customer, date_to: date) -> list[Order]:
-    """Find orders matching customer name, created up to date_to, not yet invoiced."""
+    """Find orders matching customer name, created up to date_to, not yet invoiced.
+    Only orders with status label_purchased or drop_off are eligible."""
     end = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59)
     return (
         db.query(Order)
@@ -31,6 +32,7 @@ def _find_invoiceable_orders(db: Session, customer: Customer, date_to: date) -> 
             sa_func.lower(Order.customer_name) == customer.name.lower().strip(),
             Order.created_at <= end,
             Order.invoice_id.is_(None),
+            Order.status.in_(["label_purchased", "drop_off"]),
         )
         .order_by(Order.created_at)
         .all()

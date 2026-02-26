@@ -1099,12 +1099,13 @@ function renderVariantsTable(variants) {
         return `<tr>
           <td><strong>${esc(v.variant_sku)}</strong></td>
           <td>${esc(attrStr)}</td>
-          <td>${v.price_override > 0 ? '$'+v.price_override.toFixed(2) : 'Parent'}</td>
+          <td id="vp-${v.id}">${v.price_override > 0 ? '$'+v.price_override.toFixed(2) : 'Parent'}</td>
           <td>${wt}</td>
           <td>${dims}</td>
           <td class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${v.quantity}</td>
           <td>${esc(v.location)}</td>
           <td class="actions-cell">
+            <button class="btn btn-sm btn-outline" onclick="editVarPrice('${v.id}',${v.price_override || 0})">Price</button>
             <button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')">Stock</button>
             <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')">Delete</button>
           </td>
@@ -1135,6 +1136,28 @@ async function deleteVariant(variantId) {
   const res = await fetch(API + '/products/variants/' + variantId, { method: 'DELETE' });
   if (res.ok) { toast('Variant deleted'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
   else { toast('Error deleting variant', 'error'); }
+}
+
+function editVarPrice(variantId, currentPrice) {
+  const cell = document.getElementById('vp-' + variantId);
+  if (!cell) return;
+  cell.innerHTML = '<div style="display:flex;gap:4px;align-items:center">' +
+    '<input type="number" step="0.01" min="0" value="' + (currentPrice || 0).toFixed(2) + '" id="vpi-' + variantId + '" style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:13px">' +
+    '<button class="btn btn-sm btn-primary" onclick="saveVarPrice(\'' + variantId + '\')">OK</button>' +
+    '</div>';
+  document.getElementById('vpi-' + variantId).focus();
+}
+
+async function saveVarPrice(variantId) {
+  const input = document.getElementById('vpi-' + variantId);
+  if (!input) return;
+  const price = parseFloat(input.value) || 0;
+  const res = await fetch(API + '/products/variants/' + variantId, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ price_override: price }),
+  });
+  if (res.ok) { toast('Variant price updated'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function adjustVariantStock(variantId) {
