@@ -74,6 +74,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
     db.flush()
 
     total_items = 0
+    items_subtotal = 0.0
     for item_data in data.items:
         product = db.query(Product).filter(Product.id == item_data.product_id).first()
         if not product:
@@ -138,10 +139,11 @@ def create_order(db: Session, data: OrderCreate) -> Order:
             )
         db.add(log)
         total_items += item_data.quantity
+        items_subtotal += item_data.quantity * unit_price
 
-    # Calculate processing fee
+    # Calculate processing fee and total price (shipping added when label purchased)
     order.processing_fee = total_items * settings.PROCESSING_FEE_PER_ITEM
-    order.total_price = order.processing_fee  # shipping added when label purchased
+    order.total_price = items_subtotal + order.processing_fee
 
     _add_status_history(order, OrderStatus.PENDING, "Order created")
 

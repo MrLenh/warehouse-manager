@@ -12,7 +12,7 @@ from app.models.invoice import Invoice
 from app.models.order import Order
 from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerOut, CustomerUpdate
-from app.schemas.invoice import InvoiceCreate, InvoiceOrderOut, InvoiceOut, InvoicePreview
+from app.schemas.invoice import InvoiceCreate, InvoiceOrderOut, InvoiceOut, InvoicePreview, InvoiceStatusUpdate
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -52,13 +52,14 @@ def _build_order_out(o: Order) -> InvoiceOrderOut:
     )
 
 
-def _calc_totals(orders: list[Order], processing_fee_unit: float, stocking_fee_unit: float):
+def _calc_totals(orders: list[Order], processing_fee_unit: float, stocking_fee_unit: float, discount: float = 0.0):
     order_count = len(orders)
     item_count = sum(sum(i.quantity for i in o.items) for o in orders)
     processing_fee_total = round(processing_fee_unit * item_count, 2)
     shipping_fee_total = round(sum(o.shipping_cost for o in orders), 2)
     stocking_fee_total = round(stocking_fee_unit * item_count, 2)
-    total_price = round(processing_fee_total + shipping_fee_total + stocking_fee_total, 2)
+    subtotal = processing_fee_total + shipping_fee_total + stocking_fee_total
+    total_price = round(max(0, subtotal - discount), 2)
     return {
         "order_count": order_count,
         "item_count": item_count,
@@ -67,6 +68,7 @@ def _calc_totals(orders: list[Order], processing_fee_unit: float, stocking_fee_u
         "shipping_fee_total": shipping_fee_total,
         "stocking_fee_unit": stocking_fee_unit,
         "stocking_fee_total": stocking_fee_total,
+        "discount": round(discount, 2),
         "total_price": total_price,
     }
 
@@ -79,6 +81,7 @@ def _invoice_to_out(inv: Invoice, customer: Customer | None, orders: list[Order]
         customer_id=inv.customer_id,
         customer_name=customer.name if customer else "",
         date_to=inv.date_to,
+        status=inv.status or "new",
         order_count=inv.order_count,
         item_count=inv.item_count,
         processing_fee_unit=inv.processing_fee_unit,
@@ -86,6 +89,7 @@ def _invoice_to_out(inv: Invoice, customer: Customer | None, orders: list[Order]
         shipping_fee_total=inv.shipping_fee_total,
         stocking_fee_unit=inv.stocking_fee_unit,
         stocking_fee_total=inv.stocking_fee_total,
+        discount=inv.discount,
         total_price=inv.total_price,
         notes=inv.notes,
         orders=[_build_order_out(o) for o in orders],
@@ -105,6 +109,7 @@ def preview_invoice(
     date_to: date,
     processing_fee_unit: float | None = None,
     stocking_fee_unit: float | None = None,
+    discount: float = 0.0,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -117,7 +122,7 @@ def preview_invoice(
     sfu = stocking_fee_unit if stocking_fee_unit is not None else settings.STOCKING_FEE_PER_ITEM
 
     orders = _find_invoiceable_orders(db, customer, date_to)
-    totals = _calc_totals(orders, pfu, sfu)
+    totals = _calc_totals(orders, pfu, sfu, discount)
     return InvoicePreview(**totals, orders=[_build_order_out(o) for o in orders])
 
 
@@ -138,7 +143,7 @@ def create_invoice(
     if not orders:
         raise HTTPException(400, "No invoiceable orders found for this customer and date range")
 
-    totals = _calc_totals(orders, pfu, sfu)
+    totals = _calc_totals(orders, pfu, sfu, body.discount)
 
     # Generate invoice number: INV-0001, INV-0002 …
     last = db.query(Invoice).order_by(Invoice.created_at.desc()).first()
@@ -155,12 +160,14 @@ def create_invoice(
         invoice_name=body.invoice_name,
         customer_id=body.customer_id,
         date_to=body.date_to,
+        status="new",
         notes=body.notes,
         **totals,
     )
     db.add(inv)
     db.flush()
 
+    # Link orders to invoice (mark as invoiced)
     for o in orders:
         o.invoice_id = inv.id
     db.commit()
@@ -199,11 +206,35 @@ def get_invoice(invoice_id: str, user: User = Depends(get_current_user), db: Ses
     return _invoice_to_out(inv, customer, inv.orders)
 
 
+@router.patch("/invoices/{invoice_id}/status")
+def update_invoice_status(
+    invoice_id: str,
+    body: InvoiceStatusUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    allowed = {"new", "requested", "paid", "cancel"}
+    if body.status not in allowed:
+        raise HTTPException(400, f"Invalid status. Must be one of: {', '.join(sorted(allowed))}")
+    inv.status = body.status
+    db.commit()
+    db.refresh(inv)
+    customer = db.query(Customer).filter(Customer.id == inv.customer_id).first()
+    return _invoice_to_out(inv, customer, inv.orders)
+
+
 @router.delete("/invoices/{invoice_id}", status_code=204)
 def delete_invoice(invoice_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(404, "Invoice not found")
+    # Only allow delete for new or requested invoices
+    if inv.status in ("paid", "cancel"):
+        raise HTTPException(400, f"Cannot delete invoice with status '{inv.status}'")
+    # Release orders back to un-invoiced
     for o in inv.orders:
         o.invoice_id = None
     db.delete(inv)

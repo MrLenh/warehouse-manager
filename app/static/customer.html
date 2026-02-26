@@ -37,6 +37,10 @@ tr:hover{background:#f8f9ff}
 .badge-pending{background:#fff3cd;color:#856404}
 .badge-delivered{background:#28a745;color:#fff}
 .badge-cancelled{background:#f8d7da;color:#721c24}
+.badge-new{background:#cce5ff;color:#004085}
+.badge-requested{background:#fff3cd;color:#856404}
+.badge-paid{background:#28a745;color:#fff}
+.badge-cancel{background:#f8d7da;color:#721c24}
 .empty{text-align:center;padding:60px;color:#999;font-size:15px}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.show{display:flex}
@@ -166,6 +170,7 @@ tr:hover{background:#f8f9ff}
         <div class="form-group"><label>Processing Fee / item ($)</label><input id="inv-proc-fee" type="number" step="0.01" min="0"></div>
         <div class="form-group"><label>Stocking Fee / item ($)</label><input id="inv-stock-fee" type="number" step="0.01" min="0"></div>
       </div>
+      <div class="form-group"><label>Discount ($)</label><input id="inv-discount" type="number" step="0.01" min="0" value="0"></div>
       <div class="form-group"><label>Notes</label><textarea id="inv-notes" rows="2"></textarea></div>
       <div style="text-align:center;margin:16px 0">
         <button class="btn btn-outline" onclick="previewInvoice()">Preview Orders</button>
@@ -339,14 +344,16 @@ async function loadInvoices() {
 function renderInvoices(invoices) {
   const wrap = document.getElementById('inv-table-wrap');
   if (!invoices.length) { wrap.innerHTML = '<div class="empty">No invoices found</div>'; return; }
-  wrap.innerHTML = `<table><thead><tr><th>Invoice #</th><th>Name</th><th>Customer</th><th>Date To</th><th>Orders</th><th>Items</th><th>Total</th><th>Created</th><th></th></tr></thead><tbody>` +
+  wrap.innerHTML = `<table><thead><tr><th>Invoice #</th><th>Name</th><th>Customer</th><th>Status</th><th>Date To</th><th>Orders</th><th>Items</th><th>Discount</th><th>Total</th><th>Created</th><th></th></tr></thead><tbody>` +
     invoices.map(inv => `<tr>
       <td><strong>${esc(inv.invoice_number)}</strong></td>
       <td>${esc(inv.invoice_name)}</td>
       <td>${esc(inv.customer_name)}</td>
+      <td><span class="badge badge-${inv.status}">${inv.status}</span></td>
       <td>${inv.date_to}</td>
       <td>${inv.order_count}</td>
       <td>${inv.item_count}</td>
+      <td>${inv.discount > 0 ? '-$' + inv.discount.toFixed(2) : '-'}</td>
       <td><strong>$${inv.total_price.toFixed(2)}</strong></td>
       <td>${new Date(inv.created_at).toLocaleDateString()}</td>
       <td class="actions-cell">
@@ -363,6 +370,7 @@ function openInvModal() {
   document.getElementById('inv-name').value = '';
   document.getElementById('inv-proc-fee').value = '';
   document.getElementById('inv-stock-fee').value = '';
+  document.getElementById('inv-discount').value = '0';
   document.getElementById('inv-notes').value = '';
   document.getElementById('inv-preview').innerHTML = '';
   document.getElementById('btn-create-inv').disabled = true;
@@ -381,8 +389,10 @@ async function previewInvoice() {
   const params = new URLSearchParams({customer_id: custId, date_to: dateTo});
   const pf = document.getElementById('inv-proc-fee').value;
   const sf = document.getElementById('inv-stock-fee').value;
+  const disc = parseFloat(document.getElementById('inv-discount').value) || 0;
   if (pf !== '') params.set('processing_fee_unit', pf);
   if (sf !== '') params.set('stocking_fee_unit', sf);
+  if (disc > 0) params.set('discount', disc);
 
   const div = document.getElementById('inv-preview');
   div.innerHTML = '<em>Loading preview...</em>';
@@ -411,6 +421,7 @@ function renderPreview(p) {
         <tr><td>Processing Fee (${p.item_count} items x $${p.processing_fee_unit.toFixed(2)})</td><td>$${p.processing_fee_total.toFixed(2)}</td></tr>
         <tr><td>Shipping Fee</td><td>$${p.shipping_fee_total.toFixed(2)}</td></tr>
         <tr><td>Stocking Fee (${p.item_count} items x $${p.stocking_fee_unit.toFixed(2)})</td><td>$${p.stocking_fee_total.toFixed(2)}</td></tr>
+        ${p.discount > 0 ? `<tr><td>Discount</td><td style="color:#dc3545">-$${p.discount.toFixed(2)}</td></tr>` : ''}
         <tr class="total"><td>Total</td><td>$${p.total_price.toFixed(2)}</td></tr>
       </table>
     </div>
@@ -437,8 +448,10 @@ async function createInvoice() {
   const body = {customer_id: custId, date_to: dateTo, invoice_name: name, notes: document.getElementById('inv-notes').value.trim()};
   const pf = document.getElementById('inv-proc-fee').value;
   const sf = document.getElementById('inv-stock-fee').value;
+  const disc = parseFloat(document.getElementById('inv-discount').value) || 0;
   if (pf !== '') body.processing_fee_unit = parseFloat(pf);
   if (sf !== '') body.stocking_fee_unit = parseFloat(sf);
+  if (disc > 0) body.discount = disc;
 
   try {
     const res = await fetch(API + '/customers/invoices', {
@@ -455,19 +468,35 @@ async function createInvoice() {
 }
 
 // ---- Invoice Detail ----
+let currentInvStatus = '';
+
 async function viewInvoice(id) {
   currentInvId = id;
   try {
     const res = await fetch(API + '/customers/invoices/' + id);
     if (!res.ok) { toast('Error loading invoice', 'error'); return; }
     const inv = await res.json();
+    currentInvStatus = inv.status;
     document.getElementById('inv-detail-title').textContent = inv.invoice_number + ' - ' + inv.invoice_name;
+
+    const canDelete = inv.status === 'new' || inv.status === 'requested';
+    document.getElementById('btn-del-inv').style.display = canDelete ? '' : 'none';
+
     document.getElementById('inv-detail-body').innerHTML = `
       <div class="detail-grid" style="margin-bottom:16px">
         <div class="detail-item"><div class="label">Customer</div><div class="value">${esc(inv.customer_name)}</div></div>
         <div class="detail-item"><div class="label">Date To</div><div class="value">${inv.date_to}</div></div>
+        <div class="detail-item">
+          <div class="label">Status</div>
+          <div class="value" style="display:flex;align-items:center;gap:8px">
+            <select id="inv-status-sel" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px">
+              ${['new','requested','paid','cancel'].map(s => `<option value="${s}" ${s===inv.status?'selected':''}>${s.toUpperCase()}</option>`).join('')}
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="changeInvStatus()">Update</button>
+          </div>
+        </div>
         <div class="detail-item"><div class="label">Created</div><div class="value">${new Date(inv.created_at).toLocaleString()}</div></div>
-        <div class="detail-item"><div class="label">Notes</div><div class="value">${esc(inv.notes) || '-'}</div></div>
+        <div class="detail-item" style="grid-column:span 2"><div class="label">Notes</div><div class="value">${esc(inv.notes) || '-'}</div></div>
       </div>
       <div class="card" style="margin-bottom:16px">
         <h3>Summary</h3>
@@ -477,6 +506,7 @@ async function viewInvoice(id) {
           <tr><td>Processing Fee (${inv.item_count} x $${inv.processing_fee_unit.toFixed(2)})</td><td>$${inv.processing_fee_total.toFixed(2)}</td></tr>
           <tr><td>Shipping Fee</td><td>$${inv.shipping_fee_total.toFixed(2)}</td></tr>
           <tr><td>Stocking Fee (${inv.item_count} x $${inv.stocking_fee_unit.toFixed(2)})</td><td>$${inv.stocking_fee_total.toFixed(2)}</td></tr>
+          ${inv.discount > 0 ? `<tr><td>Discount</td><td style="color:#dc3545">-$${inv.discount.toFixed(2)}</td></tr>` : ''}
           <tr class="total"><td>Total</td><td>$${inv.total_price.toFixed(2)}</td></tr>
         </table>
       </div>
@@ -499,8 +529,30 @@ async function viewInvoice(id) {
 
 function closeInvDetail() { document.getElementById('inv-detail-modal').classList.remove('show'); }
 
+async function changeInvStatus() {
+  const status = document.getElementById('inv-status-sel').value;
+  try {
+    const res = await fetch(API + '/customers/invoices/' + currentInvId + '/status', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status}),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    toast('Status updated to ' + status.toUpperCase());
+    currentInvStatus = status;
+    // Update delete button visibility
+    const canDelete = status === 'new' || status === 'requested';
+    document.getElementById('btn-del-inv').style.display = canDelete ? '' : 'none';
+    loadInvoices();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 async function deleteInvoice() {
   if (!currentInvId) return;
+  if (currentInvStatus === 'paid' || currentInvStatus === 'cancel') {
+    toast('Cannot delete invoice with status ' + currentInvStatus.toUpperCase(), 'error');
+    return;
+  }
   if (!confirm('Delete this invoice? Orders will be unlinked and can be re-invoiced.')) return;
   try {
     const res = await fetch(API + '/customers/invoices/' + currentInvId, {method: 'DELETE'});

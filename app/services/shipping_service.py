@@ -167,7 +167,8 @@ def buy_label(db: Session, order_id: str, carrier: str = "", service: str = "",
     order.tracking_url = bought.tracker.public_url if bought.tracker else ""
     order.label_url = bought.postage_label.label_url if bought.postage_label else ""
     order.shipping_cost = float(selected_rate.rate)
-    order.total_price = order.processing_fee + order.shipping_cost
+    items_subtotal = sum(i.quantity * i.unit_price for i in order.items)
+    order.total_price = items_subtotal + order.processing_fee + order.shipping_cost
     order.status = OrderStatus.LABEL_PURCHASED
 
     _add_status_history(

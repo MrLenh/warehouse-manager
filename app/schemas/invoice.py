@@ -10,7 +10,12 @@ class InvoiceCreate(BaseModel):
     invoice_name: str
     processing_fee_unit: Optional[float] = None  # None = use config default
     stocking_fee_unit: Optional[float] = None  # None = use config default
+    discount: float = 0.0
     notes: str = ""
+
+
+class InvoiceStatusUpdate(BaseModel):
+    status: str  # new, requested, paid, cancel
 
 
 class InvoiceOrderOut(BaseModel):
@@ -33,6 +38,7 @@ class InvoiceOut(BaseModel):
     customer_id: str
     customer_name: str = ""
     date_to: date
+    status: str = "new"
     order_count: int
     item_count: int
     processing_fee_unit: float
@@ -40,6 +46,7 @@ class InvoiceOut(BaseModel):
     shipping_fee_total: float
     stocking_fee_unit: float
     stocking_fee_total: float
+    discount: float = 0.0
     total_price: float
     notes: str
     orders: list[InvoiceOrderOut] = []
@@ -55,5 +62,6 @@ class InvoicePreview(BaseModel):
     shipping_fee_total: float
     stocking_fee_unit: float
     stocking_fee_total: float
+    discount: float = 0.0
     total_price: float
     orders: list[InvoiceOrderOut]

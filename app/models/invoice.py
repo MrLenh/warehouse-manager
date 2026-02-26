@@ -15,6 +15,7 @@ class Invoice(Base):
     invoice_name: Mapped[str] = mapped_column(String, nullable=False)
     customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"), nullable=False)
     date_to: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="new")  # new, requested, paid, cancel
 
     # Summary
     order_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -26,6 +27,7 @@ class Invoice(Base):
     shipping_fee_total: Mapped[float] = mapped_column(Float, default=0.0)
     stocking_fee_unit: Mapped[float] = mapped_column(Float, default=0.0)
     stocking_fee_total: Mapped[float] = mapped_column(Float, default=0.0)
+    discount: Mapped[float] = mapped_column(Float, default=0.0)
     total_price: Mapped[float] = mapped_column(Float, default=0.0)
 
     notes: Mapped[str] = mapped_column(Text, default="")
