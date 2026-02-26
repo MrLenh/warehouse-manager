@@ -227,6 +227,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-primary" onclick="openOrderModal()">+ Create Order</button>
       </div>
     </div>
+    <div id="orders-overview" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"></div>
     <table>
       <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
@@ -1290,6 +1291,22 @@ function renderOrders(list) {
           ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
         </td>
       </tr>`).join('');
+  // Overview stats
+  const counts = {};
+  filtered.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
+  const stats = [
+    { label: 'Total', value: filtered.length, bg: '#f0f2f5', color: '#333' },
+    { label: 'Pending', value: counts['pending'] || 0, bg: '#fff3cd', color: '#856404' },
+    { label: 'Processing', value: counts['processing'] || 0, bg: '#cce5ff', color: '#004085' },
+    { label: 'Packing', value: counts['packing'] || 0, bg: '#e8daef', color: '#6c3483' },
+    { label: 'Packed', value: counts['packed'] || 0, bg: '#d4edda', color: '#155724' },
+    { label: 'Label', value: counts['label_purchased'] || 0, bg: '#d1ecf1', color: '#0c5460' },
+    { label: 'Drop Off', value: counts['drop_off'] || 0, bg: '#d6d8db', color: '#383d41' },
+    { label: 'Shipped', value: counts['shipped'] || 0, bg: '#c3e6cb', color: '#155724' },
+  ];
+  document.getElementById('orders-overview').innerHTML = stats
+    .filter(s => s.value > 0 || s.label === 'Total')
+    .map(s => `<div style="padding:8px 14px;border-radius:8px;background:${s.bg};color:${s.color};font-size:13px;font-weight:600;min-width:70px;text-align:center"><div style="font-size:20px">${s.value}</div>${s.label}</div>`).join('');
   updateSelectedCount();
 }
 
