@@ -411,6 +411,14 @@ async function doScan() {
     const res = await fetch(API + '/picking-lists/scan?qr_code=' + encodeURIComponent(code), { method: 'POST' });
     const data = await res.json();
 
+    if (!res.ok) {
+      resultEl.className = 'scan-result error';
+      resultEl.textContent = data.detail || data.message || ('Server error: ' + res.status);
+      input.value = '';
+      input.focus();
+      return;
+    }
+
     if (data.success) {
       // Shipping label scanned → order marked as shipped
       if (data.label_scanned) {

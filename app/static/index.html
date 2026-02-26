@@ -2295,7 +2295,21 @@ async function handleGlobalScan(raw) {
     return;
   }
 
-  // 3. SKU lookup (product or variant)
+  // 3. PICK- code: redirect to packing station to scan
+  if (code.startsWith('PICK-')) {
+    try {
+      const res = await fetch(API + '/picking-lists/scan?qr_code=' + encodeURIComponent(code), { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        toast(data.message || 'Scanned');
+        return;
+      }
+    } catch {}
+    toast('Open Packing Station to scan PICK codes', 'error');
+    return;
+  }
+
+  // 4. SKU lookup (product or variant)
   try {
     const res = await fetch(API + '/products/qr/lookup?sku=' + encodeURIComponent(code));
     if (res.ok) {

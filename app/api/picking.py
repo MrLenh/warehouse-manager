@@ -66,7 +66,10 @@ def get_progress(picking_list_id: str, db: Session = Depends(get_db)):
 
 @router.post("/scan", response_model=ScanResult)
 def scan_qr(qr_code: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    result = picking_service.scan_pick_item(db, qr_code)
+    try:
+        result = picking_service.scan_pick_item(db, qr_code)
+    except Exception as e:
+        raise HTTPException(400, f"Scan error: {e}")
     if result["success"]:
         auth_service.log_activity(db, user.id, user.username, "scan", detail=f"{qr_code} → {result.get('order_number','')} ({result.get('order_picked',0)}/{result.get('order_total',0)})", ip=request.client.host if request.client else "")
     return result
