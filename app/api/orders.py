@@ -165,7 +165,18 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
                 order_groups[order_name]["notes"] = extra_notes
 
     # Process each order group
+    from app.models.order import Order
     from app.services import product_service
+
+    # Pre-check duplicate order_names against DB
+    display_names = [order_groups[k]["display_order_name"] for k in group_order if order_groups[k]["display_order_name"]]
+    if display_names:
+        existing_orders = db.query(Order.order_name).filter(Order.order_name.in_(display_names)).all()
+        existing_names = {o.order_name for o in existing_orders}
+        for dup_name in existing_names:
+            errors.append({"order_name": dup_name, "error": f"Order name '{dup_name}' already exists in database"})
+        # Remove duplicates from processing
+        group_order = [k for k in group_order if order_groups[k]["display_order_name"] not in existing_names]
 
     created = 0
     created_details = []

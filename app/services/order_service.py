@@ -28,6 +28,12 @@ def _add_status_history(order: Order, status: str, note: str = "") -> None:
 
 
 def create_order(db: Session, data: OrderCreate) -> Order:
+    # Check duplicate order_name
+    if data.order_name:
+        existing = db.query(Order).filter(Order.order_name == data.order_name).first()
+        if existing:
+            raise ValueError(f"Order name '{data.order_name}' already exists (order {existing.order_number})")
+
     order = Order(
         order_number=_generate_order_number(),
         order_name=data.order_name,

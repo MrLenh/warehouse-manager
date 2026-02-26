@@ -27,7 +27,7 @@ class Order(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     order_number: Mapped[str] = mapped_column(String, unique=True, index=True)
-    order_name: Mapped[str] = mapped_column(String, default="")
+    order_name: Mapped[str] = mapped_column(String, default="", unique=True, index=True)
     customer_name: Mapped[str] = mapped_column(String, nullable=False)
     customer_email: Mapped[str] = mapped_column(String, default="")
     customer_phone: Mapped[str] = mapped_column(String, default="")
