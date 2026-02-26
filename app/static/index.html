@@ -208,6 +208,7 @@ tr:hover{background:#f8f9ff}
           <option value="pending">Pending</option>
           <option value="confirmed">Confirmed</option>
           <option value="processing">Processing</option>
+          <option value="packing">Packing</option>
           <option value="packed">Packed</option>
           <option value="label_purchased">Label Purchased</option>
           <option value="drop_off">Drop Off</option>
@@ -1532,12 +1533,13 @@ async function viewOrder(id) {
     </div>
   `;
 
-  const statusFlow = ['pending','confirmed','processing','packed','label_purchased','drop_off','shipped','in_transit','delivered'];
+  const statusFlow = ['pending','confirmed','processing','packing','packed','label_purchased','drop_off','shipped','in_transit','delivered'];
   const curIdx = statusFlow.indexOf(o.status);
+  const labelIdx = statusFlow.indexOf('label_purchased');
   let footerHtml = '';
   if (o.status !== 'cancelled' && o.status !== 'delivered') {
     // Buy label - carrier/service selector + button
-    if (!o.label_url && curIdx < 4) {
+    if (!o.label_url && curIdx < labelIdx) {
       const oCarrier = o.carrier || defaultCarrier;
       const oService = o.service || defaultService;
       const carrierOpts = Object.keys(CARRIERS).map(c => `<option value="${c}" ${c===oCarrier?'selected':''}>${c}</option>`).join('');
@@ -1569,7 +1571,7 @@ async function viewOrder(id) {
         if(hEl) hEl.value = p.height || 0;
       }).catch(()=>{});
     }
-    if (curIdx < statusFlow.length - 1) {
+    if (curIdx >= 0 && curIdx < statusFlow.length - 1) {
       const next = statusFlow[curIdx + 1];
       footerHtml += `<button class="btn btn-success" onclick="updateOrderStatus('${o.id}','${next}')">Move to: ${next}</button>`;
     }
@@ -1681,7 +1683,8 @@ async function buyLabel(orderId) {
       try { const e = await res.json(); toast(e.detail || 'Error buying label', 'error'); }
       catch { toast('Error buying label', 'error'); }
     }
-  } finally {
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally {
     _buyingLabel = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Buy Label'; }
   }
