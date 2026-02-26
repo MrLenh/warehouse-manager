@@ -651,10 +651,26 @@ function closeLabelModal() {
   document.getElementById('label-modal').classList.remove('show');
 }
 
-function updateLmService() {
+function updateLmService(selectedService) {
   const carrier = document.getElementById('lm-carrier').value;
   const services = CARRIERS[carrier] || [];
-  document.getElementById('lm-service').innerHTML = services.map(s => `<option value="${s}">${s}</option>`).join('');
+  const sel = document.getElementById('lm-service');
+  // If selectedService not in list, add it so the dropdown always shows the picked rate
+  if (selectedService && !services.includes(selectedService)) services.push(selectedService);
+  sel.innerHTML = services.map(s => `<option value="${s}" ${s === selectedService ? 'selected' : ''}>${s}</option>`).join('');
+  if (selectedService) sel.value = selectedService;
+}
+
+function selectLmRate(idx) {
+  const r = window._lmRates && window._lmRates[idx];
+  if (!r) return;
+  document.getElementById('lm-carrier').value = r.carrier;
+  updateLmService(r.service);
+  toast(`Selected ${r.carrier} ${r.service} — $${parseFloat(r.rate).toFixed(2)}`, 'info');
+  // Highlight selected row
+  document.querySelectorAll('#lm-rates tr').forEach(tr => tr.style.background = '');
+  const row = document.querySelector(`#lm-rates tr[data-idx="${idx}"]`);
+  if (row) row.style.background = '#e8f5e9';
 }
 
 function _getLmParcelParams() {
@@ -684,8 +700,9 @@ async function getLmRates() {
     const data = await res.json();
     const rates = data.rates || [];
     if (rates.length === 0) { div.innerHTML = '<em style="color:orange">No rates available</em>'; return; }
+    window._lmRates = rates;
     div.innerHTML = '<table style="font-size:12px;box-shadow:none"><thead><tr><th>Carrier</th><th>Service</th><th>Rate</th><th>Days</th><th></th></tr></thead><tbody>' +
-      rates.map(r => `<tr><td>${esc(r.carrier)}</td><td>${esc(r.service)}</td><td><strong>$${parseFloat(r.rate).toFixed(2)}</strong></td><td>${r.delivery_days || '-'}</td><td><button class="btn btn-sm btn-outline" onclick="document.getElementById('lm-carrier').value='${esc(r.carrier)}';updateLmService();document.getElementById('lm-service').value='${esc(r.service)}'">Select</button></td></tr>`).join('') +
+      rates.map((r, i) => `<tr data-idx="${i}"><td>${esc(r.carrier)}</td><td>${esc(r.service)}</td><td><strong>$${parseFloat(r.rate).toFixed(2)}</strong></td><td>${r.delivery_days || '-'}</td><td><button class="btn btn-sm btn-outline" onclick="selectLmRate(${i})">Select</button></td></tr>`).join('') +
       '</tbody></table>';
   } catch (err) { div.innerHTML = '<span style="color:red">' + err.message + '</span>'; }
 }

@@ -1312,9 +1312,25 @@ document.getElementById('filter-status').addEventListener('change', loadOrders);
 function updateServiceOptions(carrierSelId, serviceSelId, selectedService) {
   const carrier = document.getElementById(carrierSelId).value;
   const serviceSel = document.getElementById(serviceSelId);
-  const services = CARRIERS[carrier] || [];
+  const services = [...(CARRIERS[carrier] || [])];
   const target = selectedService || (carrier === defaultCarrier ? defaultService : services[0] || '');
+  // If selected service not in list, add it so dropdown always shows the picked rate
+  if (target && !services.includes(target)) services.push(target);
   serviceSel.innerHTML = services.map(s => `<option value="${s}" ${s === target ? 'selected' : ''}>${s}</option>`).join('');
+}
+
+function selectBuyRate(idx) {
+  const r = window._blRates && window._blRates[idx];
+  if (!r) return;
+  const carrierEl = document.getElementById('bl-carrier');
+  if (!carrierEl) return;
+  carrierEl.value = r.carrier;
+  updateServiceOptions('bl-carrier', 'bl-service', r.service);
+  toast(`Selected ${r.carrier} ${r.service} — $${parseFloat(r.rate).toFixed(2)}`);
+  // Highlight selected row
+  document.querySelectorAll('#rates-list tr').forEach(tr => tr.style.background = '');
+  const row = document.querySelector(`#rates-list tr[data-idx="${idx}"]`);
+  if (row) row.style.background = '#e8f5e9';
 }
 
 function openOrderModal() {
@@ -1594,12 +1610,13 @@ async function getRates(orderId) {
       ratesDiv.innerHTML = '<em style="color:orange">No rates available. Check recipient address and warehouse address (WAREHOUSE_* in .env).</em>';
       return;
     }
+    window._blRates = rates;
     ratesDiv.innerHTML = '<table style="width:100%;font-size:13px"><thead><tr><th>Carrier</th><th>Service</th><th>Rate</th><th>Days</th><th></th></tr></thead><tbody>' +
-      rates.map(r => `<tr>
+      rates.map((r, i) => `<tr data-idx="${i}">
         <td>${esc(r.carrier)}</td><td>${esc(r.service)}</td>
         <td><strong>$${parseFloat(r.rate).toFixed(2)}</strong></td>
         <td>${r.delivery_days ? r.delivery_days + 'd' : '-'}</td>
-        <td><button class="btn btn-sm btn-primary" onclick="document.getElementById('bl-carrier').value='${esc(r.carrier)}';updateServiceOptions('bl-carrier','bl-service','${esc(r.service)}')">Select</button></td>
+        <td><button class="btn btn-sm btn-primary" onclick="selectBuyRate(${i})">Select</button></td>
       </tr>`).join('') + '</tbody></table>';
   } catch(e) { ratesDiv.innerHTML = '<span style="color:red">Error: ' + e.message + '</span>'; }
 }
