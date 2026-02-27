@@ -54,10 +54,27 @@ def _migrate_uploads():
         db.close()
 
 
+def _migrate_pending_to_confirmed():
+    """One-time migration: convert all pending orders to confirmed."""
+    from sqlalchemy import text
+
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        result = db.execute(text("UPDATE orders SET status = 'confirmed' WHERE status = 'pending'"))
+        if result.rowcount > 0:
+            db.commit()
+            logger.info("Migrated %d pending orders to confirmed", result.rowcount)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     _migrate_uploads()
+    _migrate_pending_to_confirmed()
     # Create default admin if no users
     from app.database import SessionLocal
     db = SessionLocal()
