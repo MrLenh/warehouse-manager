@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.picking import PickingListCreate, PickingListOut, ScanResult
 from app.services import auth_service, picking_service
-from app.services.qr_service import _get_font, _draw_label_2x1, DPI, LABEL_W, LABEL_H
+from app.services.qr_service import _draw_label_2x1, DPI
 
 router = APIRouter(prefix="/picking-lists", tags=["picking"])
 
@@ -223,8 +223,10 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{picking_list_id}/picking-summary")
 def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
-    """Export A4 picking summary PDF — aggregated SKU quantities with thumbnail, location."""
-    from PIL import Image, ImageDraw
+    """Export A4 picking summary as printable HTML table — crisp text, optimized for print."""
+    from html import escape
+
+    from fastapi.responses import HTMLResponse
 
     from app.models.product import Product, Variant
 
@@ -260,13 +262,11 @@ def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
             product_cache[pid] = db.query(Product).filter(Product.id == pid).first()
         product = product_cache[pid]
 
-        # Find variant by variant_sku matching row["sku"]
         location = ""
         image_url = ""
         if product:
             image_url = product.image_url or ""
             location = product.location or ""
-            # Check if this SKU is a variant SKU
             if row["sku"] != product.sku:
                 cache_key = row["sku"]
                 if cache_key not in variant_cache:
@@ -280,119 +280,243 @@ def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
         row["location"] = location
         row["image_url"] = image_url
 
-    # --- Generate A4 PDF with table (optimized for clear print) ---
-    # At 300 DPI: 12pt=36px, 14pt=42px, 16pt=48px, 18pt=54px, 20pt=60px, 24pt=72px
-    A4_W, A4_H = 2480, 3508  # A4 at 300 DPI
-    MARGIN = 100
-    ROW_H = 130                # taller rows for bigger text
-    HEADER_H = 180
-    THUMB_SIZE = 100
-    COL_WIDTHS = [120, 420, 620, 380, 160, 520]  # thumbnail, sku, product, variant, qty, location
-    TABLE_W = sum(COL_WIDTHS)
+    total_units = sum(r["qty"] for r in rows)
 
-    font_title = _get_font(72)    # 24pt — page title
-    font_subtitle = _get_font(42) # 14pt — subtitle
-    font_header = _get_font(42)   # 14pt — table headers
-    font_body = _get_font(40)     # ~13pt — body text
-    font_sku = _get_font(44)      # ~15pt — SKU (bold emphasis)
-    font_qty = _get_font(60)      # 20pt — quantity (large & clear)
-    font_page = _get_font(36)     # 12pt — page number
+    # Build HTML table rows
+    table_rows = ""
+    for i, row in enumerate(rows):
+        img_html = ""
+        if row["image_url"]:
+            img_html = f'<img src="{escape(row["image_url"])}" class="thumb">'
+        else:
+            img_html = '<div class="thumb-placeholder"></div>'
 
-    pages = []
-    rows_per_page = (A4_H - MARGIN * 2 - HEADER_H - 80) // ROW_H
+        table_rows += f"""<tr>
+            <td class="num">{i + 1}</td>
+            <td class="img-cell">{img_html}</td>
+            <td class="sku">{escape(row["sku"])}</td>
+            <td class="product">{escape(row["product_name"])}</td>
+            <td class="variant">{escape(row["variant_label"] or "—")}</td>
+            <td class="qty">{row["qty"]}</td>
+            <td class="location">{escape(row["location"] or "—")}</td>
+            <td class="check"></td>
+        </tr>"""
 
-    for page_idx in range(0, len(rows), rows_per_page):
-        page_rows = rows[page_idx:page_idx + rows_per_page]
-        img = Image.new("RGB", (A4_W, A4_H), "white")
-        draw = ImageDraw.Draw(img)
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Picking Summary — {escape(pl.picking_number)}</title>
+<style>
+@page {{
+    size: A4;
+    margin: 12mm 10mm;
+}}
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
+    font-family: -apple-system, 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}}
 
-        # Title
-        y = MARGIN
-        draw.text((MARGIN, y), f"Picking Summary — {pl.picking_number}", fill="#000", font=font_title)
-        draw.text((MARGIN, y + 80), f"{len(rows)} SKUs  |  {sum(r['qty'] for r in rows)} total units", fill="#666", font=font_subtitle)
-        page_num = page_idx // rows_per_page + 1
-        total_pages = (len(rows) + rows_per_page - 1) // rows_per_page
-        draw.text((A4_W - MARGIN - 300, y + 80), f"Page {page_num}/{total_pages}", fill="#888", font=font_page)
-        y += HEADER_H
+.header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid #333;
+}}
+.header h1 {{
+    font-size: 22px;
+    font-weight: 700;
+}}
+.header .meta {{
+    font-size: 13px;
+    color: #555;
+    text-align: right;
+}}
 
-        # Table header
-        headers = ["", "SKU", "Product", "Variant", "Qty", "Location"]
-        x = MARGIN
-        draw.rectangle([(MARGIN, y), (MARGIN + TABLE_W, y + ROW_H)], fill="#f0f0f0")
-        for i, h in enumerate(headers):
-            text_y = y + (ROW_H - 42) // 2  # vertically center 14pt text
-            draw.text((x + 14, text_y), h, fill="#333", font=font_header)
-            x += COL_WIDTHS[i]
-        draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#bbb", width=2)
-        y += ROW_H
+table {{
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+}}
+thead {{
+    display: table-header-group;
+}}
+tr {{
+    page-break-inside: avoid;
+}}
+th {{
+    background: #333;
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 6px;
+    text-align: left;
+    border: 1px solid #333;
+}}
+td {{
+    padding: 6px;
+    border: 1px solid #ccc;
+    vertical-align: middle;
+    font-size: 14px;
+}}
+tr:nth-child(even) {{
+    background: #f7f7f7;
+}}
 
-        # Table rows
-        for row in page_rows:
-            x = MARGIN
+.num {{
+    width: 30px;
+    text-align: center;
+    color: #888;
+    font-size: 12px;
+}}
+.img-cell {{
+    width: 48px;
+    text-align: center;
+    padding: 3px;
+}}
+.thumb {{
+    width: 42px;
+    height: 42px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}}
+.thumb-placeholder {{
+    width: 42px;
+    height: 42px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    border: 1px solid #e8e8e8;
+    margin: 0 auto;
+}}
+.sku {{
+    font-weight: 700;
+    font-size: 15px;
+    white-space: nowrap;
+}}
+.product {{
+    max-width: 200px;
+}}
+.variant {{
+    color: #555;
+    font-size: 13px;
+}}
+.qty {{
+    text-align: center;
+    font-weight: 800;
+    font-size: 20px;
+    width: 55px;
+    color: #111;
+}}
+.location {{
+    font-size: 13px;
+    color: #333;
+}}
+.check {{
+    width: 40px;
+    text-align: center;
+}}
+.check-box {{
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #999;
+    border-radius: 3px;
+}}
 
-            # Thumbnail
-            thumb_x = x + (COL_WIDTHS[0] - THUMB_SIZE) // 2
-            thumb_y = y + (ROW_H - THUMB_SIZE) // 2
-            draw.rectangle([(thumb_x, thumb_y), (thumb_x + THUMB_SIZE, thumb_y + THUMB_SIZE)],
-                           fill="#f5f5f5", outline="#ddd")
+.footer {{
+    margin-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #888;
+    border-top: 1px solid #ccc;
+    padding-top: 6px;
+}}
 
-            if row["image_url"]:
-                try:
-                    img_path = row["image_url"]
-                    if img_path.startswith("/"):
-                        for base in ["app/static", "."]:
-                            full = os.path.join(base, img_path.lstrip("/"))
-                            if os.path.exists(full):
-                                img_path = full
-                                break
-                    if os.path.exists(img_path):
-                        thumb = Image.open(img_path).convert("RGB")
-                        thumb = thumb.resize((THUMB_SIZE, THUMB_SIZE), Image.LANCZOS)
-                        img.paste(thumb, (thumb_x, thumb_y))
-                except Exception:
-                    pass
+/* Print button — hidden in print */
+.print-bar {{
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}}
+.print-bar button {{
+    background: #667eea;
+    color: #fff;
+    border: none;
+    padding: 8px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}}
+.print-bar button:hover {{
+    background: #5a6fd6;
+}}
+body {{ padding-top: 52px; }}
 
-            x += COL_WIDTHS[0]
+@media print {{
+    .print-bar {{ display: none !important; }}
+    body {{ padding-top: 0; }}
+}}
+</style>
+</head>
+<body>
 
-            # SKU — larger, bold
-            text_y = y + (ROW_H - 44) // 2
-            draw.text((x + 14, text_y), row["sku"], fill="#000", font=font_sku)
-            x += COL_WIDTHS[1]
+<div class="print-bar">
+    <button onclick="window.print()">Print</button>
+    <span>{escape(pl.picking_number)} — {len(rows)} SKUs, {total_units} units</span>
+</div>
 
-            # Product name (truncate if needed)
-            name = row["product_name"]
-            text_y = y + (ROW_H - 40) // 2
-            while name and draw.textbbox((0, 0), name, font=font_body)[2] > COL_WIDTHS[2] - 28:
-                name = name[:-4] + "..."
-            draw.text((x + 14, text_y), name, fill="#333", font=font_body)
-            x += COL_WIDTHS[2]
+<div class="header">
+    <h1>Picking Summary — {escape(pl.picking_number)}</h1>
+    <div class="meta">
+        {len(rows)} SKUs &nbsp;|&nbsp; {total_units} total units<br>
+        {pl.created_at.strftime("%Y-%m-%d %H:%M") if pl.created_at else ""}
+    </div>
+</div>
 
-            # Variant
-            draw.text((x + 14, text_y), row["variant_label"] or "—", fill="#555", font=font_body)
-            x += COL_WIDTHS[3]
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Img</th>
+            <th>SKU</th>
+            <th>Product</th>
+            <th>Variant</th>
+            <th style="text-align:center">Qty</th>
+            <th>Location</th>
+            <th style="text-align:center">&#10003;</th>
+        </tr>
+    </thead>
+    <tbody>
+        {table_rows}
+    </tbody>
+</table>
 
-            # Qty — extra large & bold
-            qty_y = y + (ROW_H - 60) // 2
-            draw.text((x + 14, qty_y), str(row["qty"]), fill="#000", font=font_qty)
-            x += COL_WIDTHS[4]
+<div class="footer">
+    <span>{escape(pl.picking_number)}</span>
+    <span>{len(rows)} SKUs, {total_units} units</span>
+</div>
 
-            # Location
-            loc = row["location"] or "—"
-            draw.text((x + 14, text_y), loc, fill="#555", font=font_body)
+</body>
+</html>"""
 
-            # Row border
-            draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#e0e0e0", width=1)
-            y += ROW_H
-
-        # Table outer border
-        table_bottom = MARGIN + HEADER_H + ROW_H * (len(page_rows) + 1)
-        draw.rectangle([(MARGIN, MARGIN + HEADER_H), (MARGIN + TABLE_W, table_bottom)], outline="#bbb", width=2)
-
-        pages.append(img)
-
-    buf = io.BytesIO()
-    pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=300)
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="application/pdf", headers={
-        "Content-Disposition": f"inline; filename=picking-summary-{pl.picking_number}.pdf"
-    })
+    return HTMLResponse(content=html)
