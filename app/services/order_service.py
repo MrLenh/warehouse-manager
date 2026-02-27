@@ -141,8 +141,11 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         total_items += item_data.quantity
         items_subtotal += item_data.quantity * unit_price
 
-    # Calculate processing fee and total price (shipping added when label purchased)
-    order.processing_fee = total_items * settings.PROCESSING_FEE_PER_ITEM
+    # Calculate processing fee: $1.75 first item + $0.50 each additional
+    order.processing_fee = (
+        settings.PROCESSING_FEE_FIRST_ITEM
+        + max(0, total_items - 1) * settings.PROCESSING_FEE_EXTRA_ITEM
+    ) if total_items > 0 else 0.0
     order.total_price = items_subtotal + order.processing_fee
 
     _add_status_history(order, OrderStatus.CONFIRMED, "Order created")

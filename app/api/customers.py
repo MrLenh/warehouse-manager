@@ -120,7 +120,7 @@ def preview_invoice(
     if not customer:
         raise HTTPException(404, "Customer not found")
 
-    pfu = processing_fee_unit if processing_fee_unit is not None else settings.PROCESSING_FEE_PER_ITEM
+    pfu = processing_fee_unit if processing_fee_unit is not None else settings.PROCESSING_FEE_EXTRA_ITEM
     sfu = stocking_fee_unit if stocking_fee_unit is not None else settings.STOCKING_FEE_PER_ITEM
 
     orders = _find_invoiceable_orders(db, customer, date_to)
@@ -138,7 +138,7 @@ def create_invoice(
     if not customer:
         raise HTTPException(404, "Customer not found")
 
-    pfu = body.processing_fee_unit if body.processing_fee_unit is not None else settings.PROCESSING_FEE_PER_ITEM
+    pfu = body.processing_fee_unit if body.processing_fee_unit is not None else settings.PROCESSING_FEE_EXTRA_ITEM
     sfu = body.stocking_fee_unit if body.stocking_fee_unit is not None else settings.STOCKING_FEE_PER_ITEM
 
     orders = _find_invoiceable_orders(db, customer, body.date_to)
