@@ -16,6 +16,8 @@ from easypost.errors import EasyPostError
 from app.services import auth_service, order_service, shipping_service
 from app.services.webhook_service import send_webhook
 
+from app.models.picking import PickItem, PickingList, PickingListStatus
+
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 ORDER_CSV_COLUMNS = [
@@ -30,6 +32,26 @@ ORDER_CSV_COLUMNS = [
 def _fire_webhook(order):
     """Run async webhook in background."""
     asyncio.run(send_webhook(order))
+
+
+def _enrich_order(order, db: Session) -> dict:
+    """Add picking_list_id/picking_number to order output."""
+    data = OrderOut.model_validate(order).model_dump()
+    pick_item = (
+        db.query(PickItem)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id == order.id,
+            PickingList.status.in_([PickingListStatus.ACTIVE, PickingListStatus.PROCESSING]),
+        )
+        .first()
+    )
+    if pick_item:
+        pl = db.query(PickingList).filter(PickingList.id == pick_item.picking_list_id).first()
+        if pl:
+            data["picking_list_id"] = pl.id
+            data["picking_number"] = pl.picking_number
+    return data
 
 
 @router.post("", response_model=OrderOut, status_code=201)
@@ -281,20 +303,20 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
     return {"created": created, "created_details": created_details, "errors": errors}
 
 
-@router.get("/{order_id}", response_model=OrderOut)
+@router.get("/{order_id}")
 def get_order(order_id: str, db: Session = Depends(get_db)):
     order = order_service.get_order(db, order_id)
     if not order:
         raise HTTPException(404, "Order not found")
-    return order
+    return _enrich_order(order, db)
 
 
-@router.get("/by-number/{order_number}", response_model=OrderOut)
+@router.get("/by-number/{order_number}")
 def get_order_by_number(order_number: str, db: Session = Depends(get_db)):
     order = order_service.get_order_by_number(db, order_number)
     if not order:
         raise HTTPException(404, "Order not found")
-    return order
+    return _enrich_order(order, db)
 
 
 @router.patch("/{order_id}/status", response_model=OrderOut)

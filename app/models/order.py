@@ -51,7 +51,7 @@ class Order(Base):
 
     status: Mapped[str] = mapped_column(
         Enum(OrderStatus, values_callable=lambda x: [e.value for e in x]),
-        default=OrderStatus.PENDING,
+        default=OrderStatus.CONFIRMED,
     )
     status_history: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of {status, timestamp}
 

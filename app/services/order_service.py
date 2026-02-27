@@ -51,7 +51,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         service=data.service or settings.DEFAULT_SERVICE,
         webhook_url=data.webhook_url,
         notes=data.notes,
-        status=OrderStatus.PENDING,
+        status=OrderStatus.CONFIRMED,
     )
 
     if data.ship_from:
@@ -145,7 +145,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
     order.processing_fee = total_items * settings.PROCESSING_FEE_PER_ITEM
     order.total_price = items_subtotal + order.processing_fee
 
-    _add_status_history(order, OrderStatus.PENDING, "Order created")
+    _add_status_history(order, OrderStatus.CONFIRMED, "Order created")
 
     # Flush items so order.items relationship is available for QR generation
     db.flush()
@@ -287,6 +287,30 @@ def cancel_order(db: Session, order_id: str) -> Order | None:
                     note=f"Restored from cancelled order {order.order_number}",
                 )
                 db.add(log)
+
+    # Remove from any active packing list
+    from app.models.picking import PickItem, PickingList, PickingListStatus
+    pick_items = (
+        db.query(PickItem)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id == order.id,
+            PickingList.status.in_([PickingListStatus.ACTIVE, PickingListStatus.PROCESSING]),
+        )
+        .all()
+    )
+    if pick_items:
+        pl_id = pick_items[0].picking_list_id
+        for pi in pick_items:
+            db.delete(pi)
+        db.flush()
+        # Delete picking list if now empty
+        remaining = db.query(PickItem).filter(PickItem.picking_list_id == pl_id).count()
+        if remaining == 0:
+            pl = db.query(PickingList).filter(PickingList.id == pl_id).first()
+            if pl:
+                db.delete(pl)
+        refund_note += " | Removed from packing list"
 
     order.status = OrderStatus.CANCELLED
     _add_status_history(order, OrderStatus.CANCELLED, "Order cancelled" + refund_note)

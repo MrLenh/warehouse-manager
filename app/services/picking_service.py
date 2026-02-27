@@ -21,11 +21,11 @@ def create_picking_list(db: Session, order_ids: list[str]) -> PickingList:
     if not orders:
         raise ValueError("No valid orders found")
 
-    # Only pending orders can be added to a batch
-    non_pending = [o for o in orders if o.status != OrderStatus.PENDING]
-    if non_pending:
-        names = ", ".join(f"{o.order_number} ({o.status})" for o in non_pending)
-        raise ValueError(f"Only pending orders can be batched: {names}")
+    # Only confirmed orders can be added to a batch
+    non_confirmed = [o for o in orders if o.status != OrderStatus.CONFIRMED]
+    if non_confirmed:
+        names = ", ".join(f"{o.order_number} ({o.status})" for o in non_confirmed)
+        raise ValueError(f"Only confirmed orders can be batched: {names}")
 
     # Check if any order is already in an active batch
     already_in_batch = (
@@ -130,6 +130,17 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
         # Not a pick QR code — check if it's a tracking number (shipping label scan)
         return _scan_tracking_number(db, qr_code)
 
+    # Block scanning if order is pending (paused)
+    order_check = db.query(Order).filter(Order.id == pick_item.order_id).first()
+    if order_check and order_check.status == OrderStatus.PENDING:
+        return {
+            "success": False,
+            "message": f"Order {order_check.order_number} is PENDING (paused). Resume it first.",
+            "pick_item": pick_item,
+            "order_id": pick_item.order_id,
+            "order_number": order_check.order_number,
+        }
+
     if pick_item.picked:
         order = db.query(Order).filter(Order.id == pick_item.order_id).first()
         return {
@@ -200,11 +211,11 @@ def delete_picking_list(db: Session, picking_list_id: str) -> dict:
     order_ids = set(i.order_id for i in pl.items)
     item_count = len(pl.items)
 
-    # Reset orders back to pending
+    # Reset orders back to confirmed
     for order_id in order_ids:
         order = db.query(Order).filter(Order.id == order_id).first()
         if order and order.status in (OrderStatus.PROCESSING, OrderStatus.PACKING, OrderStatus.PACKED):
-            order.status = OrderStatus.PENDING
+            order.status = OrderStatus.CONFIRMED
 
     # Delete picking list (cascade deletes pick items)
     db.delete(pl)
@@ -238,10 +249,10 @@ def remove_order_from_picking_list(db: Session, picking_list_id: str, order_id: 
     for item in items_to_remove:
         db.delete(item)
 
-    # Reset order status back to pending
+    # Reset order status back to confirmed
     order = db.query(Order).filter(Order.id == order_id).first()
     if order and order.status in (OrderStatus.PROCESSING, OrderStatus.PACKING, OrderStatus.PACKED):
-        order.status = OrderStatus.PENDING
+        order.status = OrderStatus.CONFIRMED
 
     db.commit()
 

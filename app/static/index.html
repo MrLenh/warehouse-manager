@@ -1552,6 +1552,7 @@ async function viewOrder(id) {
       <div class="detail-item"><div class="label">Tracking</div><div class="value">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' : 'Not available'}</div></div>
       ${o.tracking_status ? '<div class="detail-item"><div class="label">Tracking Status</div><div class="value"><span class="badge badge-'+esc(o.tracking_status)+'">'+esc(o.tracking_status)+'</span></div></div>' : ''}
       ${o.easypost_shipment_id ? '<div class="detail-item"><div class="label">Shipment ID</div><div class="value" style="font-size:12px;color:#888">'+esc(o.easypost_shipment_id)+'</div></div>' : ''}
+      ${o.picking_list_id ? '<div class="detail-item"><div class="label">Packing List</div><div class="value"><a href="/packing/'+esc(o.picking_list_id)+'" target="_blank" style="font-weight:600">'+esc(o.picking_number)+'</a></div></div>' : ''}
     </div>
     <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
     <table>
@@ -1567,7 +1568,7 @@ async function viewOrder(id) {
     </div>
   `;
 
-  const statusFlow = ['pending','confirmed','processing','packing','packed','label_purchased','drop_off','shipped','in_transit','delivered'];
+  const statusFlow = ['confirmed','processing','packing','packed','label_purchased','drop_off','shipped','in_transit','delivered'];
   const curIdx = statusFlow.indexOf(o.status);
   const labelIdx = statusFlow.indexOf('label_purchased');
   let footerHtml = '';
@@ -1605,9 +1606,8 @@ async function viewOrder(id) {
         if(hEl) hEl.value = p.height || 0;
       }).catch(()=>{});
     }
-    if (curIdx >= 0 && curIdx < statusFlow.length - 1) {
-      const next = statusFlow[curIdx + 1];
-      footerHtml += `<button class="btn btn-success" onclick="updateOrderStatus('${o.id}','${next}')">Move to: ${next}</button>`;
+    if (o.status !== 'pending') {
+      footerHtml += `<button class="btn btn-warning" onclick="updateOrderStatus('${o.id}','pending')">Pending</button>`;
     }
     footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}', ${!!o.label_url})">Cancel Order</button>`;
   }

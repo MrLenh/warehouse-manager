@@ -82,6 +82,8 @@ class OrderOut(BaseModel):
     tracking_url: str
     label_url: str
     easypost_shipment_id: str = ""
+    picking_list_id: str = ""
+    picking_number: str = ""
     qr_code_path: Optional[str] = ""
     notes: str
     created_at: datetime

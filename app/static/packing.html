@@ -331,8 +331,11 @@ function renderOrderCards() {
     const hasLabel = !!o.label_url;
 
     const isDroppedOff = ['drop_off','shipped','in_transit','delivered'].includes(o.order_status);
+    const isPending = o.order_status === 'pending';
     let actionsHtml = '';
-    if (isComplete && !hasLabel) {
+    if (isPending) {
+      actionsHtml += `<button class="btn btn-outline btn-sm" onclick="resumeOrder('${o.order_id}')">Resume</button>`;
+    } else if (isComplete && !hasLabel) {
       actionsHtml = `<button class="btn btn-primary btn-sm" onclick="openLabelModal('${o.order_id}','${esc(o.order_number)}')">Buy Label</button>`;
     } else if (hasLabel) {
       if (!isDroppedOff) {
@@ -341,6 +344,10 @@ function renderOrderCards() {
       if (o.tracking_number) {
         actionsHtml += ` <span style="font-size:12px;color:#888">Track: ${esc(o.tracking_number)}</span>`;
       }
+    }
+    // Pending button - only if not already pending/dropped off
+    if (!isPending && !isDroppedOff) {
+      actionsHtml += ` <button class="btn btn-warning btn-sm" onclick="pauseOrder('${o.order_id}')" title="Pause this order">Pending</button>`;
     }
     // Unpack button - only for active batches
     if (currentPL && currentPL.status === 'active') {
@@ -358,7 +365,7 @@ function renderOrderCards() {
       <td>${i.picked_at ? new Date(i.picked_at).toLocaleTimeString() : '-'}</td>
     </tr>`).join('');
 
-    return `<div class="card order-card ${isComplete ? 'complete' : ''} ${isDroppedOff ? 'dimmed' : ''}">
+    return `<div class="card order-card ${isComplete ? 'complete' : ''} ${isDroppedOff || isPending ? 'dimmed' : ''}">
       <div class="order-card-header">
         <h4>${esc(o.order_number)} ${o.order_name ? '(' + esc(o.order_name) + ')' : ''} - ${esc(o.customer_name)}</h4>
         <div class="order-card-actions">
@@ -637,6 +644,24 @@ function exportQrCodes() {
 function exportPickingSummary() {
   if (!currentPL) return;
   window.open(API + '/picking-lists/' + currentPL.id + '/picking-summary', '_blank');
+}
+
+async function pauseOrder(orderId) {
+  const res = await fetch(API + '/orders/' + orderId + '/status', {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({status: 'pending', note: 'Paused from packing station'}),
+  });
+  if (res.ok) { toast('Order paused'); refreshProgress(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function resumeOrder(orderId) {
+  const res = await fetch(API + '/orders/' + orderId + '/status', {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({status: 'processing', note: 'Resumed from packing station'}),
+  });
+  if (res.ok) { toast('Order resumed'); refreshProgress(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 // Label modal
