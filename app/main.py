@@ -54,18 +54,21 @@ def _migrate_uploads():
         db.close()
 
 
-def _migrate_pending_to_confirmed():
-    """One-time migration: convert all pending orders to confirmed."""
+def _clear_all_orders():
+    """One-time migration: delete all orders and related data."""
     from sqlalchemy import text
 
     from app.database import SessionLocal
 
     db = SessionLocal()
     try:
-        result = db.execute(text("UPDATE orders SET status = 'confirmed' WHERE status = 'pending'"))
-        if result.rowcount > 0:
-            db.commit()
-            logger.info("Migrated %d pending orders to confirmed", result.rowcount)
+        tables = ["pick_items", "picking_lists", "activity_logs", "order_items", "orders"]
+        for tbl in tables:
+            result = db.execute(text(f"DELETE FROM {tbl}"))
+            if result.rowcount > 0:
+                logger.info("Cleared %d rows from %s", result.rowcount, tbl)
+        db.commit()
+        logger.info("All orders cleared")
     finally:
         db.close()
 
@@ -74,7 +77,7 @@ def _migrate_pending_to_confirmed():
 async def lifespan(app: FastAPI):
     init_db()
     _migrate_uploads()
-    _migrate_pending_to_confirmed()
+    _clear_all_orders()
     # Create default admin if no users
     from app.database import SessionLocal
     db = SessionLocal()
