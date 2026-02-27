@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Picking Summary</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e;-webkit-text-size-adjust:100%}
+
+.header{background:linear-gradient(135deg,#667eea,#5a6fd6);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header h1{font-size:18px;font-weight:600}
+.header-sub{font-size:12px;opacity:.85;margin-top:2px}
+
+.container{padding:12px;max-width:600px;margin:0 auto}
+
+/* Progress bar */
+.progress-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.progress-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.progress-label{font-size:14px;font-weight:600;color:#333}
+.progress-count{font-size:13px;color:#667eea;font-weight:600}
+.progress-bar{height:8px;background:#e9ecef;border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#667eea,#28a745);border-radius:4px;transition:width .3s}
+.status-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.status-active{background:#e3f2fd;color:#1976d2}
+.status-processing{background:#fff3e0;color:#e65100}
+.status-done{background:#e8f5e9;color:#2e7d32}
+.status-archived{background:#f5f5f5;color:#757575}
+
+/* Order cards */
+.order-card{background:#fff;border-radius:12px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;border-left:4px solid #e0e0e0}
+.order-card.complete{border-left-color:#28a745}
+.order-card.in-progress{border-left-color:#667eea}
+.order-card.dropped{border-left-color:#6c757d;opacity:.6}
+
+.order-header{padding:12px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.order-header:active{background:#f8f9fa}
+.order-title{font-size:14px;font-weight:600;color:#333}
+.order-name{font-size:12px;color:#666;margin-top:1px}
+.order-progress-mini{display:flex;align-items:center;gap:6px}
+.order-progress-mini .count{font-size:12px;font-weight:600;color:#667eea}
+.order-progress-mini .mini-bar{width:40px;height:5px;background:#e9ecef;border-radius:3px;overflow:hidden}
+.order-progress-mini .mini-fill{height:100%;background:#28a745;border-radius:3px}
+
+.order-body{padding:0 14px 12px;display:none}
+.order-body.open{display:block}
+
+/* Item rows */
+.item-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0}
+.item-row:last-child{border-bottom:none}
+.item-thumb{width:40px;height:40px;border-radius:6px;object-fit:cover;background:#f5f5f5;flex-shrink:0}
+.item-info{flex:1;min-width:0}
+.item-sku{font-size:13px;font-weight:600;color:#333}
+.item-name{font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-variant{font-size:11px;color:#888}
+.item-status{flex-shrink:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px}
+.item-status.picked{background:#e8f5e9;color:#2e7d32}
+.item-status.unpicked{background:#f5f5f5;color:#ccc}
+
+/* Summary stats row */
+.stats-row{display:flex;gap:8px;margin-bottom:12px}
+.stat-card{flex:1;background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.stat-val{font-size:22px;font-weight:700;color:#333}
+.stat-label{font-size:11px;color:#888;margin-top:2px}
+
+/* Refresh */
+.refresh-btn{position:fixed;bottom:20px;right:20px;width:52px;height:52px;border-radius:50%;background:#667eea;color:#fff;border:none;font-size:22px;box-shadow:0 4px 12px rgba(102,126,234,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;z-index:50}
+.refresh-btn:active{transform:scale(.92)}
+.refresh-btn.spinning svg{animation:spin .8s linear}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.loading{text-align:center;padding:40px;color:#888;font-size:14px}
+.error{text-align:center;padding:40px;color:#dc3545;font-size:14px}
+
+/* Auto-refresh indicator */
+.auto-refresh{font-size:11px;color:rgba(255,255,255,.7);text-align:right}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1 id="pl-number">Loading...</h1>
+  <div class="header-sub">
+    <span id="pl-status" class="status-badge status-processing">—</span>
+    <span class="auto-refresh" id="auto-label"></span>
+  </div>
+</div>
+
+<div class="container">
+  <div id="loading" class="loading">Loading picking summary...</div>
+  <div id="error" class="error" style="display:none"></div>
+
+  <div id="content" style="display:none">
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-val" id="stat-orders">0</div>
+        <div class="stat-label">Orders</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="stat-picked">0</div>
+        <div class="stat-label">Picked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="stat-total">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+    </div>
+
+    <!-- Overall progress -->
+    <div class="progress-card">
+      <div class="progress-top">
+        <span class="progress-label">Overall Progress</span>
+        <span class="progress-count" id="progress-pct">0%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+
+    <!-- Order list -->
+    <div id="order-list"></div>
+  </div>
+</div>
+
+<button class="refresh-btn" id="refresh-btn" title="Refresh">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+</button>
+
+<script>
+const pickingListId = window.location.pathname.split('/picking/')[1]?.split('/')[0] || '';
+let autoRefreshTimer = null;
+
+async function loadSummary() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+
+  try {
+    const res = await fetch(`/api/v1/picking-lists/${pickingListId}/summary`);
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    const data = await res.json();
+    render(data);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
+    document.getElementById('error').textContent = 'Failed to load: ' + e.message;
+  } finally {
+    setTimeout(() => btn.classList.remove('spinning'), 400);
+  }
+}
+
+function render(data) {
+  // Header
+  document.getElementById('pl-number').textContent = data.picking_number;
+  const statusEl = document.getElementById('pl-status');
+  statusEl.textContent = data.status;
+  statusEl.className = 'status-badge status-' + data.status;
+  document.getElementById('auto-label').textContent = data.assigned_to ? 'Assigned: ' + data.assigned_to : '';
+
+  // Stats
+  document.getElementById('stat-orders').textContent = data.order_count;
+  document.getElementById('stat-picked').textContent = data.picked_items;
+  document.getElementById('stat-total').textContent = data.total_items;
+
+  // Progress
+  const pct = data.total_items > 0 ? Math.round(data.picked_items / data.total_items * 100) : 0;
+  document.getElementById('progress-pct').textContent = pct + '%';
+  document.getElementById('progress-fill').style.width = pct + '%';
+
+  // Orders
+  const list = document.getElementById('order-list');
+  // Track which orders were open
+  const openOrders = new Set();
+  list.querySelectorAll('.order-body.open').forEach(el => {
+    openOrders.add(el.dataset.orderId);
+  });
+
+  list.innerHTML = '';
+
+  // Sort: in-progress first, then complete, then dropped
+  const orders = (data.orders || []).sort((a, b) => {
+    const rank = o => {
+      if (['drop_off','shipped','in_transit','delivered'].includes(o.order_status)) return 2;
+      if (o.picked >= o.total) return 1;
+      return 0;
+    };
+    return rank(a) - rank(b);
+  });
+
+  for (const order of orders) {
+    const picked = order.picked;
+    const total = order.total;
+    const pctO = total > 0 ? Math.round(picked / total * 100) : 0;
+    const isComplete = picked >= total;
+    const isDropped = ['drop_off','shipped','in_transit','delivered'].includes(order.order_status);
+
+    const card = document.createElement('div');
+    card.className = 'order-card' + (isDropped ? ' dropped' : isComplete ? ' complete' : picked > 0 ? ' in-progress' : '');
+
+    // Sort items: unpicked first, then by sku
+    const items = (order.items || []).sort((a, b) => {
+      if (a.picked !== b.picked) return a.picked ? 1 : -1;
+      return (a.sku + a.sequence).localeCompare(b.sku + b.sequence);
+    });
+
+    let itemsHtml = '';
+    for (const item of items) {
+      const thumbSrc = item.image_url || '';
+      const thumbEl = thumbSrc
+        ? `<img class="item-thumb" src="${thumbSrc}" alt="" loading="lazy">`
+        : `<div class="item-thumb"></div>`;
+      itemsHtml += `
+        <div class="item-row">
+          ${thumbEl}
+          <div class="item-info">
+            <div class="item-sku">${item.sku} <span style="color:#aaa;font-weight:400">#${item.sequence}</span></div>
+            <div class="item-name">${item.product_name}</div>
+            ${item.variant_label ? `<div class="item-variant">${item.variant_label}</div>` : ''}
+          </div>
+          <div class="item-status ${item.picked ? 'picked' : 'unpicked'}">${item.picked ? '&#10003;' : '&#9675;'}</div>
+        </div>`;
+    }
+
+    const isOpen = openOrders.has(order.order_id);
+
+    card.innerHTML = `
+      <div class="order-header" onclick="toggleOrder(this)">
+        <div>
+          <div class="order-title">${order.order_number}${order.order_name ? ' — ' + order.order_name : ''}</div>
+          <div class="order-name">${order.customer_name || ''}</div>
+        </div>
+        <div class="order-progress-mini">
+          <span class="count">${picked}/${total}</span>
+          <div class="mini-bar"><div class="mini-fill" style="width:${pctO}%"></div></div>
+        </div>
+      </div>
+      <div class="order-body${isOpen ? ' open' : ''}" data-order-id="${order.order_id}">
+        ${itemsHtml}
+      </div>`;
+
+    list.appendChild(card);
+  }
+}
+
+function toggleOrder(headerEl) {
+  const body = headerEl.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// Auto refresh every 10s
+function startAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(loadSummary, 10000);
+}
+
+document.getElementById('refresh-btn').addEventListener('click', loadSummary);
+
+if (pickingListId) {
+  loadSummary();
+  startAutoRefresh();
+} else {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('error').style.display = 'block';
+  document.getElementById('error').textContent = 'No picking list ID found in URL';
+}
+</script>
+</body>
+</html>

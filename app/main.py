@@ -54,30 +54,10 @@ def _migrate_uploads():
         db.close()
 
 
-def _clear_all_orders():
-    """One-time migration: delete all orders and related data."""
-    from sqlalchemy import text
-
-    from app.database import SessionLocal
-
-    db = SessionLocal()
-    try:
-        tables = ["pick_items", "picking_lists", "activity_logs", "order_items", "orders"]
-        for tbl in tables:
-            result = db.execute(text(f"DELETE FROM {tbl}"))
-            if result.rowcount > 0:
-                logger.info("Cleared %d rows from %s", result.rowcount, tbl)
-        db.commit()
-        logger.info("All orders cleared")
-    finally:
-        db.close()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     _migrate_uploads()
-    _clear_all_orders()
     # Create default admin if no users
     from app.database import SessionLocal
     db = SessionLocal()
@@ -113,8 +93,13 @@ async def auth_middleware(request: Request, call_next):
         or path.startswith("/static/")
         or path.startswith("/uploads/")
         or path.startswith("/api/v1/auth/")
+        or path.startswith("/picking/")
         or path == "/health"
     ):
+        return await call_next(request)
+
+    # Public API: picking list summary (for mobile QR scan)
+    if path.startswith("/api/v1/picking-lists/") and path.endswith("/summary"):
         return await call_next(request)
 
     # For API requests, let the dependency handle auth (returns 401)
@@ -185,6 +170,12 @@ def packing_page():
 def packing_detail_page(picking_list_id: str):
     """Packing station page for a specific picking list."""
     return FileResponse(STATIC_DIR / "packing.html")
+
+
+@app.get("/picking/{picking_list_id}")
+def picking_summary_page(picking_list_id: str):
+    """Mobile-optimized picking summary page — landing for picking list QR scan."""
+    return FileResponse(STATIC_DIR / "picking.html")
 
 
 @app.get("/api/v1/config")

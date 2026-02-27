@@ -106,6 +106,16 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE invoices ADD COLUMN {col_name} {col_type}"))
 
+    if "picking_lists" in tables:
+        existing = {col["name"] for col in inspector.get_columns("picking_lists")}
+        new_cols = {
+            "assigned_to": "VARCHAR DEFAULT NULL",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE picking_lists ADD COLUMN {col_name} {col_type}"))
+
     if "order_items" in tables:
         existing = {col["name"] for col in inspector.get_columns("order_items")}
         new_cols = {

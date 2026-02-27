@@ -28,6 +28,7 @@ class PickingListOut(BaseModel):
     id: str
     picking_number: str
     status: str
+    assigned_to: str | None = None
     created_at: datetime
     updated_at: datetime
     items: list[PickItemOut] = []

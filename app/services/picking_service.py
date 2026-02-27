@@ -126,7 +126,7 @@ def _scan_tracking_number(db: Session, code: str) -> dict:
     }
 
 
-def scan_pick_item(db: Session, qr_code: str) -> dict:
+def scan_pick_item(db: Session, qr_code: str, username: str | None = None) -> dict:
     """Scan a QR code to mark item as picked, or scan a tracking number to mark order as shipped."""
     pick_item = db.query(PickItem).filter(PickItem.qr_code == qr_code).first()
     if not pick_item:
@@ -158,10 +158,14 @@ def scan_pick_item(db: Session, qr_code: str) -> dict:
     pick_item.picked = True
     pick_item.picked_at = datetime.now(timezone.utc)
 
-    # Transition batch to processing on first scan
+    # Transition batch to processing on first scan + assign user
     picking_list = db.query(PickingList).filter(PickingList.id == pick_item.picking_list_id).first()
     if picking_list and picking_list.status == PickingListStatus.ACTIVE:
         picking_list.status = PickingListStatus.PROCESSING
+        if username and not picking_list.assigned_to:
+            picking_list.assigned_to = username
+    if picking_list and not picking_list.assigned_to and username:
+        picking_list.assigned_to = username
 
     # Check order progress in this picking list
     order_items = db.query(PickItem).filter(

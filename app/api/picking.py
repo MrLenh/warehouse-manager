@@ -24,6 +24,7 @@ def _to_picking_list_out(pl) -> dict:
         "id": pl.id,
         "picking_number": pl.picking_number,
         "status": pl.status,
+        "assigned_to": pl.assigned_to,
         "created_at": pl.created_at,
         "updated_at": pl.updated_at,
         "items": pl.items,
@@ -68,7 +69,7 @@ def get_progress(picking_list_id: str, db: Session = Depends(get_db)):
 @router.post("/scan", response_model=ScanResult)
 def scan_qr(qr_code: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        result = picking_service.scan_pick_item(db, qr_code)
+        result = picking_service.scan_pick_item(db, qr_code, username=user.username)
     except Exception as e:
         raise HTTPException(400, f"Scan error: {e}")
     if result["success"]:
@@ -114,6 +115,54 @@ def remove_order_from_picking_list(picking_list_id: str, order_id: str, request:
         return result
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+@router.get("/{picking_list_id}/label")
+def export_picking_list_label(picking_list_id: str, db: Session = Depends(get_db)):
+    """Export a QR label for the picking list itself (links to mobile summary page)."""
+    from app.services.qr_service import generate_picking_list_qr
+
+    pl = picking_service.get_picking_list(db, picking_list_id)
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+
+    order_count = len(set(i.order_id for i in pl.items))
+    item_count = len(pl.items)
+    png_bytes = generate_picking_list_qr(pl, order_count=order_count, item_count=item_count)
+
+    return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers={
+        "Content-Disposition": f"inline; filename=label-{pl.picking_number}.png"
+    })
+
+
+@router.get("/{picking_list_id}/summary")
+def get_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
+    """Public JSON summary for mobile picking page. Also transitions ACTIVE → PROCESSING."""
+    from app.models.picking import PickingListStatus
+
+    pl = picking_service.get_picking_list(db, picking_list_id)
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+
+    # Auto-transition ACTIVE → PROCESSING when summary is viewed (scanned)
+    if pl.status == PickingListStatus.ACTIVE:
+        pl.status = PickingListStatus.PROCESSING
+        db.commit()
+        db.refresh(pl)
+
+    progress = picking_service.get_picking_list_progress(db, picking_list_id)
+    total_items = len(pl.items)
+    picked_items = sum(1 for i in pl.items if i.picked)
+
+    return {
+        "picking_number": pl.picking_number,
+        "status": pl.status if isinstance(pl.status, str) else pl.status.value,
+        "assigned_to": pl.assigned_to,
+        "total_items": total_items,
+        "picked_items": picked_items,
+        "order_count": len(progress),
+        "orders": progress,
+    }
 
 
 @router.get("/{picking_list_id}/qrcodes")

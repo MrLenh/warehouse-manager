@@ -149,6 +149,7 @@ tr:hover{background:#f8f9ff}
           </label>
           <button class="btn btn-outline btn-sm" onclick="exportPickingSummary()">Picking Summary</button>
           <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">QR Labels (by SKU)</button>
+          <button class="btn btn-outline btn-sm" onclick="printPickingLabel()">Picking Label</button>
           <button class="btn btn-outline btn-sm" onclick="refreshProgress()">Refresh</button>
           <button class="btn btn-danger btn-sm" id="unpack-batch-btn" onclick="unpackBatch()">Unpack Batch</button>
         </div>
@@ -258,7 +259,7 @@ async function loadPickingLists() {
       <div class="progress-bar" style="height:16px;margin-top:8px">
         <div class="progress-fill" style="width:${pct}%;${pct >= 100 ? 'background:#28a745' : ''}">${pct}%</div>
       </div>
-      <div class="meta" style="margin-top:4px">${pl.picked_items}/${pl.total_items} picked | <span class="badge badge-${pl.status}">${pl.status}</span></div>
+      <div class="meta" style="margin-top:4px">${pl.picked_items}/${pl.total_items} picked | <span class="badge badge-${pl.status}">${pl.status}</span>${pl.assigned_to ? ` | ${esc(pl.assigned_to)}` : ''}</div>
     </div>`;
   }).join('');
 }
@@ -648,6 +649,11 @@ function exportQrCodes() {
 function exportPickingSummary() {
   if (!currentPL) return;
   window.open(API + '/picking-lists/' + currentPL.id + '/picking-summary', '_blank');
+}
+
+function printPickingLabel() {
+  if (!currentPL) return;
+  window.open(API + '/picking-lists/' + currentPL.id + '/label', '_blank');
 }
 
 async function pauseOrder(orderId) {

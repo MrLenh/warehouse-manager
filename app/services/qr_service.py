@@ -153,6 +153,25 @@ def generate_variant_qr(variant, product) -> bytes:
     )
 
 
+def generate_picking_list_qr(picking_list, order_count: int = 0, item_count: int = 0) -> bytes:
+    """Generate a 2x1 inch QR label for a picking list. Returns PNG bytes."""
+    base = settings.BASE_URL.rstrip("/")
+    qr_data = f"{base}/picking/{picking_list.id}"
+
+    lines = [
+        ("40", picking_list.picking_number, "#000000"),
+        ("26", f"{order_count} orders, {item_count} items", "#333333"),
+        ("22", picking_list.status.upper() if isinstance(picking_list.status, str) else picking_list.status.value.upper(), "#667eea"),
+    ]
+
+    img = _draw_label_2x1(qr_data, lines)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", dpi=(DPI, DPI))
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def generate_order_qr(order) -> bytes:
     """Generate a 2x1 inch QR label for an order. Returns PNG bytes."""
     base = settings.BASE_URL.rstrip("/")
