@@ -12,6 +12,7 @@ class PickingListStatus(str, PyEnum):
     ACTIVE = "active"
     PROCESSING = "processing"
     DONE = "done"
+    ARCHIVED = "archived"
 
 
 class PickingList(Base):

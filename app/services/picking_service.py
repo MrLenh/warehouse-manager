@@ -81,8 +81,11 @@ def get_picking_list(db: Session, picking_list_id: str) -> PickingList | None:
     return db.query(PickingList).filter(PickingList.id == picking_list_id).first()
 
 
-def list_picking_lists(db: Session, skip: int = 0, limit: int = 100) -> list[PickingList]:
-    return db.query(PickingList).order_by(PickingList.created_at.desc()).offset(skip).limit(limit).all()
+def list_picking_lists(db: Session, skip: int = 0, limit: int = 100, include_archived: bool = False) -> list[PickingList]:
+    q = db.query(PickingList)
+    if not include_archived:
+        q = q.filter(PickingList.status != PickingListStatus.ARCHIVED)
+    return q.order_by(PickingList.created_at.desc()).offset(skip).limit(limit).all()
 
 
 def _scan_tracking_number(db: Session, code: str) -> dict:

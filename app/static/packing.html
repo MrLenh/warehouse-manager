@@ -245,10 +245,14 @@ async function loadPickingLists() {
   container.innerHTML = lists.map(pl => {
     const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
     const canDelete = pl.status === 'active';
+    const canArchive = pl.status === 'done' || pl.order_count === 0;
     return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" data-pl-id="${pl.id}" onclick="selectPickingList('${pl.id}')">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <h4>${esc(pl.picking_number)}</h4>
-        ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Delete batch">&#10005;</button>` : ''}
+        <div style="display:flex;gap:4px">
+          ${canArchive ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();archiveBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Archive batch">Archive</button>` : ''}
+          ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Delete batch">&#10005;</button>` : ''}
+        </div>
       </div>
       <div class="meta">${pl.order_count} orders, ${pl.total_items} items</div>
       <div class="progress-bar" style="height:16px;margin-top:8px">
@@ -812,6 +816,25 @@ async function printAndDropOff(orderId, labelUrl) {
 }
 
 // Delete batch from picking list selector
+async function archiveBatch(plId, plNumber) {
+  try {
+    const res = await fetch(API + '/picking-lists/' + plId + '/archive', { method: 'POST' });
+    if (res.ok) {
+      toast(`Batch ${plNumber} archived`);
+      if (currentPL && currentPL.id === plId) {
+        currentPL = null;
+        stopAutoRefresh();
+        document.getElementById('packing-session').style.display = 'none';
+        document.getElementById('header-info').textContent = '';
+      }
+      await loadPickingLists();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error archiving batch', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
 async function deleteBatch(plId, plNumber) {
   if (!confirm(`Delete batch "${plNumber}"?\nAll orders will be released from this batch.`)) return;
   try {

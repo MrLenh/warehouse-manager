@@ -87,6 +87,24 @@ def delete_picking_list(picking_list_id: str, request: Request, user: User = Dep
         raise HTTPException(400, str(e))
 
 
+@router.post("/{picking_list_id}/archive")
+def archive_picking_list(picking_list_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Archive a picking list. Only empty or done batches can be archived."""
+    from app.models.picking import PickingListStatus
+    pl = picking_service.get_picking_list(db, picking_list_id)
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+    if pl.status == PickingListStatus.ARCHIVED:
+        raise HTTPException(400, "Already archived")
+    order_count = len(set(i.order_id for i in pl.items))
+    if order_count > 0 and pl.status not in (PickingListStatus.DONE,):
+        raise HTTPException(400, "Only empty or done batches can be archived")
+    pl.status = PickingListStatus.ARCHIVED
+    db.commit()
+    auth_service.log_activity(db, user.id, user.username, "archive_batch", detail=pl.picking_number, ip=request.client.host if request.client else "")
+    return {"archived": pl.id, "picking_number": pl.picking_number}
+
+
 @router.delete("/{picking_list_id}/orders/{order_id}")
 def remove_order_from_picking_list(picking_list_id: str, order_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Remove a single order from a picking list (unpack from batch)."""
