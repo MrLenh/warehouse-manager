@@ -280,19 +280,23 @@ def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
         row["location"] = location
         row["image_url"] = image_url
 
-    # --- Generate A4 PDF with table ---
+    # --- Generate A4 PDF with table (optimized for clear print) ---
+    # At 300 DPI: 12pt=36px, 14pt=42px, 16pt=48px, 18pt=54px, 20pt=60px, 24pt=72px
     A4_W, A4_H = 2480, 3508  # A4 at 300 DPI
-    MARGIN = 120
-    ROW_H = 100
-    HEADER_H = 140
-    THUMB_SIZE = 70
-    COL_WIDTHS = [100, 400, 600, 400, 150, 490]  # thumbnail, sku, product, variant, qty, location
+    MARGIN = 100
+    ROW_H = 130                # taller rows for bigger text
+    HEADER_H = 180
+    THUMB_SIZE = 100
+    COL_WIDTHS = [120, 420, 620, 380, 160, 520]  # thumbnail, sku, product, variant, qty, location
     TABLE_W = sum(COL_WIDTHS)
 
-    font_h = _get_font(36)
-    font_b = _get_font(32)
-    font_title = _get_font(52)
-    font_small = _get_font(28)
+    font_title = _get_font(72)    # 24pt — page title
+    font_subtitle = _get_font(42) # 14pt — subtitle
+    font_header = _get_font(42)   # 14pt — table headers
+    font_body = _get_font(40)     # ~13pt — body text
+    font_sku = _get_font(44)      # ~15pt — SKU (bold emphasis)
+    font_qty = _get_font(60)      # 20pt — quantity (large & clear)
+    font_page = _get_font(36)     # 12pt — page number
 
     pages = []
     rows_per_page = (A4_H - MARGIN * 2 - HEADER_H - 80) // ROW_H
@@ -304,38 +308,38 @@ def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
 
         # Title
         y = MARGIN
-        draw.text((MARGIN, y), f"Picking Summary - {pl.picking_number}", fill="#000", font=font_title)
-        draw.text((MARGIN, y + 58), f"{len(rows)} SKUs, {sum(r['qty'] for r in rows)} total units", fill="#888", font=font_small)
-        if page_idx > 0:
-            draw.text((A4_W - MARGIN - 300, y), f"Page {page_idx // rows_per_page + 1}", fill="#888", font=font_small)
+        draw.text((MARGIN, y), f"Picking Summary — {pl.picking_number}", fill="#000", font=font_title)
+        draw.text((MARGIN, y + 80), f"{len(rows)} SKUs  |  {sum(r['qty'] for r in rows)} total units", fill="#666", font=font_subtitle)
+        page_num = page_idx // rows_per_page + 1
+        total_pages = (len(rows) + rows_per_page - 1) // rows_per_page
+        draw.text((A4_W - MARGIN - 300, y + 80), f"Page {page_num}/{total_pages}", fill="#888", font=font_page)
         y += HEADER_H
 
         # Table header
-        headers = ["", "SKU", "Product Name", "Variant", "Qty", "Location"]
+        headers = ["", "SKU", "Product", "Variant", "Qty", "Location"]
         x = MARGIN
         draw.rectangle([(MARGIN, y), (MARGIN + TABLE_W, y + ROW_H)], fill="#f0f0f0")
         for i, h in enumerate(headers):
-            draw.text((x + 12, y + 30), h, fill="#333", font=font_h)
+            text_y = y + (ROW_H - 42) // 2  # vertically center 14pt text
+            draw.text((x + 14, text_y), h, fill="#333", font=font_header)
             x += COL_WIDTHS[i]
-        draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#ccc", width=2)
+        draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#bbb", width=2)
         y += ROW_H
 
         # Table rows
         for row in page_rows:
             x = MARGIN
 
-            # Thumbnail placeholder
+            # Thumbnail
             thumb_x = x + (COL_WIDTHS[0] - THUMB_SIZE) // 2
             thumb_y = y + (ROW_H - THUMB_SIZE) // 2
             draw.rectangle([(thumb_x, thumb_y), (thumb_x + THUMB_SIZE, thumb_y + THUMB_SIZE)],
                            fill="#f5f5f5", outline="#ddd")
 
-            # Try to load thumbnail from URL if it's a local path
             if row["image_url"]:
                 try:
                     img_path = row["image_url"]
                     if img_path.startswith("/"):
-                        # Try relative to static dir
                         for base in ["app/static", "."]:
                             full = os.path.join(base, img_path.lstrip("/"))
                             if os.path.exists(full):
@@ -350,37 +354,39 @@ def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
 
             x += COL_WIDTHS[0]
 
-            # SKU
-            draw.text((x + 12, y + 32), row["sku"], fill="#000", font=font_b)
+            # SKU — larger, bold
+            text_y = y + (ROW_H - 44) // 2
+            draw.text((x + 14, text_y), row["sku"], fill="#000", font=font_sku)
             x += COL_WIDTHS[1]
 
             # Product name (truncate if needed)
             name = row["product_name"]
-            while name and draw.textbbox((0, 0), name, font=font_b)[2] > COL_WIDTHS[2] - 24:
+            text_y = y + (ROW_H - 40) // 2
+            while name and draw.textbbox((0, 0), name, font=font_body)[2] > COL_WIDTHS[2] - 28:
                 name = name[:-4] + "..."
-            draw.text((x + 12, y + 32), name, fill="#333", font=font_b)
+            draw.text((x + 14, text_y), name, fill="#333", font=font_body)
             x += COL_WIDTHS[2]
 
             # Variant
-            draw.text((x + 12, y + 32), row["variant_label"] or "-", fill="#555", font=font_b)
+            draw.text((x + 14, text_y), row["variant_label"] or "—", fill="#555", font=font_body)
             x += COL_WIDTHS[3]
 
-            # Qty (bold, larger)
-            qty_font = _get_font(40)
-            draw.text((x + 12, y + 28), str(row["qty"]), fill="#000", font=qty_font)
+            # Qty — extra large & bold
+            qty_y = y + (ROW_H - 60) // 2
+            draw.text((x + 14, qty_y), str(row["qty"]), fill="#000", font=font_qty)
             x += COL_WIDTHS[4]
 
             # Location
-            loc = row["location"] or "-"
-            draw.text((x + 12, y + 32), loc, fill="#555", font=font_b)
+            loc = row["location"] or "—"
+            draw.text((x + 14, text_y), loc, fill="#555", font=font_body)
 
             # Row border
-            draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#e8e8e8", width=1)
+            draw.line([(MARGIN, y + ROW_H), (MARGIN + TABLE_W, y + ROW_H)], fill="#e0e0e0", width=1)
             y += ROW_H
 
         # Table outer border
         table_bottom = MARGIN + HEADER_H + ROW_H * (len(page_rows) + 1)
-        draw.rectangle([(MARGIN, MARGIN + HEADER_H), (MARGIN + TABLE_W, table_bottom)], outline="#ccc", width=2)
+        draw.rectangle([(MARGIN, MARGIN + HEADER_H), (MARGIN + TABLE_W, table_bottom)], outline="#bbb", width=2)
 
         pages.append(img)
 

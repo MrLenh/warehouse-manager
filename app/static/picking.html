@@ -9,23 +9,52 @@
 body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e;-webkit-text-size-adjust:100%}
 
 .header{background:linear-gradient(135deg,#667eea,#5a6fd6);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header-top{display:flex;justify-content:space-between;align-items:center}
 .header h1{font-size:18px;font-weight:600}
-.header-sub{font-size:12px;opacity:.85;margin-top:2px}
+.header-sub{font-size:12px;opacity:.85;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.status-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.status-active{background:rgba(255,255,255,.25);color:#fff}
+.status-processing{background:#fff3e0;color:#e65100}
+.status-done{background:#e8f5e9;color:#2e7d32}
+.status-archived{background:rgba(255,255,255,.15);color:rgba(255,255,255,.7)}
 
 .container{padding:12px;max-width:600px;margin:0 auto}
 
+/* Action buttons bar */
+.action-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.action-btn{flex:1;min-width:0;padding:10px 8px;background:#fff;border:1px solid #e0e0e0;border-radius:10px;text-align:center;font-size:12px;font-weight:600;color:#667eea;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;gap:4px}
+.action-btn:active{background:#f0f0f0;transform:scale(.97)}
+.action-btn svg{flex-shrink:0}
+
+/* Stats row */
+.stats-row{display:flex;gap:8px;margin-bottom:12px}
+.stat-card{flex:1;background:#fff;border-radius:10px;padding:12px 8px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.stat-val{font-size:24px;font-weight:700;color:#333}
+.stat-label{font-size:11px;color:#888;margin-top:2px}
+
 /* Progress bar */
-.progress-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.progress-card{background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .progress-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .progress-label{font-size:14px;font-weight:600;color:#333}
-.progress-count{font-size:13px;color:#667eea;font-weight:600}
-.progress-bar{height:8px;background:#e9ecef;border-radius:4px;overflow:hidden}
-.progress-fill{height:100%;background:linear-gradient(90deg,#667eea,#28a745);border-radius:4px;transition:width .3s}
-.status-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.status-active{background:#e3f2fd;color:#1976d2}
-.status-processing{background:#fff3e0;color:#e65100}
-.status-done{background:#e8f5e9;color:#2e7d32}
-.status-archived{background:#f5f5f5;color:#757575}
+.progress-count{font-size:14px;color:#667eea;font-weight:700}
+.progress-bar{height:10px;background:#e9ecef;border-radius:5px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#667eea,#28a745);border-radius:5px;transition:width .3s}
+
+/* Tab switcher */
+.tab-bar{display:flex;gap:0;background:#fff;border-radius:10px;overflow:hidden;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.tab{flex:1;padding:10px;text-align:center;font-size:13px;font-weight:600;color:#888;cursor:pointer;border-bottom:3px solid transparent;-webkit-tap-highlight-color:transparent}
+.tab.active{color:#667eea;border-bottom-color:#667eea;background:#f8f9ff}
+
+/* SKU summary cards */
+.sku-card{background:#fff;border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;align-items:center;gap:12px}
+.sku-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;background:#f5f5f5;flex-shrink:0}
+.sku-info{flex:1;min-width:0}
+.sku-code{font-size:15px;font-weight:700;color:#333}
+.sku-name{font-size:12px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.sku-variant{font-size:11px;color:#888}
+.sku-qty{flex-shrink:0;text-align:center;min-width:48px}
+.sku-qty-val{font-size:22px;font-weight:800;color:#667eea}
+.sku-qty-label{font-size:10px;color:#888}
 
 /* Order cards */
 .order-card{background:#fff;border-radius:12px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;border-left:4px solid #e0e0e0}
@@ -38,8 +67,8 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
 .order-title{font-size:14px;font-weight:600;color:#333}
 .order-name{font-size:12px;color:#666;margin-top:1px}
 .order-progress-mini{display:flex;align-items:center;gap:6px}
-.order-progress-mini .count{font-size:12px;font-weight:600;color:#667eea}
-.order-progress-mini .mini-bar{width:40px;height:5px;background:#e9ecef;border-radius:3px;overflow:hidden}
+.order-progress-mini .count{font-size:13px;font-weight:700;color:#667eea}
+.order-progress-mini .mini-bar{width:44px;height:6px;background:#e9ecef;border-radius:3px;overflow:hidden}
 .order-progress-mini .mini-fill{height:100%;background:#28a745;border-radius:3px}
 
 .order-body{padding:0 14px 12px;display:none}
@@ -53,17 +82,11 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
 .item-sku{font-size:13px;font-weight:600;color:#333}
 .item-name{font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .item-variant{font-size:11px;color:#888}
-.item-status{flex-shrink:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px}
+.item-status{flex-shrink:0;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px}
 .item-status.picked{background:#e8f5e9;color:#2e7d32}
 .item-status.unpicked{background:#f5f5f5;color:#ccc}
 
-/* Summary stats row */
-.stats-row{display:flex;gap:8px;margin-bottom:12px}
-.stat-card{flex:1;background:#fff;border-radius:10px;padding:12px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.stat-val{font-size:22px;font-weight:700;color:#333}
-.stat-label{font-size:11px;color:#888;margin-top:2px}
-
-/* Refresh */
+/* Refresh FAB */
 .refresh-btn{position:fixed;bottom:20px;right:20px;width:52px;height:52px;border-radius:50%;background:#667eea;color:#fff;border:none;font-size:22px;box-shadow:0 4px 12px rgba(102,126,234,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;z-index:50}
 .refresh-btn:active{transform:scale(.92)}
 .refresh-btn.spinning svg{animation:spin .8s linear}
@@ -71,18 +94,17 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
 
 .loading{text-align:center;padding:40px;color:#888;font-size:14px}
 .error{text-align:center;padding:40px;color:#dc3545;font-size:14px}
-
-/* Auto-refresh indicator */
-.auto-refresh{font-size:11px;color:rgba(255,255,255,.7);text-align:right}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1 id="pl-number">Loading...</h1>
+  <div class="header-top">
+    <h1 id="pl-number">Loading...</h1>
+  </div>
   <div class="header-sub">
     <span id="pl-status" class="status-badge status-processing">—</span>
-    <span class="auto-refresh" id="auto-label"></span>
+    <span id="auto-label" style="font-size:11px;color:rgba(255,255,255,.7)"></span>
   </div>
 </div>
 
@@ -91,6 +113,22 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
   <div id="error" class="error" style="display:none"></div>
 
   <div id="content" style="display:none">
+    <!-- Action buttons -->
+    <div class="action-bar">
+      <div class="action-btn" onclick="downloadSummaryPDF()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Summary PDF
+      </div>
+      <div class="action-btn" onclick="downloadQrLabels()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        QR Labels
+      </div>
+      <div class="action-btn" onclick="openPackingStation()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Packing
+      </div>
+    </div>
+
     <!-- Stats -->
     <div class="stats-row">
       <div class="stat-card">
@@ -116,8 +154,17 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
       <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
     </div>
 
-    <!-- Order list -->
-    <div id="order-list"></div>
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <div class="tab active" id="tab-sku" onclick="switchTab('sku')">By SKU</div>
+      <div class="tab" id="tab-orders" onclick="switchTab('orders')">By Order</div>
+    </div>
+
+    <!-- SKU summary view -->
+    <div id="sku-list"></div>
+
+    <!-- Order list view -->
+    <div id="order-list" style="display:none"></div>
   </div>
 </div>
 
@@ -128,6 +175,28 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
 <script>
 const pickingListId = window.location.pathname.split('/picking/')[1]?.split('/')[0] || '';
 let autoRefreshTimer = null;
+let currentData = null;
+let currentTab = 'sku';
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-sku').classList.toggle('active', tab === 'sku');
+  document.getElementById('tab-orders').classList.toggle('active', tab === 'orders');
+  document.getElementById('sku-list').style.display = tab === 'sku' ? '' : 'none';
+  document.getElementById('order-list').style.display = tab === 'orders' ? '' : 'none';
+}
+
+function downloadSummaryPDF() {
+  window.open(`/api/v1/picking-lists/${pickingListId}/picking-summary`, '_blank');
+}
+
+function downloadQrLabels() {
+  window.open(`/api/v1/picking-lists/${pickingListId}/qrcodes`, '_blank');
+}
+
+function openPackingStation() {
+  window.open(`/packing/${pickingListId}`, '_blank');
+}
 
 async function loadSummary() {
   const btn = document.getElementById('refresh-btn');
@@ -137,6 +206,7 @@ async function loadSummary() {
     const res = await fetch(`/api/v1/picking-lists/${pickingListId}/summary`);
     if (!res.ok) throw new Error(`Error ${res.status}`);
     const data = await res.json();
+    currentData = data;
     render(data);
     document.getElementById('loading').style.display = 'none';
     document.getElementById('error').style.display = 'none';
@@ -156,7 +226,7 @@ function render(data) {
   const statusEl = document.getElementById('pl-status');
   statusEl.textContent = data.status;
   statusEl.className = 'status-badge status-' + data.status;
-  document.getElementById('auto-label').textContent = data.assigned_to ? 'Assigned: ' + data.assigned_to : '';
+  document.getElementById('auto-label').textContent = data.assigned_to ? data.assigned_to : '';
 
   // Stats
   document.getElementById('stat-orders').textContent = data.order_count;
@@ -168,7 +238,62 @@ function render(data) {
   document.getElementById('progress-pct').textContent = pct + '%';
   document.getElementById('progress-fill').style.width = pct + '%';
 
-  // Orders
+  renderSkuView(data);
+  renderOrderView(data);
+}
+
+function renderSkuView(data) {
+  // Aggregate all items by SKU
+  const skuMap = {};
+  for (const order of (data.orders || [])) {
+    for (const item of (order.items || [])) {
+      const key = item.sku + '|' + (item.variant_label || '');
+      if (!skuMap[key]) {
+        skuMap[key] = {
+          sku: item.sku,
+          product_name: item.product_name,
+          variant_label: item.variant_label,
+          image_url: item.image_url || '',
+          total: 0,
+          picked: 0,
+        };
+      }
+      skuMap[key].total += 1;
+      if (item.picked) skuMap[key].picked += 1;
+    }
+  }
+
+  const skus = Object.values(skuMap).sort((a, b) => {
+    // Unpicked first, then by SKU
+    const aRemain = a.total - a.picked;
+    const bRemain = b.total - b.picked;
+    if (aRemain > 0 && bRemain === 0) return -1;
+    if (aRemain === 0 && bRemain > 0) return 1;
+    return a.sku.localeCompare(b.sku);
+  });
+
+  const container = document.getElementById('sku-list');
+  container.innerHTML = skus.map(s => {
+    const done = s.picked >= s.total;
+    const thumbEl = s.image_url
+      ? `<img class="sku-thumb" src="${s.image_url}" alt="" loading="lazy">`
+      : `<div class="sku-thumb"></div>`;
+    return `<div class="sku-card" style="${done ? 'opacity:.5' : ''}">
+      ${thumbEl}
+      <div class="sku-info">
+        <div class="sku-code">${s.sku}</div>
+        <div class="sku-name">${s.product_name}</div>
+        ${s.variant_label ? `<div class="sku-variant">${s.variant_label}</div>` : ''}
+      </div>
+      <div class="sku-qty">
+        <div class="sku-qty-val" style="${done ? 'color:#28a745' : ''}">${s.picked}/${s.total}</div>
+        <div class="sku-qty-label">${done ? 'done' : 'pick'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderOrderView(data) {
   const list = document.getElementById('order-list');
   // Track which orders were open
   const openOrders = new Set();
@@ -178,7 +303,6 @@ function render(data) {
 
   list.innerHTML = '';
 
-  // Sort: in-progress first, then complete, then dropped
   const orders = (data.orders || []).sort((a, b) => {
     const rank = o => {
       if (['drop_off','shipped','in_transit','delivered'].includes(o.order_status)) return 2;
@@ -198,7 +322,6 @@ function render(data) {
     const card = document.createElement('div');
     card.className = 'order-card' + (isDropped ? ' dropped' : isComplete ? ' complete' : picked > 0 ? ' in-progress' : '');
 
-    // Sort items: unpicked first, then by sku
     const items = (order.items || []).sort((a, b) => {
       if (a.picked !== b.picked) return a.picked ? 1 : -1;
       return (a.sku + a.sequence).localeCompare(b.sku + b.sequence);
