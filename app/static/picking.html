@@ -56,6 +56,9 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
 .sku-qty-val{font-size:22px;font-weight:800;color:#667eea}
 .sku-qty-label{font-size:10px;color:#888}
 
+.sku-dl{flex-shrink:0;width:36px;height:36px;border-radius:8px;background:#f0f3ff;border:1px solid #dde3f7;color:#667eea;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sku-dl:active{background:#dde3f7;transform:scale(.92)}
+
 /* Order cards */
 .order-card{background:#fff;border-radius:12px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden;border-left:4px solid #e0e0e0}
 .order-card.complete{border-left-color:#28a745}
@@ -194,6 +197,16 @@ function downloadQrLabels() {
   window.open(`/api/v1/picking-lists/${pickingListId}/qrcodes`, '_blank');
 }
 
+function downloadSkuQr(sku) {
+  // Direct download — browser saves PDF automatically thanks to Content-Disposition: attachment
+  const a = document.createElement('a');
+  a.href = `/api/v1/picking-lists/${pickingListId}/qrcodes?sku=${encodeURIComponent(sku)}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function openPackingStation() {
   window.open(`/packing/${pickingListId}`, '_blank');
 }
@@ -288,6 +301,9 @@ function renderSkuView(data) {
       <div class="sku-qty">
         <div class="sku-qty-val" style="${done ? 'color:#28a745' : ''}">${s.picked}/${s.total}</div>
         <div class="sku-qty-label">${done ? 'done' : 'pick'}</div>
+      </div>
+      <div class="sku-dl" onclick="downloadSkuQr('${s.sku}')" title="Download QR labels for ${s.sku}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </div>
     </div>`;
   }).join('');

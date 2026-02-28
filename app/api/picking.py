@@ -1,7 +1,7 @@
 import io
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -166,8 +166,12 @@ def get_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{picking_list_id}/qrcodes")
-def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
-    """Export all QR codes for a picking list as a printable PDF (2x1 inch labels), sorted by SKU."""
+def export_qrcodes(
+    picking_list_id: str,
+    db: Session = Depends(get_db),
+    sku: str | None = Query(None, description="Filter labels by SKU"),
+):
+    """Export QR codes for a picking list as a printable PDF (2x1 inch labels), sorted by SKU."""
     from app.models.order import Order
 
     pl = picking_service.get_picking_list(db, picking_list_id)
@@ -177,8 +181,14 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     if not pl.items:
         raise HTTPException(400, "No items in picking list")
 
+    items = pl.items
+    if sku:
+        items = [i for i in items if i.sku == sku]
+        if not items:
+            raise HTTPException(404, f"No items found for SKU: {sku}")
+
     # Sort items by SKU then sequence for faster label sticking
-    sorted_items = sorted(pl.items, key=lambda i: (i.sku, i.variant_label or "", i.sequence))
+    sorted_items = sorted(items, key=lambda i: (i.sku, i.variant_label or "", i.sequence))
 
     # Cache order info to avoid repeated queries
     order_cache = {}
@@ -216,8 +226,11 @@ def export_qrcodes(picking_list_id: str, db: Session = Depends(get_db)):
     buf = io.BytesIO()
     pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=DPI)
     buf.seek(0)
+    fname = f"picking-{pl.picking_number}"
+    if sku:
+        fname += f"-{sku}"
     return StreamingResponse(buf, media_type="application/pdf", headers={
-        "Content-Disposition": f"inline; filename=picking-{pl.picking_number}.pdf"
+        "Content-Disposition": f"attachment; filename={fname}.pdf"
     })
 
 
