@@ -8,7 +8,6 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
 
-/* Header */
 .header{background:linear-gradient(135deg,#2d3748,#1a202c);color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
 .header h1{font-size:20px;font-weight:600}
 .header-right{display:flex;align-items:center;gap:16px}
@@ -16,37 +15,39 @@ body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f
 .logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 16px;border-radius:8px;font-size:13px;cursor:pointer}
 .logout-btn:hover{background:rgba(255,255,255,.25)}
 
-/* Layout */
 .container{max-width:1100px;margin:0 auto;padding:20px}
 
-/* Dashboard cards */
-.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
 .dash-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center}
 .dash-val{font-size:28px;font-weight:800;color:#667eea}
 .dash-val.warn{color:#e53e3e}
 .dash-label{font-size:12px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
 
-/* Tabs */
 .tabs{display:flex;gap:0;background:#fff;border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .tab{flex:1;padding:12px;text-align:center;font-size:14px;font-weight:600;color:#888;cursor:pointer;border-bottom:3px solid transparent;transition:.2s}
 .tab:hover{color:#667eea;background:#f8f9ff}
 .tab.active{color:#667eea;border-bottom-color:#667eea;background:#f8f9ff}
 
-/* Panel */
 .panel{display:none;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
 .panel.active{display:block}
-.panel-header{padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+.panel-header{padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
 .panel-header h2{font-size:16px;font-weight:600}
-.search{padding:8px 14px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;width:240px}
+.search{padding:8px 14px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;width:220px}
 .search:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-primary{background:#667eea;color:#fff}
+.btn-primary:hover{background:#5a6fd6}
+.btn-outline{background:#fff;color:#667eea;border:1px solid #dde3f7}
+.btn-outline:hover{background:#f0f3ff}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-success{background:#28a745;color:#fff}
+.btn-success:hover{background:#22943e}
 
-/* Table */
 table{width:100%;border-collapse:collapse}
 th{background:#f8f9fa;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#888;padding:10px 14px;text-align:left;font-weight:600}
 td{padding:10px 14px;font-size:13px;border-top:1px solid #f0f0f0;vertical-align:middle}
 tr:hover td{background:#f8f9ff}
 
-/* Status badges */
 .badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
 .badge-pending,.badge-confirmed{background:#fff3e0;color:#e65100}
 .badge-processing,.badge-packing,.badge-packed{background:#e3f2fd;color:#1565c0}
@@ -54,12 +55,12 @@ tr:hover td{background:#f8f9ff}
 .badge-shipped,.badge-in_transit{background:#e8f5e9;color:#2e7d32}
 .badge-delivered{background:#e8f5e9;color:#1b5e20}
 .badge-cancelled{background:#ffebee;color:#c62828}
-.badge-new{background:#e3f2fd;color:#1565c0}
+.badge-new,.badge-draft{background:#e3f2fd;color:#1565c0}
 .badge-requested{background:#fff3e0;color:#e65100}
-.badge-paid{background:#e8f5e9;color:#2e7d32}
+.badge-paid,.badge-completed,.badge-approved{background:#e8f5e9;color:#2e7d32}
 .badge-cancel{background:#ffebee;color:#c62828}
+.badge-receiving{background:#fce4ec;color:#880e4f}
 
-/* Product cards for inventory */
 .product-grid{padding:16px 20px}
 .prod-card{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid #f0f0f0}
 .prod-card:last-child{border-bottom:none}
@@ -75,7 +76,6 @@ tr:hover td{background:#f8f9ff}
 .variant-row{margin-left:62px;font-size:12px;color:#666;padding:4px 0}
 .variant-row span{margin-right:12px}
 
-/* Invoice detail modal */
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:200;display:none;align-items:center;justify-content:center}
 .modal-overlay.show{display:flex}
 .modal{background:#fff;border-radius:14px;width:620px;max-width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)}
@@ -83,15 +83,32 @@ tr:hover td{background:#f8f9ff}
 .modal-header h2{font-size:18px;font-weight:600}
 .modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#888;padding:0 4px}
 .modal-body{padding:20px}
+.modal-footer{padding:14px 20px;border-top:1px solid #f0f0f0;display:flex;justify-content:flex-end;gap:8px}
 .detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:13px}
 .detail-row:last-child{border-bottom:none}
 .detail-label{color:#888}
 .detail-val{font-weight:600;color:#333}
 .detail-total{font-size:18px;color:#667eea;font-weight:800}
 
-.empty{text-align:center;padding:40px;color:#888;font-size:14px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12px;color:#555;margin-bottom:4px;font-weight:600}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none}
+.form-group input:focus,.form-group select:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 
-/* Tracking link */
+.order-item-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px}
+.order-item-row select,.order-item-row input{padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none}
+.order-item-row select{flex:1}
+.order-item-row input{width:60px}
+.remove-item{background:none;border:none;color:#dc3545;font-size:18px;cursor:pointer;padding:0 4px}
+
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;z-index:300;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+.toast.success{background:#28a745}
+.toast.error{background:#dc3545}
+
+.empty{text-align:center;padding:40px;color:#888;font-size:14px}
 a.track-link{color:#667eea;text-decoration:none;font-weight:600}
 a.track-link:hover{text-decoration:underline}
 </style>
@@ -107,13 +124,12 @@ a.track-link:hover{text-decoration:underline}
 </div>
 
 <div class="container">
-  <!-- Dashboard -->
   <div class="dash-grid" id="dash-grid"></div>
 
-  <!-- Tabs -->
   <div class="tabs">
     <div class="tab active" data-tab="orders" onclick="switchTab('orders')">Orders</div>
     <div class="tab" data-tab="inventory" onclick="switchTab('inventory')">Inventory</div>
+    <div class="tab" data-tab="stock-requests" onclick="switchTab('stock-requests')">Stock Requests</div>
     <div class="tab" data-tab="invoices" onclick="switchTab('invoices')">Invoices</div>
   </div>
 
@@ -121,32 +137,22 @@ a.track-link:hover{text-decoration:underline}
   <div class="panel active" id="panel-orders">
     <div class="panel-header">
       <h2>My Orders</h2>
-      <select id="order-status-filter" onchange="loadOrders()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
-        <option value="">All statuses</option>
-        <option value="confirmed">Confirmed</option>
-        <option value="processing">Processing</option>
-        <option value="packing">Packing</option>
-        <option value="packed">Packed</option>
-        <option value="label_purchased">Label Purchased</option>
-        <option value="drop_off">Drop Off</option>
-        <option value="shipped">Shipped</option>
-        <option value="in_transit">In Transit</option>
-        <option value="delivered">Delivered</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="order-status-filter" onchange="loadOrders()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          <option value="">All statuses</option>
+          <option value="confirmed">Confirmed</option><option value="processing">Processing</option>
+          <option value="packing">Packing</option><option value="packed">Packed</option>
+          <option value="label_purchased">Label Purchased</option><option value="drop_off">Drop Off</option>
+          <option value="shipped">Shipped</option><option value="in_transit">In Transit</option>
+          <option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
+        </select>
+        <a href="/api/v1/portal/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
+        <label class="btn btn-success btn-sm" style="margin:0;cursor:pointer">Import CSV<input type="file" accept=".csv" id="csv-import-file" style="display:none" onchange="importCSV(this)"></label>
+        <button class="btn btn-primary btn-sm" onclick="openCreateOrderModal()">+ New Order</button>
+      </div>
     </div>
     <table>
-      <thead>
-        <tr>
-          <th>Order #</th>
-          <th>Name</th>
-          <th>Items</th>
-          <th>Status</th>
-          <th>Tracking</th>
-          <th>Total</th>
-          <th>Date</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Order #</th><th>Name</th><th>Items</th><th>Status</th><th>Tracking</th><th>Total</th><th>Date</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
     <div class="empty" id="orders-empty" style="display:none">No orders found</div>
@@ -162,23 +168,24 @@ a.track-link:hover{text-decoration:underline}
     <div class="empty" id="products-empty" style="display:none">No products found</div>
   </div>
 
-  <!-- Invoices panel -->
-  <div class="panel" id="panel-invoices">
+  <!-- Stock Requests panel -->
+  <div class="panel" id="panel-stock-requests">
     <div class="panel-header">
-      <h2>My Invoices</h2>
+      <h2>Stock Requests</h2>
+      <button class="btn btn-primary btn-sm" onclick="openStockRequestModal()">+ New Request</button>
     </div>
     <table>
-      <thead>
-        <tr>
-          <th>Invoice #</th>
-          <th>Name</th>
-          <th>Period</th>
-          <th>Orders</th>
-          <th>Items</th>
-          <th>Status</th>
-          <th>Total</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Request #</th><th>Supplier</th><th>Items</th><th>Total Qty</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody id="sr-body"></tbody>
+    </table>
+    <div class="empty" id="sr-empty" style="display:none">No stock requests found</div>
+  </div>
+
+  <!-- Invoices panel -->
+  <div class="panel" id="panel-invoices">
+    <div class="panel-header"><h2>My Invoices</h2></div>
+    <table>
+      <thead><tr><th>Invoice #</th><th>Name</th><th>Period</th><th>Orders</th><th>Items</th><th>Status</th><th>Total</th></tr></thead>
       <tbody id="invoices-body"></tbody>
     </table>
     <div class="empty" id="invoices-empty" style="display:none">No invoices found</div>
@@ -188,17 +195,77 @@ a.track-link:hover{text-decoration:underline}
 <!-- Invoice detail modal -->
 <div class="modal-overlay" id="invoice-modal">
   <div class="modal">
-    <div class="modal-header">
-      <h2 id="inv-modal-title">Invoice</h2>
-      <button class="modal-close" onclick="closeInvModal()">&times;</button>
-    </div>
+    <div class="modal-header"><h2 id="inv-modal-title">Invoice</h2><button class="modal-close" onclick="closeModal('invoice-modal')">&times;</button></div>
     <div class="modal-body" id="inv-modal-body"></div>
   </div>
 </div>
 
+<!-- Create Order modal -->
+<div class="modal-overlay" id="order-modal">
+  <div class="modal" style="width:680px">
+    <div class="modal-header"><h2>New Order</h2><button class="modal-close" onclick="closeModal('order-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Order Name</label><input id="co-name" placeholder="e.g. Don hang A"></div>
+        <div class="form-group"><label>Notes</label><input id="co-notes" placeholder="Optional notes"></div>
+      </div>
+      <h3 style="font-size:14px;margin:16px 0 8px;color:#555">Ship To</h3>
+      <div class="form-row">
+        <div class="form-group"><label>Name *</label><input id="co-ship-name" required></div>
+        <div class="form-group"><label>Street *</label><input id="co-ship-street1" required></div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label>City *</label><input id="co-ship-city" required></div>
+        <div class="form-group"><label>State *</label><input id="co-ship-state" required></div>
+        <div class="form-group"><label>ZIP *</label><input id="co-ship-zip" required></div>
+      </div>
+      <h3 style="font-size:14px;margin:16px 0 8px;color:#555">Items</h3>
+      <div id="co-items"></div>
+      <button class="btn btn-outline btn-sm" onclick="addOrderItem()" style="margin-top:4px">+ Add Item</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('order-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitOrder()">Create Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Stock Request modal -->
+<div class="modal-overlay" id="sr-modal">
+  <div class="modal" style="width:600px">
+    <div class="modal-header"><h2>New Stock Request</h2><button class="modal-close" onclick="closeModal('sr-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Supplier</label><input id="sr-supplier" placeholder="Supplier name"></div>
+      <div class="form-group"><label>Notes</label><textarea id="sr-notes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none"></textarea></div>
+      <h3 style="font-size:14px;margin:12px 0 8px;color:#555">Items</h3>
+      <div id="sr-items"></div>
+      <button class="btn btn-outline btn-sm" onclick="addSrItem()" style="margin-top:4px">+ Add Item</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('sr-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitStockRequest()">Create Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast-el"></div>
+
 <script>
 const API = '/api/v1/portal';
 let currentUser = null;
+let productsCache = [];
+
+// --- Helpers ---
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtDate(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }); }
+function toast(msg, type='success') {
+  const el = document.getElementById('toast-el');
+  el.textContent = msg; el.className = 'toast ' + type + ' show';
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // --- Auth ---
 async function loadUser() {
@@ -209,7 +276,6 @@ async function loadUser() {
     document.getElementById('header-user').textContent = currentUser.display_name || currentUser.username;
   } catch { window.location.href = '/login'; }
 }
-
 async function doLogout() {
   await fetch('/api/v1/auth/logout', { method: 'POST' });
   window.location.href = '/login';
@@ -222,6 +288,7 @@ function switchTab(name) {
   if (name === 'orders') loadOrders();
   else if (name === 'inventory') loadProducts();
   else if (name === 'invoices') loadInvoices();
+  else if (name === 'stock-requests') loadStockRequests();
 }
 
 // --- Dashboard ---
@@ -241,6 +308,33 @@ async function loadDashboard() {
   } catch {}
 }
 
+// --- Fetch products for selectors ---
+async function fetchProductsCache() {
+  if (productsCache.length) return;
+  try {
+    const res = await fetch(API + '/products?limit=500');
+    if (!res.ok) return;
+    const data = await res.json();
+    productsCache = data.products || [];
+  } catch {}
+}
+
+function buildProductOptions() {
+  let html = '<option value="">-- Select product --</option>';
+  for (const p of productsCache) {
+    if (p.variants && p.variants.length) {
+      for (const v of p.variants) {
+        let attrs = '';
+        try { const a = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : v.attributes; attrs = Object.values(a).join('/'); } catch {}
+        html += `<option value="${p.id}|${v.id}">${esc(v.variant_sku)} — ${esc(p.name)} ${attrs} (stock: ${v.quantity})</option>`;
+      }
+    } else {
+      html += `<option value="${p.id}|">${esc(p.sku)} — ${esc(p.name)} (stock: ${p.quantity})</option>`;
+    }
+  }
+  return html;
+}
+
 // --- Orders ---
 async function loadOrders() {
   const status = document.getElementById('order-status-filter').value;
@@ -255,7 +349,7 @@ async function loadOrders() {
     tbody.innerHTML = data.orders.map(o => {
       const trackHtml = o.tracking_number
         ? (o.tracking_url ? `<a class="track-link" href="${esc(o.tracking_url)}" target="_blank">${esc(o.tracking_number)}</a>` : esc(o.tracking_number))
-        : '<span style="color:#ccc">—</span>';
+        : '<span style="color:#ccc">\u2014</span>';
       return `<tr>
         <td><strong>${esc(o.order_number)}</strong></td>
         <td>${esc(o.order_name)}</td>
@@ -269,6 +363,94 @@ async function loadOrders() {
   } catch {}
 }
 
+// --- Create Order ---
+async function openCreateOrderModal() {
+  await fetchProductsCache();
+  document.getElementById('co-name').value = '';
+  document.getElementById('co-notes').value = '';
+  document.getElementById('co-ship-name').value = '';
+  document.getElementById('co-ship-street1').value = '';
+  document.getElementById('co-ship-city').value = '';
+  document.getElementById('co-ship-state').value = '';
+  document.getElementById('co-ship-zip').value = '';
+  document.getElementById('co-items').innerHTML = '';
+  addOrderItem();
+  openModal('order-modal');
+}
+
+function addOrderItem() {
+  const opts = buildProductOptions();
+  const row = document.createElement('div');
+  row.className = 'order-item-row';
+  row.innerHTML = `<select>${opts}</select><input type="number" min="1" value="1" placeholder="Qty"><button class="remove-item" onclick="this.parentElement.remove()">&times;</button>`;
+  document.getElementById('co-items').appendChild(row);
+}
+
+async function submitOrder() {
+  const shipName = document.getElementById('co-ship-name').value.trim();
+  const street1 = document.getElementById('co-ship-street1').value.trim();
+  const city = document.getElementById('co-ship-city').value.trim();
+  const state = document.getElementById('co-ship-state').value.trim();
+  const zip = document.getElementById('co-ship-zip').value.trim();
+  if (!shipName || !street1 || !city || !state || !zip) { toast('Please fill all Ship To fields', 'error'); return; }
+
+  const itemRows = document.getElementById('co-items').querySelectorAll('.order-item-row');
+  const items = [];
+  for (const row of itemRows) {
+    const val = row.querySelector('select').value;
+    const qty = parseInt(row.querySelector('input').value) || 1;
+    if (!val) continue;
+    const [productId, variantId] = val.split('|');
+    items.push({ product_id: productId, variant_id: variantId || '', quantity: qty });
+  }
+  if (!items.length) { toast('Add at least one item', 'error'); return; }
+
+  const body = {
+    order_name: document.getElementById('co-name').value.trim(),
+    customer_name: '', // will be overridden by backend
+    ship_to: { name: shipName, street1, city, state, zip, country: 'US' },
+    items,
+    notes: document.getElementById('co-notes').value.trim(),
+  };
+
+  try {
+    const res = await fetch(API + '/orders', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      toast('Order created: ' + data.order_number);
+      closeModal('order-modal');
+      loadOrders();
+      loadDashboard();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error creating order', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// --- CSV Import ---
+async function importCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch(API + '/orders/import', { method: 'POST', body: form });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`Imported ${data.created} orders` + (data.errors.length ? `, ${data.errors.length} errors` : ''));
+      loadOrders();
+      loadDashboard();
+      if (data.errors.length) console.warn('Import errors:', data.errors);
+    } else {
+      toast(data.detail || 'Import failed', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
+  input.value = '';
+}
+
 // --- Products / Inventory ---
 async function loadProducts() {
   const q = document.getElementById('inv-search').value.trim();
@@ -276,6 +458,7 @@ async function loadProducts() {
     const res = await fetch(API + '/products?limit=200' + (q ? '&q=' + encodeURIComponent(q) : ''));
     if (!res.ok) return;
     const data = await res.json();
+    productsCache = data.products || [];
     const container = document.getElementById('product-list');
     const empty = document.getElementById('products-empty');
     if (!data.products.length) { container.innerHTML = ''; empty.style.display = ''; return; }
@@ -310,6 +493,78 @@ async function loadProducts() {
   } catch {}
 }
 
+// --- Stock Requests ---
+async function loadStockRequests() {
+  try {
+    const res = await fetch(API + '/stock-requests?limit=200');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.getElementById('sr-body');
+    const empty = document.getElementById('sr-empty');
+    if (!data.stock_requests.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+    empty.style.display = 'none';
+    tbody.innerHTML = data.stock_requests.map(sr => `<tr>
+      <td><strong>${esc(sr.request_number)}</strong></td>
+      <td>${esc(sr.supplier)}</td>
+      <td style="text-align:center">${sr.item_count}</td>
+      <td style="text-align:center">${sr.total_qty}</td>
+      <td><span class="badge badge-${sr.status}">${sr.status}</span></td>
+      <td style="font-size:12px;color:#888">${fmtDate(sr.created_at)}</td>
+    </tr>`).join('');
+  } catch {}
+}
+
+async function openStockRequestModal() {
+  await fetchProductsCache();
+  document.getElementById('sr-supplier').value = '';
+  document.getElementById('sr-notes').value = '';
+  document.getElementById('sr-items').innerHTML = '';
+  addSrItem();
+  openModal('sr-modal');
+}
+
+function addSrItem() {
+  const opts = buildProductOptions();
+  const row = document.createElement('div');
+  row.className = 'order-item-row';
+  row.innerHTML = `<select>${opts}</select><input type="number" min="1" value="1" placeholder="Qty"><button class="remove-item" onclick="this.parentElement.remove()">&times;</button>`;
+  document.getElementById('sr-items').appendChild(row);
+}
+
+async function submitStockRequest() {
+  const itemRows = document.getElementById('sr-items').querySelectorAll('.order-item-row');
+  const items = [];
+  for (const row of itemRows) {
+    const val = row.querySelector('select').value;
+    const qty = parseInt(row.querySelector('input').value) || 1;
+    if (!val) continue;
+    const [productId, variantId] = val.split('|');
+    items.push({ product_id: productId, variant_id: variantId || '', quantity_requested: qty });
+  }
+  if (!items.length) { toast('Add at least one item', 'error'); return; }
+
+  const body = {
+    supplier: document.getElementById('sr-supplier').value.trim(),
+    notes: document.getElementById('sr-notes').value.trim(),
+    items,
+  };
+
+  try {
+    const res = await fetch(API + '/stock-requests', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      toast('Stock request created: ' + data.request_number);
+      closeModal('sr-modal');
+      loadStockRequests();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
+}
+
 // --- Invoices ---
 async function loadInvoices() {
   try {
@@ -337,7 +592,7 @@ async function openInvoice(id) {
     const res = await fetch(API + '/invoices/' + id);
     if (!res.ok) return;
     const inv = await res.json();
-    document.getElementById('inv-modal-title').textContent = inv.invoice_number + ' — ' + inv.invoice_name;
+    document.getElementById('inv-modal-title').textContent = inv.invoice_number + ' \u2014 ' + inv.invoice_name;
     let html = `
       <div class="detail-row"><span class="detail-label">Status</span><span class="detail-val"><span class="badge badge-${inv.status}">${inv.status}</span></span></div>
       <div class="detail-row"><span class="detail-label">Period to</span><span class="detail-val">${inv.date_to}</span></div>
@@ -352,21 +607,13 @@ async function openInvoice(id) {
       <div class="detail-row"><span class="detail-label" style="font-size:16px;font-weight:700">Total</span><span class="detail-total">$${inv.total_price.toFixed(2)}</span></div>
     `;
     if (inv.orders && inv.orders.length) {
-      html += `<h3 style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#555">Orders in this invoice</h3>`;
-      html += inv.orders.map(o => `<div class="detail-row"><span class="detail-label">${esc(o.order_number)}</span><span class="detail-val"><span class="badge badge-${o.status}">${o.status.replace(/_/g,' ')}</span> — ${o.item_count} items — $${o.shipping_cost.toFixed(2)} ship</span></div>`).join('');
+      html += '<h3 style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#555">Orders in this invoice</h3>';
+      html += inv.orders.map(o => `<div class="detail-row"><span class="detail-label">${esc(o.order_number)}</span><span class="detail-val"><span class="badge badge-${o.status}">${o.status.replace(/_/g,' ')}</span> \u2014 ${o.item_count} items \u2014 $${o.shipping_cost.toFixed(2)} ship</span></div>`).join('');
     }
     document.getElementById('inv-modal-body').innerHTML = html;
-    document.getElementById('invoice-modal').classList.add('show');
+    openModal('invoice-modal');
   } catch {}
 }
-
-function closeInvModal() {
-  document.getElementById('invoice-modal').classList.remove('show');
-}
-
-// --- Helpers ---
-function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function fmtDate(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }); }
 
 // --- Init ---
 (async () => {

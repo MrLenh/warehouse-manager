@@ -1,6 +1,9 @@
-"""Customer portal API — read-only endpoints scoped to the logged-in customer."""
+"""Customer portal API — endpoints scoped to the logged-in customer."""
 
-from fastapi import APIRouter, Depends, HTTPException
+import csv
+import io
+
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -10,7 +13,11 @@ from app.models.customer import Customer
 from app.models.invoice import Invoice
 from app.models.order import Order, OrderItem
 from app.models.product import Product, Variant
+from app.models.stock_request import StockRequest, StockRequestStatus
 from app.models.user import User
+from app.schemas.order import AddressInput, OrderCreate, OrderItemCreate, OrderOut
+from app.schemas.stock_request import StockRequestCreate, StockRequestItemCreate, StockRequestOut
+from app.services import auth_service, order_service, product_service, stock_request_service
 
 router = APIRouter(prefix="/portal", tags=["customer-portal"])
 
@@ -160,7 +167,9 @@ def list_products(
     db: Session = Depends(get_db),
 ):
     customer = _require_customer(user, db)
-    query = db.query(Product).filter(Product.customer_id == customer.id)
+    query = db.query(Product).filter(
+        (Product.customer_id == customer.id) | (Product.customer_id.is_(None))
+    )
     if q:
         query = query.filter(
             Product.name.ilike(f"%{q}%") | Product.sku.ilike(f"%{q}%")
@@ -269,4 +278,297 @@ def get_invoice(invoice_id: str, user: User = Depends(get_current_user), db: Ses
             }
             for o in inv.orders
         ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Create orders (manual / API)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/orders", status_code=201)
+def create_portal_order(
+    data: OrderCreate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Customer creates an order. customer_name is forced to their own name."""
+    customer = _require_customer(user, db)
+    # Override customer_name — customer cannot impersonate
+    data.customer_name = customer.name
+    data.customer_email = data.customer_email or customer.email
+    data.customer_phone = data.customer_phone or customer.phone
+    try:
+        order = order_service.create_order(db, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    auth_service.log_activity(
+        db, user.id, user.username, "create_order",
+        detail=f"Portal: {order.order_number}",
+        ip=request.client.host if request.client else "",
+    )
+    return {
+        "id": order.id,
+        "order_number": order.order_number,
+        "order_name": order.order_name or "",
+        "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+        "item_count": sum(i.quantity for i in order.items),
+        "total_price": order.total_price,
+    }
+
+
+# ---------------------------------------------------------------------------
+# CSV import orders
+# ---------------------------------------------------------------------------
+
+PORTAL_CSV_COLUMNS = [
+    "order_name", "customer_email", "customer_phone",
+    "ship_to_name", "ship_to_street1", "ship_to_street2",
+    "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
+    "carrier", "service",
+    "sku", "item_name", "quantity", "notes",
+]
+
+
+@router.get("/orders/import-template")
+def download_import_template(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """CSV template — customer_name column is removed (auto-filled)."""
+    from fastapi.responses import StreamingResponse
+
+    _require_customer(user, db)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(PORTAL_CSV_COLUMNS)
+    writer.writerow([
+        "Order A", "a@email.com", "0901234567",
+        "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",
+        "", "",
+        "SP-001", "San pham A", "2", "Giao buoi sang",
+    ])
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=order_import_template.csv"},
+    )
+
+
+@router.post("/orders/import")
+def import_orders(
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Import orders via CSV. customer_name is locked to the logged-in customer."""
+    customer = _require_customer(user, db)
+
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported")
+
+    try:
+        content = file.file.read().decode("utf-8-sig")
+    except Exception as e:
+        raise HTTPException(400, f"Cannot read CSV file: {e}")
+    reader = csv.DictReader(io.StringIO(content))
+
+    order_groups: dict[str, dict] = {}
+    group_order: list[str] = []
+    errors: list[dict] = []
+    auto_counter = 0
+
+    for row_num, row in enumerate(reader, start=2):
+        order_name = (row.get("order_name") or "").strip()
+        sku = (row.get("sku") or "").strip()
+        if not sku:
+            errors.append({"row": row_num, "error": "SKU is required"})
+            continue
+
+        quantity = int(row.get("quantity") or 1)
+        if quantity < 1:
+            quantity = 1
+
+        if not order_name:
+            auto_counter += 1
+            order_name = f"__auto_{auto_counter}_row{row_num}"
+
+        ship_to_name = (row.get("ship_to_name") or "").strip() or customer.name
+
+        if order_name not in order_groups:
+            order_groups[order_name] = {
+                "customer_name": customer.name,
+                "customer_email": (row.get("customer_email") or "").strip() or customer.email,
+                "customer_phone": (row.get("customer_phone") or "").strip() or customer.phone,
+                "ship_to_name": ship_to_name,
+                "ship_to_street1": (row.get("ship_to_street1") or "").strip(),
+                "ship_to_street2": (row.get("ship_to_street2") or "").strip(),
+                "ship_to_city": (row.get("ship_to_city") or "").strip(),
+                "ship_to_state": (row.get("ship_to_state") or "").strip(),
+                "ship_to_zip": (row.get("ship_to_zip") or "").strip(),
+                "ship_to_country": (row.get("ship_to_country") or "").strip() or "US",
+                "carrier": (row.get("carrier") or "").strip(),
+                "service": (row.get("service") or "").strip(),
+                "notes": (row.get("notes") or "").strip(),
+                "display_order_name": (row.get("order_name") or "").strip(),
+                "items": [],
+            }
+            group_order.append(order_name)
+
+        order_groups[order_name]["items"].append({
+            "sku": sku,
+            "item_name": (row.get("item_name") or "").strip(),
+            "quantity": quantity,
+            "row": row_num,
+        })
+
+    # Pre-check duplicate order_names
+    display_names = [order_groups[k]["display_order_name"] for k in group_order if order_groups[k]["display_order_name"]]
+    if display_names:
+        existing = db.query(Order.order_name).filter(Order.order_name.in_(display_names)).all()
+        existing_set = {o.order_name for o in existing}
+        for dn in existing_set:
+            errors.append({"order_name": dn, "error": f"Order name '{dn}' already exists"})
+        group_order = [k for k in group_order if order_groups[k]["display_order_name"] not in existing_set]
+
+    created = 0
+    created_details: list[dict] = []
+
+    for key in group_order:
+        group = order_groups[key]
+        resolved_items = []
+        has_error = False
+        for item in group["items"]:
+            sku_val = item["sku"]
+            row_num = item["row"]
+            variant = product_service.get_variant_by_sku(db, sku_val)
+            if variant:
+                resolved_items.append({"product_id": variant.product_id, "variant_id": variant.id, "quantity": item["quantity"]})
+                continue
+            product = product_service.get_product_by_sku(db, sku_val)
+            if product:
+                if product.variants and len(product.variants) > 0:
+                    errors.append({"row": row_num, "sku": sku_val, "error": f"Product '{sku_val}' has variants. Use variant_sku."})
+                    has_error = True
+                    break
+                resolved_items.append({"product_id": product.id, "variant_id": "", "quantity": item["quantity"]})
+                continue
+            errors.append({"row": row_num, "sku": sku_val, "error": f"SKU '{sku_val}' not found"})
+            has_error = True
+            break
+
+        if has_error or not resolved_items:
+            continue
+
+        order_data = OrderCreate(
+            order_name=group["display_order_name"],
+            customer_name=customer.name,
+            customer_email=group["customer_email"],
+            customer_phone=group["customer_phone"],
+            ship_to=AddressInput(
+                name=group["ship_to_name"],
+                street1=group["ship_to_street1"],
+                city=group["ship_to_city"],
+                state=group["ship_to_state"],
+                zip=group["ship_to_zip"],
+                country=group["ship_to_country"],
+            ),
+            items=[OrderItemCreate(product_id=ri["product_id"], variant_id=ri["variant_id"], quantity=ri["quantity"]) for ri in resolved_items],
+            carrier=group["carrier"],
+            service=group["service"],
+            notes=group["notes"],
+        )
+
+        try:
+            order_service.create_order(db, order_data)
+            created += 1
+            created_details.append({"order_name": group["display_order_name"] or key, "items": len(resolved_items)})
+        except ValueError as e:
+            errors.append({"order_name": group["display_order_name"] or key, "error": str(e)})
+
+    return {"created": created, "created_details": created_details, "errors": errors}
+
+
+# ---------------------------------------------------------------------------
+# Stock requests
+# ---------------------------------------------------------------------------
+
+
+@router.get("/stock-requests")
+def list_stock_requests(
+    skip: int = 0,
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List stock requests that contain products owned by this customer."""
+    customer = _require_customer(user, db)
+    my_product_ids = {
+        p.id for p in db.query(Product.id).filter(
+            (Product.customer_id == customer.id) | (Product.customer_id.is_(None))
+        ).all()
+    }
+    from app.models.stock_request import StockRequestItem
+    sr_ids = {
+        row.stock_request_id for row in
+        db.query(StockRequestItem.stock_request_id)
+        .filter(StockRequestItem.product_id.in_(my_product_ids))
+        .distinct()
+        .all()
+    } if my_product_ids else set()
+
+    query = db.query(StockRequest).filter(StockRequest.id.in_(sr_ids)) if sr_ids else db.query(StockRequest).filter(False)
+    total = query.count()
+    reqs = query.order_by(StockRequest.created_at.desc()).offset(skip).limit(limit).all()
+    return {
+        "total": total,
+        "stock_requests": [
+            {
+                "id": sr.id,
+                "request_number": sr.request_number,
+                "supplier": sr.supplier,
+                "status": sr.status.value if hasattr(sr.status, "value") else str(sr.status),
+                "notes": sr.notes,
+                "item_count": len(sr.items),
+                "total_qty": sum(i.quantity_requested for i in sr.items),
+                "created_at": sr.created_at.isoformat() if sr.created_at else "",
+                "items": [
+                    {
+                        "id": i.id,
+                        "sku": i.sku,
+                        "product_name": i.product_name,
+                        "variant_label": i.variant_label,
+                        "quantity_requested": i.quantity_requested,
+                        "quantity_received": i.quantity_received,
+                    }
+                    for i in sr.items
+                ],
+            }
+            for sr in reqs
+        ],
+    }
+
+
+@router.post("/stock-requests", status_code=201)
+def create_stock_request(
+    data: StockRequestCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Customer creates a stock request for their products."""
+    customer = _require_customer(user, db)
+    for item in data.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            raise HTTPException(400, f"Product not found: {item.product_id}")
+        if product.customer_id is not None and product.customer_id != customer.id:
+            raise HTTPException(403, f"Product {product.sku} does not belong to you")
+    try:
+        sr = stock_request_service.create_stock_request(db, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {
+        "id": sr.id,
+        "request_number": sr.request_number,
+        "status": sr.status.value if hasattr(sr.status, "value") else str(sr.status),
+        "item_count": len(sr.items),
     }
