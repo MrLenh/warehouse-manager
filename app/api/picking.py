@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.picking import PickingListCreate, PickingListOut, ScanResult
 from app.services import auth_service, picking_service
-from app.services.qr_service import _draw_label_2x1, DPI
+from app.services.qr_service import _draw_label_2x1, DPI, LABEL_H
 
 router = APIRouter(prefix="/picking-lists", tags=["picking"])
 
@@ -202,21 +202,22 @@ def export_qrcodes(
 
         order = order_cache[item.order_id]
 
-        # Build text lines for right side
+        # Build text lines for right side — compact layout for 2x1 label printer
+        picking_qr_size = LABEL_H - 100  # 200px QR, leaves more room for text
         lines = [
-            ("36", item.sku, "#000000"),
-            ("26", item.product_name, "#333333"),
+            ("34", item.sku, "#000000"),
+            ("24", item.product_name, "#000000"),
         ]
         if item.variant_label:
-            lines.append(("20", item.variant_label, "#555555"))
-        lines.append(("20", f"#{item.sequence} | {item.qr_code}", "#888888"))
+            lines.append(("20", item.variant_label, "#333333"))
+        lines.append(("18", f"#{item.sequence} | {item.qr_code}", "#333333"))
         if order:
             order_label = order.order_number
             if order.order_name:
                 order_label += f" ({order.order_name})"
-            lines.append(("18", order_label, "#888888"))
+            lines.append(("18", order_label, "#333333"))
 
-        label_img = _draw_label_2x1(item.qr_code, lines)
+        label_img = _draw_label_2x1(item.qr_code, lines, qr_size=picking_qr_size, show_border=False)
         pages.append(label_img)
 
     if not pages:

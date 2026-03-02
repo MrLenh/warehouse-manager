@@ -29,12 +29,19 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def _draw_label_2x1(qr_data: str, lines: list[tuple[str, str, str]]) -> Image.Image:
+def _draw_label_2x1(
+    qr_data: str,
+    lines: list[tuple[str, str, str]],
+    qr_size: int = QR_SIZE,
+    show_border: bool = True,
+) -> Image.Image:
     """Create a 2x1 inch label: QR on left, text info on right.
 
     Args:
         qr_data: data to encode in QR code
         lines: list of (font_size, text, color) tuples
+        qr_size: QR code size in pixels (default QR_SIZE)
+        show_border: whether to draw a border around the label
     Returns:
         PIL Image
     """
@@ -43,7 +50,7 @@ def _draw_label_2x1(qr_data: str, lines: list[tuple[str, str, str]]) -> Image.Im
     qr.add_data(qr_data)
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-    qr_img = qr_img.resize((QR_SIZE, QR_SIZE), Image.NEAREST)
+    qr_img = qr_img.resize((qr_size, qr_size), Image.NEAREST)
 
     # Create label
     img = Image.new("RGB", (LABEL_W, LABEL_H), "white")
@@ -51,11 +58,11 @@ def _draw_label_2x1(qr_data: str, lines: list[tuple[str, str, str]]) -> Image.Im
 
     # QR on left, vertically centered
     qr_x = PADDING
-    qr_y = (LABEL_H - QR_SIZE) // 2
+    qr_y = (LABEL_H - qr_size) // 2
     img.paste(qr_img, (qr_x, qr_y))
 
     # Text on right side
-    text_x = PADDING + QR_SIZE + PADDING
+    text_x = PADDING + qr_size + PADDING
     text_area_w = LABEL_W - text_x - PADDING
 
     # Calculate total text height to vertically center
@@ -78,7 +85,8 @@ def _draw_label_2x1(qr_data: str, lines: list[tuple[str, str, str]]) -> Image.Im
         y += line_h
 
     # Border
-    draw.rectangle([(0, 0), (LABEL_W - 1, LABEL_H - 1)], outline="#cccccc", width=1)
+    if show_border:
+        draw.rectangle([(0, 0), (LABEL_W - 1, LABEL_H - 1)], outline="#cccccc", width=1)
 
     return img
 
