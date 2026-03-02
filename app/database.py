@@ -130,6 +130,18 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE order_items ADD COLUMN {col_name} {col_type}"))
 
+    if "users" in tables:
+        existing = {col["name"] for col in inspector.get_columns("users")}
+        if "customer_id" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN customer_id VARCHAR DEFAULT NULL"))
+
+    if "products" in tables:
+        existing = {col["name"] for col in inspector.get_columns("products")}
+        if "customer_id" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE products ADD COLUMN customer_id VARCHAR DEFAULT NULL"))
+
 
 def _migrate_order_status_enum():
     """Add new enum values to order status (PostgreSQL only)."""

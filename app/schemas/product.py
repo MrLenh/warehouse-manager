@@ -76,6 +76,7 @@ class ProductCreate(BaseModel):
     image_url: str = ""
     option_types: list[str] = []  # e.g. ["color", "size"]
     variants: list[VariantCreate] = []
+    customer_id: str | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -90,6 +91,7 @@ class ProductUpdate(BaseModel):
     location: str | None = None
     image_url: str | None = None
     option_types: list[str] | None = None
+    customer_id: str | None = None
 
 
 class ProductOut(BaseModel):
@@ -107,6 +109,7 @@ class ProductOut(BaseModel):
     location: str
     qr_code_path: str
     image_url: str = ""
+    customer_id: str | None = None
     option_types: list[str] = []
     variants: list[VariantOut] = []
     created_at: datetime

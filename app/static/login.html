@@ -47,7 +47,12 @@ async function doLogin(e) {
       body: JSON.stringify({ username, password }),
     });
     if (res.ok) {
-      window.location.href = '/';
+      const data = await res.json().catch(() => ({}));
+      if (data.user && data.user.role === 'customer') {
+        window.location.href = '/portal';
+      } else {
+        window.location.href = '/';
+      }
     } else {
       const data = await res.json().catch(() => ({}));
       errEl.textContent = data.detail || 'Login failed';

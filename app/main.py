@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
-from app.api import auth, customers, orders, picking, products, reports, stock_requests, webhooks
+from app.api import auth, customers, orders, picking, portal, products, reports, stock_requests, webhooks
 from app.config import settings
 from app.database import init_db
 from app.services.auth_service import decode_token, ensure_default_admin
@@ -108,8 +108,25 @@ async def auth_middleware(request: Request, call_next):
 
     # For page requests, check cookie and redirect to login if missing/invalid
     token = request.cookies.get("token")
-    if not token or not decode_token(token):
+    payload = decode_token(token) if token else None
+    if not payload:
         return RedirectResponse("/login", status_code=302)
+
+    # Role-based page routing
+    from app.database import SessionLocal
+    from app.models.user import User
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == payload["sub"]).first()
+        if user and user.role == "customer":
+            # Customer can only access /portal
+            if not path.startswith("/portal"):
+                return RedirectResponse("/portal", status_code=302)
+        elif path.startswith("/portal"):
+            # Non-customer users shouldn't access /portal
+            return RedirectResponse("/", status_code=302)
+    finally:
+        db.close()
 
     return await call_next(request)
 
@@ -122,6 +139,7 @@ app.include_router(stock_requests.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
 app.include_router(picking.router, prefix="/api/v1")
 app.include_router(customers.router, prefix="/api/v1")
+app.include_router(portal.router, prefix="/api/v1")
 
 
 # Mount persistent uploads directory (survives deploys)
@@ -152,6 +170,12 @@ def product_detail_page(product_id: str):
 def order_detail_page(order_id: str):
     """Order detail page - landing for QR code scans."""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/portal")
+def portal_page():
+    """Customer portal — read-only view of own orders, inventory, invoices."""
+    return FileResponse(STATIC_DIR / "portal.html")
 
 
 @app.get("/customers")

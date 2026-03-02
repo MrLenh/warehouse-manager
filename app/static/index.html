@@ -384,7 +384,7 @@ tr:hover{background:#f8f9ff}
       </div>
       <div class="form-group">
         <label>Role</label>
-        <div style="display:flex;gap:10px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
           <label class="role-option" id="role-opt-staff" onclick="selectRole('staff')">
             <svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             <span>Staff</span>
@@ -395,8 +395,19 @@ tr:hover{background:#f8f9ff}
             <span>Admin</span>
             <small>Full access: users, settings, reports</small>
           </label>
+          <label class="role-option" id="role-opt-customer" onclick="selectRole('customer')">
+            <svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            <span>Customer</span>
+            <small>Portal: view own orders, inventory, invoices</small>
+          </label>
         </div>
         <input type="hidden" id="u-role" value="staff">
+      </div>
+      <div class="form-group" id="u-customer-group" style="display:none">
+        <label>Linked Customer *</label>
+        <select id="u-customer-id" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px">
+          <option value="">— Select customer —</option>
+        </select>
       </div>
     </div>
     <div class="modal-footer">
@@ -488,6 +499,12 @@ tr:hover{background:#f8f9ff}
           <input type="url" id="p-image-url" placeholder="https://example.com/image.jpg" style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
         </div>
         <div id="p-image-upload-status" style="display:none;font-size:12px;color:#667eea;margin-top:4px">Uploading...</div>
+      </div>
+      <div class="form-group">
+        <label>Owner (Customer)</label>
+        <select id="p-customer-id" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px">
+          <option value="">— No owner (warehouse) —</option>
+        </select>
       </div>
       <div class="form-row-3">
         <div class="form-group"><label>Category</label><input type="text" id="p-category" placeholder="e.g. Electronics"></div>
@@ -871,7 +888,27 @@ function openProductModal(product = null) {
   document.getElementById('p-option-types').value = product && product.option_types ? product.option_types.join(', ') : '';
   if (product) { document.getElementById('p-qty').disabled = true; }
   else { document.getElementById('p-qty').disabled = false; }
+  // Customer owner dropdown
+  loadProductCustomerOptions().then(() => {
+    document.getElementById('p-customer-id').value = product && product.customer_id ? product.customer_id : '';
+  });
   document.getElementById('product-modal').classList.add('show');
+}
+
+async function loadProductCustomerOptions() {
+  const sel = document.getElementById('p-customer-id');
+  if (sel.options.length > 1) return;
+  try {
+    const res = await fetch(API + '/customers?limit=500');
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const c of data.customers) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name + (c.company ? ' (' + c.company + ')' : '');
+      sel.appendChild(opt);
+    }
+  } catch {}
 }
 
 function editProduct(id) {
@@ -941,6 +978,7 @@ async function saveProduct() {
   const editId = document.getElementById('product-edit-id').value;
   const optTypesRaw = document.getElementById('p-option-types').value;
   const optTypes = optTypesRaw ? optTypesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const pCustomerId = document.getElementById('p-customer-id').value || null;
   if (editId) {
     const body = {
       name: document.getElementById('p-name').value,
@@ -954,6 +992,7 @@ async function saveProduct() {
       location: document.getElementById('p-location').value,
       image_url: document.getElementById('p-image-url').value,
       option_types: optTypes,
+      customer_id: pCustomerId,
     };
     const res = await fetch(API + '/products/' + editId, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (res.ok) { toast('Product updated'); closeModal('product-modal'); loadProducts(); }
@@ -973,6 +1012,7 @@ async function saveProduct() {
       location: document.getElementById('p-location').value,
       image_url: document.getElementById('p-image-url').value,
       option_types: optTypes,
+      customer_id: pCustomerId,
     };
     const res = await fetch(API + '/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     if (res.ok) {
@@ -2128,6 +2168,7 @@ function renderUserStats() {
   const active = usersData.filter(u => u.active).length;
   const admins = usersData.filter(u => u.role === 'admin').length;
   const staff = usersData.filter(u => u.role === 'staff').length;
+  const customers = usersData.filter(u => u.role === 'customer').length;
   document.getElementById('user-stats').innerHTML = `
     <div class="user-stat-card">
       <div class="stat-icon" style="background:#e8f0fe"><svg viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
@@ -2144,6 +2185,10 @@ function renderUserStats() {
     <div class="user-stat-card">
       <div class="stat-icon" style="background:#fff3cd"><svg viewBox="0 0 24 24" fill="none" stroke="#856404" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div class="stat-info"><div class="stat-num">${staff}</div><div class="stat-label">Staff</div></div>
+    </div>
+    <div class="user-stat-card">
+      <div class="stat-icon" style="background:#e3f2fd"><svg viewBox="0 0 24 24" fill="none" stroke="#1565c0" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg></div>
+      <div class="stat-info"><div class="stat-num">${customers}</div><div class="stat-label">Customers</div></div>
     </div>`;
 }
 
@@ -2168,7 +2213,7 @@ function renderUserCards() {
         </div>
       </div>
       <div class="uc-meta">
-        <span class="badge badge-${u.role === 'admin' ? 'processing' : 'pending'}">${u.role}</span>
+        <span class="badge badge-${u.role === 'admin' ? 'processing' : u.role === 'customer' ? 'label_purchased' : 'pending'}">${u.role}</span>
         <span class="badge badge-${u.active ? 'delivered' : 'cancelled'}">${u.active ? 'Active' : 'Disabled'}</span>
         <span style="font-size:11px;color:#aaa">${u.created_at ? 'Joined ' + new Date(u.created_at).toLocaleDateString() : ''}</span>
       </div>
@@ -2195,6 +2240,25 @@ function selectRole(role) {
   document.getElementById('u-role').value = role;
   document.getElementById('role-opt-staff').classList.toggle('selected', role === 'staff');
   document.getElementById('role-opt-admin').classList.toggle('selected', role === 'admin');
+  document.getElementById('role-opt-customer').classList.toggle('selected', role === 'customer');
+  document.getElementById('u-customer-group').style.display = role === 'customer' ? '' : 'none';
+  if (role === 'customer') loadCustomerOptions();
+}
+
+async function loadCustomerOptions() {
+  const sel = document.getElementById('u-customer-id');
+  if (sel.options.length > 1) return;
+  try {
+    const res = await fetch(API + '/customers?limit=500');
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const c of data.customers) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name + (c.company ? ' (' + c.company + ')' : '');
+      sel.appendChild(opt);
+    }
+  } catch {}
 }
 
 function togglePwVis(inputId, el) {
@@ -2211,6 +2275,7 @@ function openCreateUserModal() {
   document.getElementById('u-display-name').value = '';
   document.getElementById('u-password').value = '';
   document.getElementById('u-password-group').style.display = '';
+  document.getElementById('u-customer-id').value = '';
   selectRole('staff');
   openModal('create-user-modal');
 }
@@ -2226,6 +2291,9 @@ function openEditUserModal(userId) {
   document.getElementById('u-password').value = '';
   document.getElementById('u-password-group').style.display = 'none';
   selectRole(u.role);
+  if (u.customer_id) {
+    loadCustomerOptions().then(() => { document.getElementById('u-customer-id').value = u.customer_id; });
+  }
   openModal('create-user-modal');
 }
 
@@ -2235,23 +2303,31 @@ async function saveUser() {
   const displayName = document.getElementById('u-display-name').value.trim();
   const password = document.getElementById('u-password').value;
   const role = document.getElementById('u-role').value;
+  const customerId = document.getElementById('u-customer-id').value;
+
+  if (role === 'customer' && !customerId) { toast('Please select a linked customer', 'error'); return; }
 
   if (!editId) {
     if (!username || !password) { toast('Username and password required', 'error'); return; }
     if (password.length < 4) { toast('Password must be at least 4 characters', 'error'); return; }
     try {
+      const body = { username, password, display_name: displayName || username, role };
+      if (role === 'customer') body.customer_id = customerId;
       const res = await fetch(API + '/auth/users', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ username, password, display_name: displayName || username, role }),
+        body: JSON.stringify(body),
       });
       if (res.ok) { toast('User created successfully'); closeModal('create-user-modal'); loadUsers(); }
       else { const e = await res.json().catch(()=>({})); toast(e.detail || 'Error creating user', 'error'); }
     } catch (err) { toast(err.message, 'error'); }
   } else {
     try {
+      const body = { display_name: displayName, role };
+      if (role === 'customer') body.customer_id = customerId;
+      else body.customer_id = '';
       const res = await fetch(API + '/auth/users/' + editId, {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ display_name: displayName, role }),
+        body: JSON.stringify(body),
       });
       if (res.ok) { toast('User updated successfully'); closeModal('create-user-modal'); loadUsers(); }
       else { const e = await res.json().catch(()=>({})); toast(e.detail || 'Error updating user', 'error'); }

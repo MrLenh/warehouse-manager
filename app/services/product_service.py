@@ -34,6 +34,7 @@ def create_product(db: Session, data: ProductCreate) -> Product:
         location=data.location,
         image_url=data.image_url,
         option_types=json.dumps(data.option_types),
+        customer_id=data.customer_id,
     )
     db.add(product)
     db.flush()

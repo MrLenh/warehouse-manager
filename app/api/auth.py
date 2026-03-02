@@ -20,6 +20,7 @@ class UserOut(BaseModel):
     display_name: str
     role: str
     active: bool = True
+    customer_id: str | None = None
     created_at: str = ""
 
     model_config = {"from_attributes": True}
@@ -30,6 +31,7 @@ class CreateUserRequest(BaseModel):
     password: str
     display_name: str = ""
     role: str = "staff"
+    customer_id: str | None = None
 
 
 class ActivityLogOut(BaseModel):
@@ -42,6 +44,14 @@ class ActivityLogOut(BaseModel):
     created_at: str
 
     model_config = {"from_attributes": True}
+
+
+def _user_out(u: User) -> UserOut:
+    return UserOut(
+        id=u.id, username=u.username, display_name=u.display_name,
+        role=u.role, active=u.active, customer_id=u.customer_id,
+        created_at=u.created_at.isoformat() if u.created_at else "",
+    )
 
 
 def get_current_user(
@@ -69,11 +79,7 @@ def login(data: LoginRequest, request: Request, response: Response, db: Session 
     token = auth_service.create_access_token(user.id, user.username)
     response.set_cookie("token", token, httponly=True, samesite="lax", max_age=3600 * 72)
     auth_service.log_activity(db, user.id, user.username, "login", ip=request.client.host if request.client else "")
-    return {"token": token, "user": UserOut(
-        id=user.id, username=user.username, display_name=user.display_name,
-        role=user.role, active=user.active,
-        created_at=user.created_at.isoformat() if user.created_at else "",
-    )}
+    return {"token": token, "user": _user_out(user)}
 
 
 @router.post("/logout")
@@ -84,11 +90,7 @@ def logout(response: Response):
 
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
-    return UserOut(
-        id=user.id, username=user.username, display_name=user.display_name,
-        role=user.role, active=user.active,
-        created_at=user.created_at.isoformat() if user.created_at else "",
-    )
+    return _user_out(user)
 
 
 @router.get("/users")
@@ -96,34 +98,31 @@ def list_users(user: User = Depends(get_current_user), db: Session = Depends(get
     if user.role != "admin":
         raise HTTPException(403, "Admin only")
     users = auth_service.list_users(db)
-    return [
-        UserOut(
-            id=u.id, username=u.username, display_name=u.display_name,
-            role=u.role, active=u.active,
-            created_at=u.created_at.isoformat() if u.created_at else "",
-        ) for u in users
-    ]
+    return [_user_out(u) for u in users]
 
 
 @router.post("/users", status_code=201)
 def create_user(data: CreateUserRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role != "admin":
         raise HTTPException(403, "Admin only")
+    if data.role == "customer" and not data.customer_id:
+        raise HTTPException(400, "customer_id is required for customer role")
     try:
         u = auth_service.create_user(db, data.username, data.password, data.display_name, data.role)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    if data.customer_id:
+        u.customer_id = data.customer_id
+        db.commit()
+        db.refresh(u)
     auth_service.log_activity(db, user.id, user.username, "create_user", detail=f"Created user: {data.username}")
-    return UserOut(
-        id=u.id, username=u.username, display_name=u.display_name,
-        role=u.role, active=u.active,
-        created_at=u.created_at.isoformat() if u.created_at else "",
-    )
+    return _user_out(u)
 
 
 class UpdateUserRequest(BaseModel):
     display_name: str | None = None
     role: str | None = None
+    customer_id: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -141,14 +140,12 @@ def update_user(user_id: str, data: UpdateUserRequest, user: User = Depends(get_
         target.display_name = data.display_name
     if data.role is not None:
         target.role = data.role
+    if data.customer_id is not None:
+        target.customer_id = data.customer_id or None
     db.commit()
     db.refresh(target)
     auth_service.log_activity(db, user.id, user.username, "update_user", detail=f"Updated {target.username}: role={target.role}")
-    return UserOut(
-        id=target.id, username=target.username, display_name=target.display_name,
-        role=target.role, active=target.active,
-        created_at=target.created_at.isoformat() if target.created_at else "",
-    )
+    return _user_out(target)
 
 
 @router.patch("/users/{user_id}/active")

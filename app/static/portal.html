@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Customer Portal</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
+
+/* Header */
+.header{background:linear-gradient(135deg,#2d3748,#1a202c);color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.header h1{font-size:20px;font-weight:600}
+.header-right{display:flex;align-items:center;gap:16px}
+.header-user{font-size:13px;color:rgba(255,255,255,.8)}
+.logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 16px;border-radius:8px;font-size:13px;cursor:pointer}
+.logout-btn:hover{background:rgba(255,255,255,.25)}
+
+/* Layout */
+.container{max-width:1100px;margin:0 auto;padding:20px}
+
+/* Dashboard cards */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.dash-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center}
+.dash-val{font-size:28px;font-weight:800;color:#667eea}
+.dash-val.warn{color:#e53e3e}
+.dash-label{font-size:12px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+
+/* Tabs */
+.tabs{display:flex;gap:0;background:#fff;border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.tab{flex:1;padding:12px;text-align:center;font-size:14px;font-weight:600;color:#888;cursor:pointer;border-bottom:3px solid transparent;transition:.2s}
+.tab:hover{color:#667eea;background:#f8f9ff}
+.tab.active{color:#667eea;border-bottom-color:#667eea;background:#f8f9ff}
+
+/* Panel */
+.panel{display:none;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
+.panel.active{display:block}
+.panel-header{padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+.panel-header h2{font-size:16px;font-weight:600}
+.search{padding:8px 14px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;width:240px}
+.search:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.1)}
+
+/* Table */
+table{width:100%;border-collapse:collapse}
+th{background:#f8f9fa;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#888;padding:10px 14px;text-align:left;font-weight:600}
+td{padding:10px 14px;font-size:13px;border-top:1px solid #f0f0f0;vertical-align:middle}
+tr:hover td{background:#f8f9ff}
+
+/* Status badges */
+.badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.badge-pending,.badge-confirmed{background:#fff3e0;color:#e65100}
+.badge-processing,.badge-packing,.badge-packed{background:#e3f2fd;color:#1565c0}
+.badge-label_purchased,.badge-drop_off{background:#f3e5f5;color:#7b1fa2}
+.badge-shipped,.badge-in_transit{background:#e8f5e9;color:#2e7d32}
+.badge-delivered{background:#e8f5e9;color:#1b5e20}
+.badge-cancelled{background:#ffebee;color:#c62828}
+.badge-new{background:#e3f2fd;color:#1565c0}
+.badge-requested{background:#fff3e0;color:#e65100}
+.badge-paid{background:#e8f5e9;color:#2e7d32}
+.badge-cancel{background:#ffebee;color:#c62828}
+
+/* Product cards for inventory */
+.product-grid{padding:16px 20px}
+.prod-card{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid #f0f0f0}
+.prod-card:last-child{border-bottom:none}
+.prod-img{width:48px;height:48px;border-radius:8px;object-fit:cover;background:#f5f5f5;flex-shrink:0}
+.prod-info{flex:1;min-width:0}
+.prod-sku{font-size:14px;font-weight:700;color:#333}
+.prod-name{font-size:12px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prod-cat{font-size:11px;color:#888;margin-top:2px}
+.prod-stock{text-align:center;min-width:56px}
+.prod-stock-val{font-size:20px;font-weight:800;color:#667eea}
+.prod-stock-label{font-size:10px;color:#888}
+.prod-loc{font-size:12px;color:#555;min-width:80px;text-align:right}
+.variant-row{margin-left:62px;font-size:12px;color:#666;padding:4px 0}
+.variant-row span{margin-right:12px}
+
+/* Invoice detail modal */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:14px;width:620px;max-width:95vw;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.modal-header{padding:18px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+.modal-header h2{font-size:18px;font-weight:600}
+.modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#888;padding:0 4px}
+.modal-body{padding:20px}
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:13px}
+.detail-row:last-child{border-bottom:none}
+.detail-label{color:#888}
+.detail-val{font-weight:600;color:#333}
+.detail-total{font-size:18px;color:#667eea;font-weight:800}
+
+.empty{text-align:center;padding:40px;color:#888;font-size:14px}
+
+/* Tracking link */
+a.track-link{color:#667eea;text-decoration:none;font-weight:600}
+a.track-link:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Customer Portal</h1>
+  <div class="header-right">
+    <span class="header-user" id="header-user"></span>
+    <button class="logout-btn" onclick="doLogout()">Logout</button>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Dashboard -->
+  <div class="dash-grid" id="dash-grid"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="orders" onclick="switchTab('orders')">Orders</div>
+    <div class="tab" data-tab="inventory" onclick="switchTab('inventory')">Inventory</div>
+    <div class="tab" data-tab="invoices" onclick="switchTab('invoices')">Invoices</div>
+  </div>
+
+  <!-- Orders panel -->
+  <div class="panel active" id="panel-orders">
+    <div class="panel-header">
+      <h2>My Orders</h2>
+      <select id="order-status-filter" onchange="loadOrders()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        <option value="">All statuses</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="processing">Processing</option>
+        <option value="packing">Packing</option>
+        <option value="packed">Packed</option>
+        <option value="label_purchased">Label Purchased</option>
+        <option value="drop_off">Drop Off</option>
+        <option value="shipped">Shipped</option>
+        <option value="in_transit">In Transit</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Order #</th>
+          <th>Name</th>
+          <th>Items</th>
+          <th>Status</th>
+          <th>Tracking</th>
+          <th>Total</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="orders-body"></tbody>
+    </table>
+    <div class="empty" id="orders-empty" style="display:none">No orders found</div>
+  </div>
+
+  <!-- Inventory panel -->
+  <div class="panel" id="panel-inventory">
+    <div class="panel-header">
+      <h2>My Inventory</h2>
+      <input class="search" id="inv-search" placeholder="Search products..." oninput="loadProducts()">
+    </div>
+    <div class="product-grid" id="product-list"></div>
+    <div class="empty" id="products-empty" style="display:none">No products found</div>
+  </div>
+
+  <!-- Invoices panel -->
+  <div class="panel" id="panel-invoices">
+    <div class="panel-header">
+      <h2>My Invoices</h2>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice #</th>
+          <th>Name</th>
+          <th>Period</th>
+          <th>Orders</th>
+          <th>Items</th>
+          <th>Status</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody id="invoices-body"></tbody>
+    </table>
+    <div class="empty" id="invoices-empty" style="display:none">No invoices found</div>
+  </div>
+</div>
+
+<!-- Invoice detail modal -->
+<div class="modal-overlay" id="invoice-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="inv-modal-title">Invoice</h2>
+      <button class="modal-close" onclick="closeInvModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="inv-modal-body"></div>
+  </div>
+</div>
+
+<script>
+const API = '/api/v1/portal';
+let currentUser = null;
+
+// --- Auth ---
+async function loadUser() {
+  try {
+    const res = await fetch('/api/v1/auth/me');
+    if (!res.ok) { window.location.href = '/login'; return; }
+    currentUser = await res.json();
+    document.getElementById('header-user').textContent = currentUser.display_name || currentUser.username;
+  } catch { window.location.href = '/login'; }
+}
+
+async function doLogout() {
+  await fetch('/api/v1/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+// --- Tabs ---
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+  if (name === 'orders') loadOrders();
+  else if (name === 'inventory') loadProducts();
+  else if (name === 'invoices') loadInvoices();
+}
+
+// --- Dashboard ---
+async function loadDashboard() {
+  try {
+    const res = await fetch(API + '/dashboard');
+    if (!res.ok) return;
+    const d = await res.json();
+    document.getElementById('dash-grid').innerHTML = `
+      <div class="dash-card"><div class="dash-val">${d.total_orders}</div><div class="dash-label">Total Orders</div></div>
+      <div class="dash-card"><div class="dash-val">${d.active_orders}</div><div class="dash-label">Active Orders</div></div>
+      <div class="dash-card"><div class="dash-val">${d.product_count}</div><div class="dash-label">Products</div></div>
+      <div class="dash-card"><div class="dash-val">${d.total_stock}</div><div class="dash-label">Total Stock</div></div>
+      <div class="dash-card"><div class="dash-val ${d.unpaid_invoices > 0 ? 'warn' : ''}">${d.unpaid_invoices}</div><div class="dash-label">Unpaid Invoices</div></div>
+      <div class="dash-card"><div class="dash-val">$${d.total_invoiced.toFixed(2)}</div><div class="dash-label">Total Invoiced</div></div>
+    `;
+  } catch {}
+}
+
+// --- Orders ---
+async function loadOrders() {
+  const status = document.getElementById('order-status-filter').value;
+  try {
+    const res = await fetch(API + '/orders?limit=200' + (status ? '&status=' + status : ''));
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.getElementById('orders-body');
+    const empty = document.getElementById('orders-empty');
+    if (!data.orders.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+    empty.style.display = 'none';
+    tbody.innerHTML = data.orders.map(o => {
+      const trackHtml = o.tracking_number
+        ? (o.tracking_url ? `<a class="track-link" href="${esc(o.tracking_url)}" target="_blank">${esc(o.tracking_number)}</a>` : esc(o.tracking_number))
+        : '<span style="color:#ccc">—</span>';
+      return `<tr>
+        <td><strong>${esc(o.order_number)}</strong></td>
+        <td>${esc(o.order_name)}</td>
+        <td style="text-align:center">${o.item_count}</td>
+        <td><span class="badge badge-${o.status}">${o.status.replace(/_/g,' ')}</span></td>
+        <td>${trackHtml}</td>
+        <td>$${o.total_price.toFixed(2)}</td>
+        <td style="font-size:12px;color:#888">${fmtDate(o.created_at)}</td>
+      </tr>`;
+    }).join('');
+  } catch {}
+}
+
+// --- Products / Inventory ---
+async function loadProducts() {
+  const q = document.getElementById('inv-search').value.trim();
+  try {
+    const res = await fetch(API + '/products?limit=200' + (q ? '&q=' + encodeURIComponent(q) : ''));
+    if (!res.ok) return;
+    const data = await res.json();
+    const container = document.getElementById('product-list');
+    const empty = document.getElementById('products-empty');
+    if (!data.products.length) { container.innerHTML = ''; empty.style.display = ''; return; }
+    empty.style.display = 'none';
+    container.innerHTML = data.products.map(p => {
+      const imgEl = p.image_url ? `<img class="prod-img" src="${esc(p.image_url)}" alt="">` : `<div class="prod-img"></div>`;
+      let variantHtml = '';
+      if (p.variants && p.variants.length) {
+        variantHtml = p.variants.map(v => {
+          let attrs = '';
+          try { const a = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : v.attributes; attrs = Object.values(a).join(' / '); } catch {}
+          return `<div class="variant-row"><span>${esc(v.variant_sku)}</span><span>${esc(attrs)}</span><span>Qty: <strong>${v.quantity}</strong></span>${v.location ? `<span>@ ${esc(v.location)}</span>` : ''}</div>`;
+        }).join('');
+      }
+      return `<div>
+        <div class="prod-card">
+          ${imgEl}
+          <div class="prod-info">
+            <div class="prod-sku">${esc(p.sku)}</div>
+            <div class="prod-name">${esc(p.name)}</div>
+            ${p.category ? `<div class="prod-cat">${esc(p.category)}</div>` : ''}
+          </div>
+          <div class="prod-stock">
+            <div class="prod-stock-val">${p.total_stock}</div>
+            <div class="prod-stock-label">in stock</div>
+          </div>
+          <div class="prod-loc">${p.location ? esc(p.location) : ''}</div>
+        </div>
+        ${variantHtml}
+      </div>`;
+    }).join('');
+  } catch {}
+}
+
+// --- Invoices ---
+async function loadInvoices() {
+  try {
+    const res = await fetch(API + '/invoices?limit=200');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.getElementById('invoices-body');
+    const empty = document.getElementById('invoices-empty');
+    if (!data.invoices.length) { tbody.innerHTML = ''; empty.style.display = ''; return; }
+    empty.style.display = 'none';
+    tbody.innerHTML = data.invoices.map(inv => `<tr style="cursor:pointer" onclick="openInvoice('${inv.id}')">
+      <td><strong>${esc(inv.invoice_number)}</strong></td>
+      <td>${esc(inv.invoice_name)}</td>
+      <td style="font-size:12px">${inv.date_to}</td>
+      <td style="text-align:center">${inv.order_count}</td>
+      <td style="text-align:center">${inv.item_count}</td>
+      <td><span class="badge badge-${inv.status}">${inv.status}</span></td>
+      <td><strong>$${inv.total_price.toFixed(2)}</strong></td>
+    </tr>`).join('');
+  } catch {}
+}
+
+async function openInvoice(id) {
+  try {
+    const res = await fetch(API + '/invoices/' + id);
+    if (!res.ok) return;
+    const inv = await res.json();
+    document.getElementById('inv-modal-title').textContent = inv.invoice_number + ' — ' + inv.invoice_name;
+    let html = `
+      <div class="detail-row"><span class="detail-label">Status</span><span class="detail-val"><span class="badge badge-${inv.status}">${inv.status}</span></span></div>
+      <div class="detail-row"><span class="detail-label">Period to</span><span class="detail-val">${inv.date_to}</span></div>
+      <div class="detail-row"><span class="detail-label">Orders</span><span class="detail-val">${inv.order_count}</span></div>
+      <div class="detail-row"><span class="detail-label">Items</span><span class="detail-val">${inv.item_count}</span></div>
+      <hr style="margin:12px 0;border:none;border-top:1px solid #f0f0f0">
+      <div class="detail-row"><span class="detail-label">Processing fee (${inv.processing_fee_unit}/item)</span><span class="detail-val">$${inv.processing_fee_total.toFixed(2)}</span></div>
+      <div class="detail-row"><span class="detail-label">Shipping fees</span><span class="detail-val">$${inv.shipping_fee_total.toFixed(2)}</span></div>
+      <div class="detail-row"><span class="detail-label">Stocking fee (${inv.stocking_fee_unit}/item)</span><span class="detail-val">$${inv.stocking_fee_total.toFixed(2)}</span></div>
+      ${inv.discount > 0 ? `<div class="detail-row"><span class="detail-label">Discount</span><span class="detail-val" style="color:#28a745">-$${inv.discount.toFixed(2)}</span></div>` : ''}
+      <hr style="margin:12px 0;border:none;border-top:2px solid #e0e0e0">
+      <div class="detail-row"><span class="detail-label" style="font-size:16px;font-weight:700">Total</span><span class="detail-total">$${inv.total_price.toFixed(2)}</span></div>
+    `;
+    if (inv.orders && inv.orders.length) {
+      html += `<h3 style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#555">Orders in this invoice</h3>`;
+      html += inv.orders.map(o => `<div class="detail-row"><span class="detail-label">${esc(o.order_number)}</span><span class="detail-val"><span class="badge badge-${o.status}">${o.status.replace(/_/g,' ')}</span> — ${o.item_count} items — $${o.shipping_cost.toFixed(2)} ship</span></div>`).join('');
+    }
+    document.getElementById('inv-modal-body').innerHTML = html;
+    document.getElementById('invoice-modal').classList.add('show');
+  } catch {}
+}
+
+function closeInvModal() {
+  document.getElementById('invoice-modal').classList.remove('show');
+}
+
+// --- Helpers ---
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtDate(iso) { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }); }
+
+// --- Init ---
+(async () => {
+  await loadUser();
+  loadDashboard();
+  loadOrders();
+})();
+</script>
+</body>
+</html>
