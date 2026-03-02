@@ -23,6 +23,7 @@ class InvoiceOrderOut(BaseModel):
     order_number: str
     order_name: str
     customer_name: str
+    shop_name: str = ""
     status: str
     item_count: int
     shipping_cost: float

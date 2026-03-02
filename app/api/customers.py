@@ -1,6 +1,9 @@
+import csv
+import io
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -45,6 +48,7 @@ def _build_order_out(o: Order) -> InvoiceOrderOut:
         order_number=o.order_number,
         order_name=o.order_name or "",
         customer_name=o.customer_name,
+        shop_name=o.shop_name or "",
         status=o.status.value if hasattr(o.status, "value") else str(o.status),
         item_count=sum(i.quantity for i in o.items),
         shipping_cost=o.shipping_cost,
@@ -241,6 +245,132 @@ def delete_invoice(invoice_id: str, user: User = Depends(get_current_user), db: 
         o.invoice_id = None
     db.delete(inv)
     db.commit()
+
+
+@router.get("/invoices/{invoice_id}/export")
+def export_invoice_csv(
+    invoice_id: str,
+    shop_name: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export invoice orders as CSV. Optionally filter by shop_name."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    customer = db.query(Customer).filter(Customer.id == inv.customer_id).first()
+
+    orders = inv.orders
+    if shop_name:
+        orders = [o for o in orders if (o.shop_name or "").lower() == shop_name.lower().strip()]
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "invoice_number", "customer_name", "order_number", "order_name", "shop_name",
+        "status", "item_count", "shipping_cost", "processing_fee", "total_price", "created_at",
+        "sku", "product_name", "variant_label", "quantity", "unit_price",
+    ])
+    for o in orders:
+        for item in o.items:
+            writer.writerow([
+                inv.invoice_number,
+                customer.name if customer else o.customer_name,
+                o.order_number,
+                o.order_name or "",
+                o.shop_name or "",
+                o.status.value if hasattr(o.status, "value") else str(o.status),
+                sum(i.quantity for i in o.items),
+                o.shipping_cost,
+                o.processing_fee,
+                o.total_price,
+                o.created_at.isoformat() if o.created_at else "",
+                item.sku,
+                item.product_name,
+                item.variant_label or "",
+                item.quantity,
+                item.unit_price,
+            ])
+
+    buf.seek(0)
+    filename = f"{inv.invoice_number}"
+    if shop_name:
+        filename += f"_{shop_name}"
+    filename += ".csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/invoices-export")
+def export_invoices_csv(
+    customer_id: str = "",
+    shop_name: str = "",
+    status: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export all invoices as CSV. Filter by customer_id, shop_name, or status."""
+    query = db.query(Invoice)
+    if customer_id:
+        query = query.filter(Invoice.customer_id == customer_id)
+    if status:
+        query = query.filter(Invoice.status == status)
+    invoices = query.order_by(Invoice.created_at.desc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "invoice_number", "invoice_name", "customer_name", "status", "date_to",
+        "order_number", "order_name", "shop_name",
+        "item_count", "shipping_cost", "processing_fee", "total_price", "created_at",
+        "sku", "product_name", "variant_label", "quantity", "unit_price",
+    ])
+
+    for inv in invoices:
+        customer = db.query(Customer).filter(Customer.id == inv.customer_id).first()
+        orders = inv.orders
+        if shop_name:
+            orders = [o for o in orders if (o.shop_name or "").lower() == shop_name.lower().strip()]
+        for o in orders:
+            for item in o.items:
+                writer.writerow([
+                    inv.invoice_number,
+                    inv.invoice_name,
+                    customer.name if customer else "",
+                    inv.status or "new",
+                    inv.date_to.isoformat() if inv.date_to else "",
+                    o.order_number,
+                    o.order_name or "",
+                    o.shop_name or "",
+                    sum(i.quantity for i in o.items),
+                    o.shipping_cost,
+                    o.processing_fee,
+                    o.total_price,
+                    o.created_at.isoformat() if o.created_at else "",
+                    item.sku,
+                    item.product_name,
+                    item.variant_label or "",
+                    item.quantity,
+                    item.unit_price,
+                ])
+
+    buf.seek(0)
+    filename = "invoices"
+    if customer_id and invoices:
+        c = db.query(Customer).filter(Customer.id == customer_id).first()
+        if c:
+            filename += f"_{c.name.replace(' ', '_')}"
+    if shop_name:
+        filename += f"_{shop_name}"
+    filename += ".csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ---------------------------------------------------------------------------

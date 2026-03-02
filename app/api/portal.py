@@ -107,6 +107,7 @@ def list_orders(
                 "id": o.id,
                 "order_number": o.order_number,
                 "order_name": o.order_name or "",
+                "shop_name": o.shop_name or "",
                 "status": o.status.value if hasattr(o.status, "value") else str(o.status),
                 "item_count": sum(i.quantity for i in o.items),
                 "tracking_number": o.tracking_number or "",
@@ -125,7 +126,7 @@ def list_orders(
 # ---------------------------------------------------------------------------
 
 PORTAL_CSV_COLUMNS = [
-    "order_name", "customer_email", "customer_phone",
+    "order_name", "shop_name", "customer_email", "customer_phone",
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
@@ -143,7 +144,7 @@ def download_import_template(user: User = Depends(get_current_user), db: Session
     writer = csv.writer(buf)
     writer.writerow(PORTAL_CSV_COLUMNS)
     writer.writerow([
-        "Order A", "a@email.com", "0901234567",
+        "Order A", "Shop ABC", "a@email.com", "0901234567",
         "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",
         "", "",
         "SP-001", "San pham A", "2", "Giao buoi sang",
@@ -181,6 +182,7 @@ def import_orders(
 
     for row_num, row in enumerate(reader, start=2):
         order_name = (row.get("order_name") or "").strip()
+        shop_name = (row.get("shop_name") or "").strip()
         sku = (row.get("sku") or "").strip()
         if not sku:
             errors.append({"row": row_num, "error": "SKU is required"})
@@ -199,6 +201,7 @@ def import_orders(
         if order_name not in order_groups:
             order_groups[order_name] = {
                 "customer_name": customer.name,
+                "shop_name": shop_name,
                 "customer_email": (row.get("customer_email") or "").strip() or customer.email,
                 "customer_phone": (row.get("customer_phone") or "").strip() or customer.phone,
                 "ship_to_name": ship_to_name,
@@ -264,6 +267,7 @@ def import_orders(
         order_data = OrderCreate(
             order_name=group["display_order_name"],
             customer_name=customer.name,
+            shop_name=group["shop_name"],
             customer_email=group["customer_email"],
             customer_phone=group["customer_phone"],
             ship_to=AddressInput(
@@ -302,6 +306,7 @@ def get_order(order_id: str, user: User = Depends(get_current_user), db: Session
         "id": order.id,
         "order_number": order.order_number,
         "order_name": order.order_name or "",
+        "shop_name": order.shop_name or "",
         "status": order.status.value if hasattr(order.status, "value") else str(order.status),
         "tracking_number": order.tracking_number or "",
         "tracking_url": order.tracking_url or "",
@@ -441,6 +446,7 @@ def get_invoice(invoice_id: str, user: User = Depends(get_current_user), db: Ses
                 "id": o.id,
                 "order_number": o.order_number,
                 "order_name": o.order_name or "",
+                "shop_name": o.shop_name or "",
                 "status": o.status.value if hasattr(o.status, "value") else str(o.status),
                 "item_count": sum(i.quantity for i in o.items),
                 "shipping_cost": o.shipping_cost,
@@ -449,6 +455,64 @@ def get_invoice(invoice_id: str, user: User = Depends(get_current_user), db: Ses
             for o in inv.orders
         ],
     }
+
+
+@router.get("/invoices/{invoice_id}/export")
+def export_portal_invoice_csv(
+    invoice_id: str,
+    shop_name: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export invoice as CSV for portal customer. Optionally filter by shop_name."""
+    from fastapi.responses import StreamingResponse
+
+    customer = _require_customer(user, db)
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.customer_id == customer.id).first()
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+
+    orders = inv.orders
+    if shop_name:
+        orders = [o for o in orders if (o.shop_name or "").lower() == shop_name.lower().strip()]
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "invoice_number", "order_number", "order_name", "shop_name",
+        "status", "item_count", "shipping_cost", "processing_fee", "total_price", "created_at",
+        "sku", "product_name", "variant_label", "quantity", "unit_price",
+    ])
+    for o in orders:
+        for item in o.items:
+            writer.writerow([
+                inv.invoice_number,
+                o.order_number,
+                o.order_name or "",
+                o.shop_name or "",
+                o.status.value if hasattr(o.status, "value") else str(o.status),
+                sum(i.quantity for i in o.items),
+                o.shipping_cost,
+                o.processing_fee,
+                o.total_price,
+                o.created_at.isoformat() if o.created_at else "",
+                item.sku,
+                item.product_name,
+                item.variant_label or "",
+                item.quantity,
+                item.unit_price,
+            ])
+
+    buf.seek(0)
+    filename = f"{inv.invoice_number}"
+    if shop_name:
+        filename += f"_{shop_name}"
+    filename += ".csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -482,6 +546,7 @@ def create_portal_order(
         "id": order.id,
         "order_number": order.order_number,
         "order_name": order.order_name or "",
+        "shop_name": order.shop_name or "",
         "status": order.status.value if hasattr(order.status, "value") else str(order.status),
         "item_count": sum(i.quantity for i in order.items),
         "total_price": order.total_price,

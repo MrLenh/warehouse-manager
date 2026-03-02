@@ -83,6 +83,7 @@ def _migrate_add_columns():
             "webhook_url": "VARCHAR DEFAULT ''",
             "notes": "TEXT DEFAULT ''",
             "qr_code_path": "VARCHAR DEFAULT ''",
+            "shop_name": "VARCHAR DEFAULT ''",
         }
         with engine.begin() as conn:
             for col_name, col_type in new_cols.items():

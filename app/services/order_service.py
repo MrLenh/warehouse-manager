@@ -40,6 +40,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         customer_name=data.customer_name,
         customer_email=data.customer_email,
         customer_phone=data.customer_phone,
+        shop_name=data.shop_name,
         ship_to_name=data.ship_to.name,
         ship_to_street1=data.ship_to.street1,
         ship_to_street2=data.ship_to.street2,

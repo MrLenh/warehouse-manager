@@ -31,6 +31,7 @@ class Order(Base):
     customer_name: Mapped[str] = mapped_column(String, nullable=False)
     customer_email: Mapped[str] = mapped_column(String, default="")
     customer_phone: Mapped[str] = mapped_column(String, default="")
+    shop_name: Mapped[str] = mapped_column(String, default="")
 
     # Shipping address
     ship_to_name: Mapped[str] = mapped_column(String, default="")

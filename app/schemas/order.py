@@ -27,6 +27,7 @@ class OrderCreate(BaseModel):
     customer_name: str
     customer_email: str = ""
     customer_phone: str = ""
+    shop_name: str = ""
     ship_to: AddressInput
     ship_from: AddressInput | None = None
     items: list[OrderItemCreate]
@@ -63,6 +64,7 @@ class OrderOut(BaseModel):
     customer_name: str
     customer_email: str
     customer_phone: str = ""
+    shop_name: str = ""
     status: str
     carrier: str = "USPS"
     service: str = "GroundAdvantage"

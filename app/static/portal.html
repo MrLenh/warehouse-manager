@@ -152,7 +152,7 @@ a.track-link:hover{text-decoration:underline}
       </div>
     </div>
     <table>
-      <thead><tr><th>Order #</th><th>Name</th><th>Items</th><th>Status</th><th>Tracking</th><th>Total</th><th>Date</th></tr></thead>
+      <thead><tr><th>Order #</th><th>Name</th><th>Shop</th><th>Items</th><th>Status</th><th>Tracking</th><th>Total</th><th>Date</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
     <div class="empty" id="orders-empty" style="display:none">No orders found</div>
@@ -207,8 +207,9 @@ a.track-link:hover{text-decoration:underline}
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group"><label>Order Name</label><input id="co-name" placeholder="e.g. Don hang A"></div>
-        <div class="form-group"><label>Notes</label><input id="co-notes" placeholder="Optional notes"></div>
+        <div class="form-group"><label>Shop Name</label><input id="co-shop-name" placeholder="e.g. Shopee, Lazada..."></div>
       </div>
+      <div class="form-group"><label>Notes</label><input id="co-notes" placeholder="Optional notes"></div>
       <h3 style="font-size:14px;margin:16px 0 8px;color:#555">Ship To</h3>
       <div class="form-row">
         <div class="form-group"><label>Name *</label><input id="co-ship-name" required></div>
@@ -353,6 +354,7 @@ async function loadOrders() {
       return `<tr>
         <td><strong>${esc(o.order_number)}</strong></td>
         <td>${esc(o.order_name)}</td>
+        <td>${esc(o.shop_name || '')}</td>
         <td style="text-align:center">${o.item_count}</td>
         <td><span class="badge badge-${o.status}">${o.status.replace(/_/g,' ')}</span></td>
         <td>${trackHtml}</td>
@@ -407,6 +409,7 @@ async function submitOrder() {
 
   const body = {
     order_name: document.getElementById('co-name').value.trim(),
+    shop_name: document.getElementById('co-shop-name').value.trim(),
     customer_name: '', // will be overridden by backend
     ship_to: { name: shipName, street1, city, state, zip, country: 'US' },
     items,
@@ -607,8 +610,17 @@ async function openInvoice(id) {
       <div class="detail-row"><span class="detail-label" style="font-size:16px;font-weight:700">Total</span><span class="detail-total">$${inv.total_price.toFixed(2)}</span></div>
     `;
     if (inv.orders && inv.orders.length) {
+      // Collect unique shop names for filter/export
+      const shops = [...new Set(inv.orders.map(o => o.shop_name || '').filter(Boolean))];
       html += '<h3 style="margin-top:20px;margin-bottom:8px;font-size:14px;color:#555">Orders in this invoice</h3>';
-      html += inv.orders.map(o => `<div class="detail-row"><span class="detail-label">${esc(o.order_number)}</span><span class="detail-val"><span class="badge badge-${o.status}">${o.status.replace(/_/g,' ')}</span> \u2014 ${o.item_count} items \u2014 $${o.shipping_cost.toFixed(2)} ship</span></div>`).join('');
+      html += inv.orders.map(o => `<div class="detail-row"><span class="detail-label">${esc(o.order_number)}${o.shop_name ? ' <span style="color:#888;font-size:11px">['+esc(o.shop_name)+']</span>' : ''}</span><span class="detail-val"><span class="badge badge-${o.status}">${o.status.replace(/_/g,' ')}</span> \u2014 ${o.item_count} items \u2014 $${o.shipping_cost.toFixed(2)} ship</span></div>`).join('');
+      // Export buttons
+      html += '<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">';
+      html += '<a href="'+API+'/invoices/'+inv.id+'/export" class="btn btn-outline btn-sm" download>Export CSV</a>';
+      shops.forEach(s => {
+        html += '<a href="'+API+'/invoices/'+inv.id+'/export?shop_name='+encodeURIComponent(s)+'" class="btn btn-outline btn-sm" download>Export '+esc(s)+'</a>';
+      });
+      html += '</div>';
     }
     document.getElementById('inv-modal-body').innerHTML = html;
     openModal('invoice-modal');

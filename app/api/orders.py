@@ -21,7 +21,7 @@ from app.models.picking import PickItem, PickingList, PickingListStatus
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 ORDER_CSV_COLUMNS = [
-    "order_name", "customer_name", "customer_email", "customer_phone",
+    "order_name", "shop_name", "customer_name", "customer_email", "customer_phone",
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
@@ -78,21 +78,21 @@ def download_order_import_template():
     writer.writerow(ORDER_CSV_COLUMNS)
     # Order 1: single item, USPS GroundAdvantage (default)
     writer.writerow([
-        "Don hang A", "Nguyen Van A", "a@email.com", "0901234567",
+        "Don hang A", "Shop ABC", "Nguyen Van A", "a@email.com", "0901234567",
         "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",
         "", "",
         "SP-001", "San pham A", "2", "Giao buoi sang",
     ])
     # Order 2: multiple items, UPS Ground
     writer.writerow([
-        "Don hang B", "Tran Thi B", "b@email.com", "0912345678",
+        "Don hang B", "Shop XYZ", "Tran Thi B", "b@email.com", "0912345678",
         "Tran Thi B", "456 Hai Ba Trung", "Phong 302", "Ha Noi", "HN", "10000", "US",
         "UPS", "Ground",
         "SP-002-RED-M", "San pham B - Red M", "1", "Can boc qua",
     ])
     # Order 2: additional item row - only needs sku + quantity (same order_name)
     writer.writerow([
-        "Don hang B", "", "", "",
+        "Don hang B", "", "", "", "",
         "", "", "", "", "", "", "",
         "", "",
         "SP-003", "San pham C", "3", "",
@@ -125,6 +125,7 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
 
     for row_num, row in enumerate(reader, start=2):
         order_name = (row.get("order_name") or "").strip()
+        shop_name = (row.get("shop_name") or "").strip()
         customer_name = (row.get("customer_name") or "").strip()
         ship_to_name = (row.get("ship_to_name") or "").strip()
         sku = (row.get("sku") or "").strip()
@@ -154,6 +155,7 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
                 continue
             order_groups[order_name] = {
                 "customer_name": customer_name,
+                "shop_name": shop_name,
                 "customer_email": (row.get("customer_email") or "").strip(),
                 "customer_phone": (row.get("customer_phone") or "").strip(),
                 "ship_to_name": ship_to_name or customer_name,
@@ -264,6 +266,7 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
         order_data = OrderCreate(
             order_name=display_name,
             customer_name=group["customer_name"],
+            shop_name=group["shop_name"],
             customer_email=group["customer_email"],
             customer_phone=group["customer_phone"],
             ship_to=AddressInput(
