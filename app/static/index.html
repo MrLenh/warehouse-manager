@@ -183,6 +183,18 @@ tr:hover{background:#f8f9ff}
   <div class="panel active" id="panel-products">
     <div class="toolbar">
       <input type="text" class="search" id="search-products" placeholder="Search products...">
+      <select id="filter-category" onchange="renderProducts(allProducts)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:160px">
+        <option value="">All categories</option>
+      </select>
+      <select id="filter-location" onchange="renderProducts(allProducts)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:160px">
+        <option value="">All locations</option>
+      </select>
+      <select id="filter-stock" onchange="renderProducts(allProducts)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:140px">
+        <option value="">All stock</option>
+        <option value="low">Low stock (&le;5)</option>
+        <option value="out">Out of stock</option>
+        <option value="in">In stock</option>
+      </select>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadProducts()">Refresh</button>
         <a href="/api/v1/products/export" class="btn btn-outline btn-sm" download>Export CSV</a>
@@ -246,6 +258,18 @@ tr:hover{background:#f8f9ff}
     <div id="inv-overview" class="inv-panel">
       <div class="toolbar">
         <input type="text" class="search" id="search-inventory" placeholder="Search by SKU or name...">
+        <select id="inv-filter-category" onchange="renderInventoryOverview(invOverviewData)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:160px">
+          <option value="">All categories</option>
+        </select>
+        <select id="inv-filter-location" onchange="renderInventoryOverview(invOverviewData)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:160px">
+          <option value="">All locations</option>
+        </select>
+        <select id="inv-filter-stock" onchange="renderInventoryOverview(invOverviewData)" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:140px">
+          <option value="">All stock</option>
+          <option value="low">Low stock (&le;5)</option>
+          <option value="out">Out of stock</option>
+          <option value="in">In stock</option>
+        </select>
         <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
       </div>
       <table>
@@ -824,6 +848,15 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 async function loadProducts() {
   const res = await fetch(API + '/products');
   allProducts = await res.json();
+  // Populate filter dropdowns
+  const cats = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
+  const locs = [...new Set(allProducts.map(p => p.location).filter(Boolean))].sort();
+  const catSel = document.getElementById('filter-category');
+  const locSel = document.getElementById('filter-location');
+  const prevCat = catSel.value, prevLoc = locSel.value;
+  catSel.innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  locSel.innerHTML = '<option value="">All locations</option>' + locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+  catSel.value = prevCat; locSel.value = prevLoc;
   renderProducts(allProducts);
   document.getElementById('stat-products').textContent = allProducts.length + ' Products';
   const low = allProducts.filter(p => p.quantity <= 5).length;
@@ -832,7 +865,20 @@ async function loadProducts() {
 
 function renderProducts(list) {
   const q = document.getElementById('search-products').value.toLowerCase();
-  const filtered = list.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+  const fCat = document.getElementById('filter-category').value;
+  const fLoc = document.getElementById('filter-location').value;
+  const fStock = document.getElementById('filter-stock').value;
+  const filtered = list.filter(p => {
+    if (q && !p.name.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) return false;
+    if (fCat && p.category !== fCat) return false;
+    if (fLoc && p.location !== fLoc) return false;
+    const vc = p.variants ? p.variants.length : 0;
+    const totalQty = vc > 0 ? p.variants.reduce((s,v) => s + v.quantity, 0) : p.quantity;
+    if (fStock === 'low' && totalQty > 5) return false;
+    if (fStock === 'out' && totalQty > 0) return false;
+    if (fStock === 'in' && totalQty <= 0) return false;
+    return true;
+  });
   document.getElementById('products-body').innerHTML = filtered.length === 0
     ? '<tr><td colspan="9" class="empty">No products found</td></tr>'
     : filtered.map(p => {
@@ -1830,12 +1876,32 @@ let invOverviewData = [];
 async function loadInventoryOverview() {
   const res = await fetch(API + '/reports/inventory-overview');
   invOverviewData = await res.json();
+  // Populate filter dropdowns
+  const cats = [...new Set(invOverviewData.map(r => r.category).filter(Boolean))].sort();
+  const locs = [...new Set(invOverviewData.map(r => r.location).filter(Boolean))].sort();
+  const catSel = document.getElementById('inv-filter-category');
+  const locSel = document.getElementById('inv-filter-location');
+  const prevCat = catSel.value, prevLoc = locSel.value;
+  catSel.innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  locSel.innerHTML = '<option value="">All locations</option>' + locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+  catSel.value = prevCat; locSel.value = prevLoc;
   renderInventoryOverview(invOverviewData);
 }
 
 function renderInventoryOverview(data) {
   const q = (document.getElementById('search-inventory').value || '').toLowerCase();
-  const filtered = data.filter(r => !q || r.sku.toLowerCase().includes(q) || r.name.toLowerCase().includes(q) || (r.variant_sku && r.variant_sku.toLowerCase().includes(q)));
+  const fCat = document.getElementById('inv-filter-category').value;
+  const fLoc = document.getElementById('inv-filter-location').value;
+  const fStock = document.getElementById('inv-filter-stock').value;
+  const filtered = data.filter(r => {
+    if (q && !r.sku.toLowerCase().includes(q) && !r.name.toLowerCase().includes(q) && !(r.variant_sku && r.variant_sku.toLowerCase().includes(q))) return false;
+    if (fCat && (r.category || '') !== fCat) return false;
+    if (fLoc && (r.location || '') !== fLoc) return false;
+    if (fStock === 'low' && r.current_stock > 5) return false;
+    if (fStock === 'out' && r.current_stock > 0) return false;
+    if (fStock === 'in' && r.current_stock <= 0) return false;
+    return true;
+  });
   document.getElementById('inv-overview-body').innerHTML = filtered.length === 0
     ? '<tr><td colspan="9" class="empty">No data available</td></tr>'
     : filtered.map(r => {

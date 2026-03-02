@@ -336,6 +336,9 @@ def get_order(order_id: str, user: User = Depends(get_current_user), db: Session
 @router.get("/products")
 def list_products(
     q: str = "",
+    category: str = "",
+    location: str = "",
+    stock: str = "",
     skip: int = 0,
     limit: int = 100,
     user: User = Depends(get_current_user),
@@ -349,12 +352,23 @@ def list_products(
         query = query.filter(
             Product.name.ilike(f"%{q}%") | Product.sku.ilike(f"%{q}%")
         )
+    if category:
+        query = query.filter(Product.category == category)
+    if location:
+        query = query.filter(Product.location == location)
     total = query.count()
     products = query.order_by(Product.name).offset(skip).limit(limit).all()
 
     results = []
     for p in products:
         variant_stock = sum(v.quantity for v in p.variants)
+        total_stock = p.quantity + variant_stock
+        if stock == "low" and total_stock > 5:
+            continue
+        if stock == "out" and total_stock > 0:
+            continue
+        if stock == "in" and total_stock <= 0:
+            continue
         results.append({
             "id": p.id,
             "sku": p.sku,
@@ -363,7 +377,7 @@ def list_products(
             "image_url": p.image_url or "",
             "quantity": p.quantity,
             "variant_count": len(p.variants),
-            "total_stock": p.quantity + variant_stock,
+            "total_stock": total_stock,
             "location": p.location,
             "variants": [
                 {
@@ -376,7 +390,15 @@ def list_products(
                 for v in p.variants
             ],
         })
-    return {"total": total, "products": results}
+
+    # Return filter options for the frontend
+    all_products = db.query(Product).filter(
+        (Product.customer_id == customer.id) | (Product.customer_id.is_(None))
+    ).all()
+    categories = sorted({p.category for p in all_products if p.category})
+    locations = sorted({p.location for p in all_products if p.location})
+
+    return {"total": len(results), "products": results, "categories": categories, "locations": locations}
 
 
 # ---------------------------------------------------------------------------

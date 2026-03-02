@@ -162,7 +162,21 @@ a.track-link:hover{text-decoration:underline}
   <div class="panel" id="panel-inventory">
     <div class="panel-header">
       <h2>My Inventory</h2>
-      <input class="search" id="inv-search" placeholder="Search products..." oninput="loadProducts()">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input class="search" id="inv-search" placeholder="Search products..." oninput="loadProducts()" style="margin:0">
+        <select id="inv-filter-category" onchange="loadProducts()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:150px">
+          <option value="">All categories</option>
+        </select>
+        <select id="inv-filter-location" onchange="loadProducts()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:150px">
+          <option value="">All locations</option>
+        </select>
+        <select id="inv-filter-stock" onchange="loadProducts()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;max-width:130px">
+          <option value="">All stock</option>
+          <option value="low">Low stock</option>
+          <option value="out">Out of stock</option>
+          <option value="in">In stock</option>
+        </select>
+      </div>
     </div>
     <div class="product-grid" id="product-list"></div>
     <div class="empty" id="products-empty" style="display:none">No products found</div>
@@ -457,11 +471,32 @@ async function importCSV(input) {
 // --- Products / Inventory ---
 async function loadProducts() {
   const q = document.getElementById('inv-search').value.trim();
+  const cat = document.getElementById('inv-filter-category').value;
+  const loc = document.getElementById('inv-filter-location').value;
+  const stock = document.getElementById('inv-filter-stock').value;
+  let url = API + '/products?limit=200';
+  if (q) url += '&q=' + encodeURIComponent(q);
+  if (cat) url += '&category=' + encodeURIComponent(cat);
+  if (loc) url += '&location=' + encodeURIComponent(loc);
+  if (stock) url += '&stock=' + stock;
   try {
-    const res = await fetch(API + '/products?limit=200' + (q ? '&q=' + encodeURIComponent(q) : ''));
+    const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
     productsCache = data.products || [];
+    // Populate filter dropdowns (preserve selection)
+    if (data.categories) {
+      const catSel = document.getElementById('inv-filter-category');
+      const prevCat = catSel.value;
+      catSel.innerHTML = '<option value="">All categories</option>' + data.categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      catSel.value = prevCat;
+    }
+    if (data.locations) {
+      const locSel = document.getElementById('inv-filter-location');
+      const prevLoc = locSel.value;
+      locSel.innerHTML = '<option value="">All locations</option>' + data.locations.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+      locSel.value = prevLoc;
+    }
     const container = document.getElementById('product-list');
     const empty = document.getElementById('products-empty');
     if (!data.products.length) { container.innerHTML = ''; empty.style.display = ''; return; }
