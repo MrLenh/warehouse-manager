@@ -234,6 +234,87 @@ def export_qrcodes(
     })
 
 
+@router.get("/{picking_list_id}/qrcodes-by-sku")
+def export_qrcodes_by_sku(
+    picking_list_id: str,
+    db: Session = Depends(get_db),
+):
+    """Export QR labels aggregated by SKU for Rollo printer — one 2x1 inch page per unique SKU."""
+    from app.models.product import Product, Variant
+
+    pl = picking_service.get_picking_list(db, picking_list_id)
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+    if not pl.items:
+        raise HTTPException(400, "No items in picking list")
+
+    # Aggregate items by SKU
+    sku_map: dict[str, dict] = {}
+    for item in pl.items:
+        key = item.sku
+        if key not in sku_map:
+            sku_map[key] = {
+                "sku": item.sku,
+                "product_name": item.product_name,
+                "variant_label": item.variant_label,
+                "product_id": item.product_id,
+                "qty": 0,
+            }
+        sku_map[key]["qty"] += 1
+
+    # Fetch location from product/variant
+    product_cache: dict[str, Product] = {}
+    variant_cache: dict[str, Variant | None] = {}
+    rows = sorted(sku_map.values(), key=lambda r: r["sku"])
+
+    for row in rows:
+        pid = row["product_id"]
+        if pid not in product_cache:
+            product_cache[pid] = db.query(Product).filter(Product.id == pid).first()
+        product = product_cache[pid]
+
+        location = ""
+        if product:
+            location = product.location or ""
+            if row["sku"] != product.sku:
+                cache_key = row["sku"]
+                if cache_key not in variant_cache:
+                    variant_cache[cache_key] = db.query(Variant).filter(
+                        Variant.product_id == pid, Variant.variant_sku == row["sku"]
+                    ).first()
+                variant = variant_cache[cache_key]
+                if variant and variant.location:
+                    location = variant.location
+        row["location"] = location
+
+    # Generate one label per SKU
+    pages = []
+    for row in rows:
+        lines = [
+            ("34", row["sku"], "#000000"),
+            ("20", row["product_name"], "#000000"),
+        ]
+        if row["variant_label"]:
+            lines.append(("18", row["variant_label"], "#333333"))
+        lines.append(("28", f"Qty: {row['qty']}", "#000000"))
+        if row["location"]:
+            lines.append(("18", f"Loc: {row['location']}", "#333333"))
+
+        label_img = _draw_label_2x1(row["sku"], lines)
+        pages.append(label_img)
+
+    if not pages:
+        raise HTTPException(400, "No labels generated")
+
+    buf = io.BytesIO()
+    pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=DPI)
+    buf.seek(0)
+    fname = f"picking-{pl.picking_number}-by-sku"
+    return StreamingResponse(buf, media_type="application/pdf", headers={
+        "Content-Disposition": f"attachment; filename={fname}.pdf"
+    })
+
+
 @router.get("/{picking_list_id}/picking-summary")
 def export_picking_summary(picking_list_id: str, db: Session = Depends(get_db)):
     """Export A4 picking summary as printable HTML table — crisp text, optimized for print."""
