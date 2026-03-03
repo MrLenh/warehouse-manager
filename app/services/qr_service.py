@@ -61,13 +61,15 @@ def _draw_label_2x1(
         line_h = sz + max(6 * SCALE, sz // 4)
         y += line_h
 
-    # Generate barcode (Code128)
+    # Generate barcode (Code128) at label DPI for pixel-perfect bars
     code = barcode.get('code128', barcode_data, writer=ImageWriter())
     barcode_buf = io.BytesIO()
     code.write(barcode_buf, options={
         'write_text': False,
-        'module_height': 15,
-        'quiet_zone': 1,
+        'module_height': 10,       # mm — tall bars for reliable scanning
+        'module_width': 0.24,      # mm — ~5.7px per module at 600 DPI
+        'quiet_zone': 2,           # mm — proper quiet zones for scanner
+        'dpi': DPI,                # render at label DPI (600)
     })
     barcode_buf.seek(0)
     barcode_img = Image.open(barcode_buf).convert("RGB")
@@ -79,9 +81,18 @@ def _draw_label_2x1(
         available_h = 80
         barcode_top = LABEL_H - available_h - PADDING
 
-    barcode_w = LABEL_W - 2 * PADDING
-    barcode_img = barcode_img.resize((barcode_w, available_h), Image.NEAREST)
-    img.paste(barcode_img, (PADDING, barcode_top))
+    # Preserve original bar widths — only stretch height, center horizontally
+    barcode_target_w = LABEL_W - 2 * PADDING
+    orig_w = barcode_img.width
+    if orig_w > barcode_target_w:
+        # Too wide — scale down proportionally
+        barcode_img = barcode_img.resize((barcode_target_w, available_h), Image.NEAREST)
+        x_offset = PADDING
+    else:
+        # Fits — stretch height only, center horizontally (preserves bar width ratios)
+        barcode_img = barcode_img.resize((orig_w, available_h), Image.NEAREST)
+        x_offset = PADDING + (barcode_target_w - orig_w) // 2
+    img.paste(barcode_img, (x_offset, barcode_top))
 
     # Border
     if show_border:
