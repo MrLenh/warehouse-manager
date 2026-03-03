@@ -2,7 +2,8 @@ import io
 import json
 import os
 
-import qrcode
+import barcode
+from barcode.writer import ImageWriter
 from PIL import Image, ImageDraw, ImageFont
 
 from app.config import settings
@@ -12,7 +13,6 @@ DPI = 600
 SCALE = 2  # internal render scale vs original 300 DPI design
 LABEL_W = int(2 * DPI)   # 1200
 LABEL_H = int(1 * DPI)   # 600
-QR_SIZE = LABEL_H - 200  # 400px, compact for more text space
 PADDING = 20
 
 
@@ -31,59 +31,57 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 
 def _draw_label_2x1(
-    qr_data: str,
+    barcode_data: str,
     lines: list[tuple[str, str, str]],
-    qr_size: int = QR_SIZE,
     show_border: bool = False,
 ) -> Image.Image:
-    """Create a 2x1 inch label: QR on left, text info on right.
+    """Create a 2x1 inch label: text on top, Code128 barcode on bottom.
 
     Args:
-        qr_data: data to encode in QR code
+        barcode_data: data to encode in barcode (Code128)
         lines: list of (font_size, text, color) tuples
-        qr_size: QR code size in pixels (default QR_SIZE)
         show_border: whether to draw a border around the label
     Returns:
         PIL Image
     """
-    # Generate QR code
-    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=1)
-    qr.add_data(qr_data)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-    qr_img = qr_img.resize((qr_size, qr_size), Image.NEAREST)
-
     # Create label
     img = Image.new("RGB", (LABEL_W, LABEL_H), "white")
     draw = ImageDraw.Draw(img)
+    text_area_w = LABEL_W - 2 * PADDING
 
-    # QR on left, vertically centered
-    qr_x = PADDING
-    qr_y = (LABEL_H - qr_size) // 2
-    img.paste(qr_img, (qr_x, qr_y))
-
-    # Text on right side
-    text_x = PADDING + qr_size + PADDING
-    text_area_w = LABEL_W - text_x - PADDING
-
-    # Calculate total text height to vertically center
-    total_text_h = 0
-    rendered_lines = []
+    # Draw text lines at the top
+    y = PADDING
     for font_size_str, text, color in lines:
-        sz = int(font_size_str) * SCALE  # scale font size for higher DPI
+        sz = int(font_size_str) * SCALE
         font = _get_font(sz)
         # Truncate if too wide
         while text and draw.textbbox((0, 0), text, font=font)[2] > text_area_w and len(text) > 3:
             text = text[:-4] + "..."
+        draw.text((PADDING, y), text, fill="black", font=font)
         line_h = sz + max(6 * SCALE, sz // 4)
-        rendered_lines.append((font, text, line_h))
-        total_text_h += line_h
-
-    y = max(PADDING, (LABEL_H - total_text_h) // 2)
-
-    for font, text, line_h in rendered_lines:
-        draw.text((text_x, y), text, fill="black", font=font)
         y += line_h
+
+    # Generate barcode (Code128)
+    code = barcode.get('code128', barcode_data, writer=ImageWriter())
+    barcode_buf = io.BytesIO()
+    code.write(barcode_buf, options={
+        'write_text': False,
+        'module_height': 15,
+        'quiet_zone': 1,
+    })
+    barcode_buf.seek(0)
+    barcode_img = Image.open(barcode_buf).convert("RGB")
+
+    # Place barcode in remaining space at bottom
+    barcode_top = y + PADDING // 2
+    available_h = LABEL_H - barcode_top - PADDING
+    if available_h < 80:
+        available_h = 80
+        barcode_top = LABEL_H - available_h - PADDING
+
+    barcode_w = LABEL_W - 2 * PADDING
+    barcode_img = barcode_img.resize((barcode_w, available_h), Image.NEAREST)
+    img.paste(barcode_img, (PADDING, barcode_top))
 
     # Border
     if show_border:
@@ -105,13 +103,10 @@ def generate_qr_label(
     location: str = "",
     price: float = 0.0,
 ) -> bytes:
-    """Generate a 2x1 inch QR code label. QR left, info right. Returns PNG bytes."""
-    base = settings.BASE_URL.rstrip("/")
-    qr_data = f"{base}/product/{product_id}"
-    if variant_id:
-        qr_data += f"?variant={variant_id}"
-
+    """Generate a 2x1 inch barcode label. Text on top, barcode on bottom. Returns PNG bytes."""
     display_sku = variant_sku or sku
+    barcode_data = display_sku
+
     lines = [
         ("34", display_sku, "#000000"),
         ("24", name, "#000000"),
@@ -123,7 +118,7 @@ def generate_qr_label(
     if price > 0:
         lines.append(("20", f"${price:.2f}", "#000000"))
 
-    img = _draw_label_2x1(qr_data, lines)
+    img = _draw_label_2x1(barcode_data, lines)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", dpi=(DPI, DPI))
@@ -132,7 +127,7 @@ def generate_qr_label(
 
 
 def generate_product_qr(product) -> str:
-    """Generate and save QR code for a product. Returns file path."""
+    """Generate and save barcode for a product. Returns file path."""
     os.makedirs(settings.QR_CODE_DIR, exist_ok=True)
     img_bytes = generate_qr_label(
         sku=product.sku,
@@ -148,7 +143,7 @@ def generate_product_qr(product) -> str:
 
 
 def generate_variant_qr(variant, product) -> bytes:
-    """Generate QR label for a variant. Returns PNG bytes."""
+    """Generate barcode label for a variant. Returns PNG bytes."""
     attrs = json.loads(variant.attributes) if isinstance(variant.attributes, str) else (variant.attributes or {})
     variant_label = " / ".join(attrs.values()) if attrs else ""
     price = variant.price_override if variant.price_override > 0 else product.price
@@ -166,9 +161,8 @@ def generate_variant_qr(variant, product) -> bytes:
 
 
 def generate_picking_list_qr(picking_list, order_count: int = 0, item_count: int = 0) -> bytes:
-    """Generate a 2x1 inch QR label for a picking list. Returns PNG bytes."""
-    base = settings.BASE_URL.rstrip("/")
-    qr_data = f"{base}/picking/{picking_list.id}"
+    """Generate a 2x1 inch barcode label for a picking list. Returns PNG bytes."""
+    barcode_data = picking_list.picking_number
 
     lines = [
         ("34", picking_list.picking_number, "#000000"),
@@ -176,7 +170,7 @@ def generate_picking_list_qr(picking_list, order_count: int = 0, item_count: int
         ("20", picking_list.status.upper() if isinstance(picking_list.status, str) else picking_list.status.value.upper(), "#333333"),
     ]
 
-    img = _draw_label_2x1(qr_data, lines)
+    img = _draw_label_2x1(barcode_data, lines)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", dpi=(DPI, DPI))
@@ -185,9 +179,8 @@ def generate_picking_list_qr(picking_list, order_count: int = 0, item_count: int
 
 
 def generate_order_qr(order) -> bytes:
-    """Generate a 2x1 inch QR label for an order. Returns PNG bytes."""
-    base = settings.BASE_URL.rstrip("/")
-    qr_data = f"{base}/order/{order.id}"
+    """Generate a 2x1 inch barcode label for an order. Returns PNG bytes."""
+    barcode_data = order.order_number
 
     lines = [
         ("34", order.order_number, "#000000"),
@@ -199,7 +192,7 @@ def generate_order_qr(order) -> bytes:
     status_str = order.status.upper() if isinstance(order.status, str) else order.status.value.upper()
     lines.append(("18", status_str, "#333333"))
 
-    img = _draw_label_2x1(qr_data, lines)
+    img = _draw_label_2x1(barcode_data, lines)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", dpi=(DPI, DPI))
@@ -208,7 +201,7 @@ def generate_order_qr(order) -> bytes:
 
 
 def generate_bulk_qr_page(product, variants: list) -> bytes:
-    """Generate a printable PDF with 2x1 inch QR labels, one per page.
+    """Generate a printable PDF with 2x1 inch barcode labels, one per page.
     Returns PDF bytes (or PNG if single label).
     """
     pages = []
