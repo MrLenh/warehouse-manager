@@ -527,12 +527,6 @@ async function doScan() {
       resultEl.textContent = msg;
       await refreshProgress();
 
-      // Auto-open order label on first scan (for packing cover)
-      if (isFirstScan) {
-        printOrderLabel(data.order_id);
-        toast('Print order label for packing cover');
-      }
-
       // Auto print & drop-off if order complete and label already purchased
       if (data.order_complete && data.has_label) {
         const orderProgress = progressData.find(x => x.order_id === data.order_id);
