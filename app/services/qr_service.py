@@ -7,12 +7,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 from app.config import settings
 
-# Label layout constants — 2x1 inch at 300 DPI
-DPI = 300
-LABEL_W = int(2 * DPI)   # 600
-LABEL_H = int(1 * DPI)   # 300
-QR_SIZE = LABEL_H - 100  # 200px, compact for more text space
-PADDING = 10
+# Label layout constants — 2x1 inch at 600 DPI for crisp thermal printing
+DPI = 600
+SCALE = 2  # internal render scale vs original 300 DPI design
+LABEL_W = int(2 * DPI)   # 1200
+LABEL_H = int(1 * DPI)   # 600
+QR_SIZE = LABEL_H - 200  # 400px, compact for more text space
+PADDING = 20
 
 
 def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -69,24 +70,27 @@ def _draw_label_2x1(
     total_text_h = 0
     rendered_lines = []
     for font_size_str, text, color in lines:
-        sz = int(font_size_str)
+        sz = int(font_size_str) * SCALE  # scale font size for higher DPI
         font = _get_font(sz)
         # Truncate if too wide
         while text and draw.textbbox((0, 0), text, font=font)[2] > text_area_w and len(text) > 3:
             text = text[:-4] + "..."
-        line_h = sz + max(6, sz // 4)
-        rendered_lines.append((font, text, color, line_h))
+        line_h = sz + max(6 * SCALE, sz // 4)
+        rendered_lines.append((font, text, line_h))
         total_text_h += line_h
 
     y = max(PADDING, (LABEL_H - total_text_h) // 2)
 
-    for font, text, color, line_h in rendered_lines:
-        draw.text((text_x, y), text, fill=color, font=font)
+    for font, text, line_h in rendered_lines:
+        draw.text((text_x, y), text, fill="black", font=font)
         y += line_h
 
     # Border
     if show_border:
-        draw.rectangle([(0, 0), (LABEL_W - 1, LABEL_H - 1)], outline="#cccccc", width=1)
+        draw.rectangle([(0, 0), (LABEL_W - 1, LABEL_H - 1)], outline="#cccccc", width=SCALE)
+
+    # Convert to 1-bit monochrome — eliminates anti-aliasing blur on thermal printers
+    img = img.convert("1", dither=Image.Dither.NONE).convert("RGB")
 
     return img
 
