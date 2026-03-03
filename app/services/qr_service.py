@@ -11,7 +11,7 @@ from app.config import settings
 DPI = 300
 LABEL_W = int(2 * DPI)   # 600
 LABEL_H = int(1 * DPI)   # 300
-QR_SIZE = LABEL_H - 20   # 280, nearly full height with small margin
+QR_SIZE = LABEL_H - 100  # 200px, compact for more text space
 PADDING = 10
 
 
@@ -33,7 +33,7 @@ def _draw_label_2x1(
     qr_data: str,
     lines: list[tuple[str, str, str]],
     qr_size: int = QR_SIZE,
-    show_border: bool = True,
+    show_border: bool = False,
 ) -> Image.Image:
     """Create a 2x1 inch label: QR on left, text info on right.
 
@@ -109,15 +109,15 @@ def generate_qr_label(
 
     display_sku = variant_sku or sku
     lines = [
-        ("38", display_sku, "#000000"),
-        ("28", name, "#333333"),
+        ("34", display_sku, "#000000"),
+        ("24", name, "#000000"),
     ]
     if variant_label:
-        lines.append(("22", variant_label, "#555555"))
+        lines.append(("20", variant_label, "#333333"))
     if location:
-        lines.append(("20", f"Loc: {location}", "#888888"))
+        lines.append(("18", f"Loc: {location}", "#333333"))
     if price > 0:
-        lines.append(("24", f"${price:.2f}", "#667eea"))
+        lines.append(("20", f"${price:.2f}", "#000000"))
 
     img = _draw_label_2x1(qr_data, lines)
 
@@ -167,9 +167,9 @@ def generate_picking_list_qr(picking_list, order_count: int = 0, item_count: int
     qr_data = f"{base}/picking/{picking_list.id}"
 
     lines = [
-        ("40", picking_list.picking_number, "#000000"),
-        ("26", f"{order_count} orders, {item_count} items", "#333333"),
-        ("22", picking_list.status.upper() if isinstance(picking_list.status, str) else picking_list.status.value.upper(), "#667eea"),
+        ("34", picking_list.picking_number, "#000000"),
+        ("24", f"{order_count} orders, {item_count} items", "#000000"),
+        ("20", picking_list.status.upper() if isinstance(picking_list.status, str) else picking_list.status.value.upper(), "#333333"),
     ]
 
     img = _draw_label_2x1(qr_data, lines)
@@ -186,14 +186,14 @@ def generate_order_qr(order) -> bytes:
     qr_data = f"{base}/order/{order.id}"
 
     lines = [
-        ("40", order.order_number, "#000000"),
+        ("34", order.order_number, "#000000"),
     ]
     if order.order_name:
-        lines.append(("28", order.order_name, "#333333"))
-    lines.append(("24", order.customer_name, "#555555"))
-    lines.append(("22", f"Items: {len(order.items)}", "#888888"))
+        lines.append(("24", order.order_name, "#000000"))
+    lines.append(("20", order.customer_name, "#333333"))
+    lines.append(("18", f"Items: {len(order.items)}", "#333333"))
     status_str = order.status.upper() if isinstance(order.status, str) else order.status.value.upper()
-    lines.append(("22", status_str, "#667eea"))
+    lines.append(("18", status_str, "#333333"))
 
     img = _draw_label_2x1(qr_data, lines)
 
