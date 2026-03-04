@@ -17,6 +17,7 @@ class Customer(Base):
     company: Mapped[str] = mapped_column(String, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     webhook_url: Mapped[str] = mapped_column(String, default="")
+    webhook_payload_fields: Mapped[str] = mapped_column(String, default="")  # JSON list of field keys
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

@@ -139,8 +139,12 @@ tr:hover{background:#f8f9ff}
 
     <div class="card" style="margin-top:24px">
       <h3 style="margin-bottom:8px">Webhook Payload Format</h3>
-      <p style="font-size:13px;color:#666;margin-bottom:12px">Khi order được cập nhật, hệ thống sẽ gửi HTTP POST tới webhook URL với payload JSON sau:</p>
-      <pre style="background:#f8f9fa;border:1px solid #e8e8e8;border-radius:8px;padding:16px;font-size:12px;overflow-x:auto;line-height:1.6">{
+      <p style="font-size:13px;color:#666;margin-bottom:12px">Khi order được cập nhật, hệ thống sẽ gửi HTTP POST tới webhook URL. Mỗi customer có thể tùy chỉnh các trường gửi đi.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <h4 style="font-size:13px;color:#667eea;margin-bottom:8px">Default Payload (Full)</h4>
+          <pre style="background:#f8f9fa;border:1px solid #e8e8e8;border-radius:8px;padding:14px;font-size:11px;overflow-x:auto;line-height:1.5">{
   "event": "order_update",
   "order_number": "ORD-20260304-ABC123",
   "order_name": "Don hang A",
@@ -148,27 +152,27 @@ tr:hover{background:#f8f9ff}
   "customer_name": "Nguyen Van A",
   "customer_email": "a@email.com",
   "shop_name": "Shop ABC",
-  "pricing": {
-    "shipping_cost": 8.50,
-    "processing_fee": 1.75,
-    "total_price": 10.25
-  },
-  "tracking": {
-    "tracking_number": "1Z999AA10123456784",
-    "tracking_status": "in_transit",
-    "tracking_url": "https://track.example.com/...",
-    "carrier": "USPS",
-    "service": "GroundAdvantage",
-    "carrier_label_url": "https://labels.example.com/label.pdf"
-  },
-  "shipping_address": {
-    "name": "...", "street1": "...", "street2": "...",
-    "city": "...", "state": "...", "zip": "...", "country": "US"
-  },
-  "status_history": [
-    {"status": "confirmed", "timestamp": "...", "note": "..."}
-  ]
+  "pricing": { "shipping_cost": 8.50, ... },
+  "tracking": { "tracking_number": "...", ... },
+  "shipping_address": { "name": "...", ... },
+  "status_history": [...]
 }</pre>
+        </div>
+        <div>
+          <h4 style="font-size:13px;color:#667eea;margin-bottom:8px">Custom Payload (Ví dụ)</h4>
+          <pre style="background:#f8f9fa;border:1px solid #e8e8e8;border-radius:8px;padding:14px;font-size:11px;overflow-x:auto;line-height:1.5">// Chọn fields trong Edit Webhook
+// Nếu chọn item-level fields → gửi per line item
+{
+  "id": "item-uuid-001",
+  "order_number": "ORD-20260304-ABC123",
+  "carrier_code": "USPS",
+  "tracking_number": "1212xxx2123",
+  "tracking_url": "https://track.example.com/...",
+  "base_cost": 1.75,
+  "shipping_cost": 8.50
+}</pre>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -253,7 +257,7 @@ tr:hover{background:#f8f9ff}
 
 <!-- Webhook Edit Modal -->
 <div class="modal-overlay" id="wh-modal">
-  <div class="modal" style="width:550px">
+  <div class="modal" style="width:650px">
     <div class="modal-header">
       <h2 id="wh-modal-title">Edit Webhook</h2>
       <button class="modal-close" onclick="closeWhModal()">&times;</button>
@@ -269,6 +273,25 @@ tr:hover{background:#f8f9ff}
         <input id="wh-url" type="url" placeholder="https://your-system.com/webhook">
         <div style="font-size:12px;color:#888;margin-top:4px">Hệ thống sẽ gửi HTTP POST với JSON payload tới URL này khi order được cập nhật.</div>
       </div>
+
+      <div class="form-group" style="margin-top:16px">
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          Payload Fields
+          <span style="font-size:11px;color:#888;font-weight:normal">(Để trống = gửi full payload mặc định)</span>
+        </label>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button class="btn btn-sm btn-outline" type="button" onclick="whSelectAllFields()">Select All</button>
+          <button class="btn btn-sm btn-outline" type="button" onclick="whDeselectAllFields()">Deselect All</button>
+        </div>
+        <div id="wh-fields-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;max-height:280px;overflow-y:auto;padding:12px;background:#f8f9fa;border:1px solid #e8e8e8;border-radius:8px">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:12px">
+        <label>Payload Preview</label>
+        <pre id="wh-payload-preview" style="background:#1a1a2e;color:#a8e6cf;border-radius:8px;padding:14px;font-size:12px;line-height:1.5;overflow-x:auto;max-height:200px;overflow-y:auto;margin:0">{}</pre>
+      </div>
+
       <div id="wh-test-result" style="margin-top:12px"></div>
     </div>
     <div class="modal-footer">
@@ -653,6 +676,53 @@ async function deleteInvoice() {
 // ===========================================================================
 let whCustomers = [];
 
+// Available webhook fields definition (mirrors backend AVAILABLE_WEBHOOK_FIELDS)
+const WH_AVAILABLE_FIELDS = {
+  id: {label: 'Line Item ID', group: 'Item'},
+  order_number: {label: 'Order Number', group: 'Order'},
+  order_name: {label: 'Order Name', group: 'Order'},
+  status: {label: 'Order Status', group: 'Order'},
+  customer_name: {label: 'Customer Name', group: 'Customer'},
+  customer_email: {label: 'Customer Email', group: 'Customer'},
+  shop_name: {label: 'Shop Name', group: 'Order'},
+  carrier_code: {label: 'Carrier Code', group: 'Tracking'},
+  service: {label: 'Shipping Service', group: 'Tracking'},
+  tracking_number: {label: 'Tracking Number', group: 'Tracking'},
+  tracking_url: {label: 'Tracking URL', group: 'Tracking'},
+  tracking_status: {label: 'Tracking Status', group: 'Tracking'},
+  shipping_cost: {label: 'Shipping Cost', group: 'Pricing'},
+  base_cost: {label: 'Base Cost (Processing Fee)', group: 'Pricing'},
+  total_price: {label: 'Total Price', group: 'Pricing'},
+  sku: {label: 'SKU', group: 'Item'},
+  product_name: {label: 'Product Name', group: 'Item'},
+  variant_label: {label: 'Variant', group: 'Item'},
+  quantity: {label: 'Quantity', group: 'Item'},
+  unit_price: {label: 'Unit Price', group: 'Item'},
+};
+
+const WH_SAMPLE_VALUES = {
+  id: 'item-001',
+  order_number: 'ORD-20260304-ABC123',
+  order_name: 'Don hang A',
+  status: 'shipped',
+  customer_name: 'Nguyen Van A',
+  customer_email: 'a@email.com',
+  shop_name: 'Shop ABC',
+  carrier_code: 'USPS',
+  service: 'GroundAdvantage',
+  tracking_number: '9400111899223100001234',
+  tracking_url: 'https://track.example.com/...',
+  tracking_status: 'in_transit',
+  shipping_cost: 8.50,
+  base_cost: 1.75,
+  total_price: 10.25,
+  sku: 'SKU-001',
+  product_name: 'Sample Product',
+  variant_label: 'Red / M',
+  quantity: 2,
+  unit_price: 15.99,
+};
+
 async function loadWebhooks() {
   try {
     const res = await fetch(API + '/customers?limit=500');
@@ -662,6 +732,10 @@ async function loadWebhooks() {
     document.getElementById('stat-webhooks').textContent = activeCount + ' Webhooks';
     renderWebhooks();
   } catch (e) { console.error(e); }
+}
+
+function _parseFields(c) {
+  try { return JSON.parse(c.webhook_payload_fields || '[]'); } catch { return []; }
 }
 
 function renderWebhooks() {
@@ -678,18 +752,81 @@ function renderWebhooks() {
 
   if (!list.length) { wrap.innerHTML = '<div class="empty">No customers found</div>'; return; }
 
-  wrap.innerHTML = `<table><thead><tr><th>Customer</th><th>Company</th><th>Webhook URL</th><th>Status</th><th style="width:180px"></th></tr></thead><tbody>` +
-    list.map(c => `<tr>
+  wrap.innerHTML = `<table><thead><tr><th>Customer</th><th>Company</th><th>Webhook URL</th><th>Payload</th><th>Status</th><th style="width:180px"></th></tr></thead><tbody>` +
+    list.map(c => {
+      const fields = _parseFields(c);
+      const payloadInfo = fields.length
+        ? `<span style="font-size:12px;color:#667eea" title="${fields.join(', ')}">${fields.length} fields</span>`
+        : '<span style="font-size:12px;color:#999">Default</span>';
+      return `<tr>
       <td><strong>${esc(c.name)}</strong><br><span style="font-size:12px;color:#888">${esc(c.email)}</span></td>
       <td>${esc(c.company)}</td>
-      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.webhook_url)}">${c.webhook_url ? '<code style="font-size:12px;background:#f0f2f5;padding:2px 8px;border-radius:4px">' + esc(c.webhook_url) + '</code>' : '<span style="color:#ccc">Not configured</span>'}</td>
+      <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.webhook_url)}">${c.webhook_url ? '<code style="font-size:12px;background:#f0f2f5;padding:2px 8px;border-radius:4px">' + esc(c.webhook_url) + '</code>' : '<span style="color:#ccc">Not configured</span>'}</td>
+      <td>${payloadInfo}</td>
       <td>${c.webhook_url ? '<span class="badge badge-paid">Active</span>' : '<span class="badge badge-requested">Inactive</span>'}</td>
       <td class="actions-cell">
         <button class="btn btn-sm btn-outline" onclick="openWhModal('${c.id}')">Edit</button>
         ${c.webhook_url ? `<button class="btn btn-sm btn-primary" onclick="quickTestWebhook('${c.id}')">Test</button>` : ''}
         ${c.webhook_url ? `<button class="btn btn-sm btn-danger" onclick="removeWebhook('${c.id}','${esc(c.name)}')">Remove</button>` : ''}
       </td>
-    </tr>`).join('') + '</tbody></table>';
+    </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function _renderFieldsGrid(selectedFields) {
+  const grid = document.getElementById('wh-fields-grid');
+  const groups = {};
+  for (const [key, info] of Object.entries(WH_AVAILABLE_FIELDS)) {
+    if (!groups[info.group]) groups[info.group] = [];
+    groups[info.group].push({key, ...info});
+  }
+
+  let html = '';
+  for (const [group, fields] of Object.entries(groups)) {
+    html += `<div style="grid-column:span 2;font-size:12px;font-weight:600;color:#667eea;margin-top:6px;border-bottom:1px solid #e0e0e0;padding-bottom:2px">${group}</div>`;
+    for (const f of fields) {
+      const checked = selectedFields.includes(f.key) ? 'checked' : '';
+      html += `<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:3px 0">
+        <input type="checkbox" class="wh-field-cb" value="${f.key}" ${checked} onchange="whUpdatePreview()">
+        <span>${f.label}</span>
+        <code style="font-size:10px;color:#999;margin-left:auto">${f.key}</code>
+      </label>`;
+    }
+  }
+  grid.innerHTML = html;
+}
+
+function whGetSelectedFields() {
+  return Array.from(document.querySelectorAll('.wh-field-cb:checked')).map(cb => cb.value);
+}
+
+function whSelectAllFields() {
+  document.querySelectorAll('.wh-field-cb').forEach(cb => cb.checked = true);
+  whUpdatePreview();
+}
+
+function whDeselectAllFields() {
+  document.querySelectorAll('.wh-field-cb').forEach(cb => cb.checked = false);
+  whUpdatePreview();
+}
+
+function whUpdatePreview() {
+  const fields = whGetSelectedFields();
+  const pre = document.getElementById('wh-payload-preview');
+  if (!fields.length) {
+    pre.textContent = '// Default full payload (tất cả thông tin order)';
+    return;
+  }
+  const sample = {};
+  for (const f of fields) {
+    if (f in WH_SAMPLE_VALUES) sample[f] = WH_SAMPLE_VALUES[f];
+  }
+  const hasItemField = fields.some(f => ['id','sku','product_name','variant_label','quantity','unit_price'].includes(f));
+  if (hasItemField) {
+    pre.textContent = '// Gửi 1 request cho mỗi line item:\n' + JSON.stringify(sample, null, 2);
+  } else {
+    pre.textContent = '// Gửi 1 request cho mỗi order:\n' + JSON.stringify(sample, null, 2);
+  }
 }
 
 function openWhModal(custId) {
@@ -700,6 +837,11 @@ function openWhModal(custId) {
   document.getElementById('wh-url').value = c.webhook_url || '';
   document.getElementById('wh-test-result').innerHTML = '';
   document.getElementById('wh-modal-title').textContent = c.webhook_url ? 'Edit Webhook' : 'Add Webhook';
+
+  const selectedFields = _parseFields(c);
+  _renderFieldsGrid(selectedFields);
+  whUpdatePreview();
+
   document.getElementById('wh-modal').classList.add('show');
 }
 
@@ -708,12 +850,16 @@ function closeWhModal() { document.getElementById('wh-modal').classList.remove('
 async function saveWebhook() {
   const id = document.getElementById('wh-edit-id').value;
   const url = document.getElementById('wh-url').value.trim();
+  const fields = whGetSelectedFields();
 
   try {
     const res = await fetch(API + '/customers/' + id, {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({webhook_url: url}),
+      body: JSON.stringify({
+        webhook_url: url,
+        webhook_payload_fields: fields.length ? JSON.stringify(fields) : '',
+      }),
     });
     if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
     toast(url ? 'Webhook saved' : 'Webhook removed');
@@ -726,16 +872,20 @@ async function saveWebhook() {
 async function testWebhook() {
   const id = document.getElementById('wh-edit-id').value;
   const url = document.getElementById('wh-url').value.trim();
+  const fields = whGetSelectedFields();
   const resultDiv = document.getElementById('wh-test-result');
 
   if (!url) { toast('Enter a webhook URL first', 'error'); return; }
 
-  // Save first, then test
+  // Save first (including fields), then test
   try {
     await fetch(API + '/customers/' + id, {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({webhook_url: url}),
+      body: JSON.stringify({
+        webhook_url: url,
+        webhook_payload_fields: fields.length ? JSON.stringify(fields) : '',
+      }),
     });
   } catch (e) { /* ignore save error, try test anyway */ }
 
@@ -744,10 +894,14 @@ async function testWebhook() {
   try {
     const res = await fetch(API + '/customers/' + id + '/webhook/test', {method: 'POST'});
     const data = await res.json();
+    let previewHtml = '';
+    if (data.payload_preview) {
+      previewHtml = '<pre style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:10px;font-size:11px;margin-top:8px;overflow-x:auto">' + esc(JSON.stringify(data.payload_preview, null, 2)) + '</pre>';
+    }
     if (data.success) {
-      resultDiv.innerHTML = '<div style="padding:12px;background:#d4edda;border-radius:8px;font-size:13px;color:#155724">Test successful! Status: ' + data.status_code + '</div>';
+      resultDiv.innerHTML = '<div style="padding:12px;background:#d4edda;border-radius:8px;font-size:13px;color:#155724">Test successful! Status: ' + data.status_code + previewHtml + '</div>';
     } else {
-      resultDiv.innerHTML = '<div style="padding:12px;background:#f8d7da;border-radius:8px;font-size:13px;color:#721c24">Test failed. ' + (data.error ? esc(data.error) : 'Status: ' + data.status_code) + '</div>';
+      resultDiv.innerHTML = '<div style="padding:12px;background:#f8d7da;border-radius:8px;font-size:13px;color:#721c24">Test failed. ' + (data.error ? esc(data.error) : 'Status: ' + data.status_code) + previewHtml + '</div>';
     }
     loadWebhooks();
   } catch (e) {
@@ -773,7 +927,7 @@ async function removeWebhook(custId, name) {
     const res = await fetch(API + '/customers/' + custId, {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({webhook_url: ''}),
+      body: JSON.stringify({webhook_url: '', webhook_payload_fields: ''}),
     });
     if (!res.ok) { toast('Error removing webhook', 'error'); return; }
     toast('Webhook removed');

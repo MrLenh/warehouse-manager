@@ -387,19 +387,60 @@ def export_invoices_csv(
 @router.post("/{customer_id}/webhook/test")
 def test_customer_webhook(customer_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Send a test payload to the customer's webhook URL."""
+    import json as _json
+    from app.services.webhook_service import AVAILABLE_WEBHOOK_FIELDS
+
     c = db.query(Customer).filter(Customer.id == customer_id).first()
     if not c:
         raise HTTPException(404, "Customer not found")
     if not c.webhook_url:
         raise HTTPException(400, "No webhook URL configured for this customer")
 
-    payload = {
-        "event": "test",
-        "customer_name": c.name,
-        "customer_email": c.email,
-        "message": "This is a test webhook from Warehouse Manager.",
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+    # Build payload based on custom fields if configured
+    fields = []
+    if c.webhook_payload_fields:
+        try:
+            fields = _json.loads(c.webhook_payload_fields)
+        except (ValueError, TypeError):
+            fields = []
+
+    if fields:
+        # Build sample custom payload with test data
+        payload = {}
+        for f in fields:
+            if f not in AVAILABLE_WEBHOOK_FIELDS:
+                continue
+            sample_values = {
+                "id": "item-test-001",
+                "order_number": "ORD-TEST-001",
+                "order_name": "Test Order",
+                "status": "shipped",
+                "customer_name": c.name,
+                "customer_email": c.email,
+                "shop_name": "Test Shop",
+                "carrier_code": "USPS",
+                "service": "GroundAdvantage",
+                "tracking_number": "9400111899223100001234",
+                "tracking_url": "https://track.example.com/9400111899223100001234",
+                "tracking_status": "in_transit",
+                "shipping_cost": 8.50,
+                "base_cost": 1.75,
+                "total_price": 10.25,
+                "sku": "SKU-TEST-001",
+                "product_name": "Test Product",
+                "variant_label": "Red / M",
+                "quantity": 2,
+                "unit_price": 15.99,
+            }
+            payload[f] = sample_values.get(f, "")
+    else:
+        payload = {
+            "event": "test",
+            "customer_name": c.name,
+            "customer_email": c.email,
+            "message": "This is a test webhook from Warehouse Manager.",
+            "timestamp": datetime.utcnow().isoformat(),
+        }
 
     try:
         with httpx.Client(timeout=10.0) as client:
@@ -408,6 +449,7 @@ def test_customer_webhook(customer_id: str, user: User = Depends(get_current_use
                 "success": resp.is_success,
                 "status_code": resp.status_code,
                 "url": c.webhook_url,
+                "payload_preview": payload,
             }
     except Exception as e:
         logger.error(f"Test webhook failed for customer {c.name}: {e}")

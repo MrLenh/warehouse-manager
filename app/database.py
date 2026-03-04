@@ -141,6 +141,7 @@ def _migrate_add_columns():
         existing = {col["name"] for col in inspector.get_columns("customers")}
         new_cols = {
             "webhook_url": "VARCHAR DEFAULT ''",
+            "webhook_payload_fields": "VARCHAR DEFAULT ''",
         }
         with engine.begin() as conn:
             for col_name, col_type in new_cols.items():
