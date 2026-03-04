@@ -26,6 +26,7 @@ ORDER_CSV_COLUMNS = [
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
     "sku", "item_name", "quantity", "notes",
+    "shipping_cost", "tracking_number", "tracking_url", "easypost_shipment_id", "label_url",
 ]
 
 
@@ -76,19 +77,21 @@ def download_order_import_template():
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(ORDER_CSV_COLUMNS)
-    # Order 1: single item, USPS GroundAdvantage (default)
+    # Order 1: single item, no shipping info yet
     writer.writerow([
         "Don hang A", "Shop ABC", "Nguyen Van A", "a@email.com", "0901234567",
         "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",
         "", "",
         "SP-001", "San pham A", "2", "Giao buoi sang",
+        "", "", "", "", "",
     ])
-    # Order 2: multiple items, UPS Ground
+    # Order 2: multiple items with full shipping info
     writer.writerow([
         "Don hang B", "Shop XYZ", "Tran Thi B", "b@email.com", "0912345678",
         "Tran Thi B", "456 Hai Ba Trung", "Phong 302", "Ha Noi", "HN", "10000", "US",
         "UPS", "Ground",
         "SP-002-RED-M", "San pham B - Red M", "1", "Can boc qua",
+        "8.50", "1Z999AA10123456784", "https://track.ups.com/1Z999AA10123456784", "shp_abc123", "https://labels.example.com/label.pdf",
     ])
     # Order 2: additional item row - only needs sku + quantity (same order_name)
     writer.writerow([
@@ -96,6 +99,7 @@ def download_order_import_template():
         "", "", "", "", "", "", "",
         "", "",
         "SP-003", "San pham C", "3", "",
+        "", "", "", "", "",
     ])
     buf.seek(0)
     return StreamingResponse(
@@ -161,6 +165,14 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
             if not customer_name:
                 errors.append({"row": row_num, "error": "customer_name or ship_to_name is required"})
                 continue
+
+            # Parse shipping_cost (float, default 0)
+            raw_shipping_cost = (row.get("shipping_cost") or "").strip()
+            try:
+                parsed_shipping_cost = float(raw_shipping_cost) if raw_shipping_cost else 0.0
+            except ValueError:
+                parsed_shipping_cost = 0.0
+
             order_groups[order_name] = {
                 "customer_name": customer_name,
                 "shop_name": shop_name,
@@ -177,6 +189,11 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                 "service": (row.get("service") or "").strip(),
                 "notes": (row.get("notes") or "").strip(),
                 "display_order_name": (row.get("order_name") or "").strip(),
+                "shipping_cost": parsed_shipping_cost,
+                "tracking_number": (row.get("tracking_number") or "").strip(),
+                "tracking_url": (row.get("tracking_url") or "").strip(),
+                "easypost_shipment_id": (row.get("easypost_shipment_id") or "").strip(),
+                "label_url": (row.get("label_url") or "").strip(),
                 "items": [],
             }
             group_order.append(order_name)
@@ -300,7 +317,30 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
         )
 
         try:
-            order_service.create_order(db, order_data)
+            order = order_service.create_order(db, order_data)
+
+            # Apply shipping info from CSV if provided
+            shipping_cost = group.get("shipping_cost", 0.0)
+            tracking_number = group.get("tracking_number", "")
+            tracking_url = group.get("tracking_url", "")
+            easypost_shipment_id = group.get("easypost_shipment_id", "")
+            label_url = group.get("label_url", "")
+
+            if shipping_cost or tracking_number or easypost_shipment_id or label_url:
+                if shipping_cost:
+                    order.shipping_cost = shipping_cost
+                    order.total_price = order.total_price + shipping_cost
+                if tracking_number:
+                    order.tracking_number = tracking_number
+                if tracking_url:
+                    order.tracking_url = tracking_url
+                if easypost_shipment_id:
+                    order.easypost_shipment_id = easypost_shipment_id
+                if label_url:
+                    order.label_url = label_url
+                db.commit()
+                db.refresh(order)
+
             created += 1
             created_details.append({
                 "order_name": display_name or order_name,
