@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 # Each key maps to a (label, resolver) where resolver takes (order, item) and returns the value.
 # Item may be None for order-level-only payloads.
 AVAILABLE_WEBHOOK_FIELDS = {
-    "id": ("Line Item ID", lambda o, i: i.id if i else ""),
-    "order_number": ("Order Number", lambda o, i: o.order_number),
+    "id": ("Line Item ID", lambda o, i: i.id[1:] if i and i.id and i.id.startswith("N") else (i.id if i else "")),
+    "order_number": ("Order Number", lambda o, i: o.order_name or ""),
     "order_name": ("Order Name", lambda o, i: o.order_name or ""),
     "status": ("Order Status", lambda o, i: o.status if isinstance(o.status, str) else o.status.value),
     "customer_name": ("Customer Name", lambda o, i: o.customer_name),
@@ -31,12 +31,13 @@ AVAILABLE_WEBHOOK_FIELDS = {
     "sku": ("SKU", lambda o, i: i.sku if i else ""),
     "product_name": ("Product Name", lambda o, i: i.product_name if i else ""),
     "variant_label": ("Variant", lambda o, i: i.variant_label if i else ""),
+    "variant_sku": ("Variant SKU", lambda o, i: i.variant_sku if i else ""),
     "quantity": ("Quantity", lambda o, i: i.quantity if i else 0),
     "unit_price": ("Unit Price", lambda o, i: i.unit_price if i else 0.0),
 }
 
 # Fields that require line-item iteration
-ITEM_LEVEL_FIELDS = {"id", "sku", "product_name", "variant_label", "quantity", "unit_price"}
+ITEM_LEVEL_FIELDS = {"id", "sku", "product_name", "variant_label", "variant_sku", "quantity", "unit_price"}
 
 
 def _build_payload(order: Order) -> dict:

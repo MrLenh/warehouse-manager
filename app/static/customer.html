@@ -696,6 +696,7 @@ const WH_AVAILABLE_FIELDS = {
   sku: {label: 'SKU', group: 'Item'},
   product_name: {label: 'Product Name', group: 'Item'},
   variant_label: {label: 'Variant', group: 'Item'},
+  variant_sku: {label: 'Variant SKU', group: 'Item'},
   quantity: {label: 'Quantity', group: 'Item'},
   unit_price: {label: 'Unit Price', group: 'Item'},
 };
@@ -719,6 +720,7 @@ const WH_SAMPLE_VALUES = {
   sku: 'SKU-001',
   product_name: 'Sample Product',
   variant_label: 'Red / M',
+  variant_sku: 'SKU-001-RED-M',
   quantity: 2,
   unit_price: 15.99,
 };
@@ -821,7 +823,7 @@ function whUpdatePreview() {
   for (const f of fields) {
     if (f in WH_SAMPLE_VALUES) sample[f] = WH_SAMPLE_VALUES[f];
   }
-  const hasItemField = fields.some(f => ['id','sku','product_name','variant_label','quantity','unit_price'].includes(f));
+  const hasItemField = fields.some(f => ['id','sku','product_name','variant_label','variant_sku','quantity','unit_price'].includes(f));
   if (hasItemField) {
     pre.textContent = '// Gửi 1 request cho mỗi line item:\n' + JSON.stringify(sample, null, 2);
   } else {
