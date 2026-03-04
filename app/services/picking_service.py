@@ -328,7 +328,8 @@ def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
 
 
 def create_label_batch(db: Session, order_ids: list[str]) -> PickingList:
-    """Create a batch from label_purchased orders. All items are pre-picked, ready for print & drop-off."""
+    """Create a batch from label_purchased orders. Orders go to processing for picking & scanning.
+    After all items are scanned, Print & Drop Off is shown (skipping Buy Label)."""
     orders = db.query(Order).filter(Order.id.in_(order_ids)).all()
     if not orders:
         raise ValueError("No valid orders found")
@@ -364,12 +365,10 @@ def create_label_batch(db: Session, order_ids: list[str]) -> PickingList:
 
     picking_list = PickingList(
         picking_number=_generate_picking_number(),
-        status=PickingListStatus.PROCESSING,
     )
     db.add(picking_list)
     db.flush()
 
-    now = datetime.now(timezone.utc)
     for order in orders:
         for item in order.items:
             for seq in range(1, item.quantity + 1):
@@ -384,10 +383,13 @@ def create_label_batch(db: Session, order_ids: list[str]) -> PickingList:
                     variant_label=item.variant_label,
                     sequence=seq,
                     qr_code=qr_code,
-                    picked=True,
-                    picked_at=now,
                 )
                 db.add(pick_item)
+
+    # Move orders to processing (label_url/tracking stays intact)
+    for order in orders:
+        order.status = OrderStatus.PROCESSING
+        _add_status_history(order, OrderStatus.PROCESSING, "Added to label batch for picking")
 
     db.commit()
     db.refresh(picking_list)
