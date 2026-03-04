@@ -35,6 +35,7 @@ class OrderCreate(BaseModel):
     service: str = ""  # empty = use config default
     webhook_url: str = ""
     notes: str = ""
+    status: Optional[str] = None  # override initial status (for CSV sync)
 
 
 class OrderStatusUpdate(BaseModel):

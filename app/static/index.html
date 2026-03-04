@@ -233,7 +233,7 @@ tr:hover{background:#f8f9ff}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
         <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
-        <label class="btn btn-success btn-sm" style="margin:0">Import Orders<input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="importOrderCSV(this)"></label>
+        <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
         <a href="/packing" target="_blank" class="btn btn-outline btn-sm">Packing Station</a>
         <button class="btn btn-primary" onclick="openOrderModal()">+ Create Order</button>
@@ -772,6 +772,58 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
   </div>
 </div>
 
+<!-- ORDER IMPORT CONFIG MODAL -->
+<div class="modal-overlay" id="import-order-modal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <h2>Import Orders from CSV</h2>
+      <button class="modal-close" onclick="closeModal('import-order-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+        Choose the initial status for all imported orders. Use this when syncing orders from another system to avoid re-processing orders that were already shipped or have tracking.
+      </p>
+      <label style="font-weight:600;font-size:13px">Initial Order Status</label>
+      <select id="import-order-status" class="input" style="margin-top:4px">
+        <option value="pending">Pending</option>
+        <option value="confirmed" selected>Confirmed (default)</option>
+        <option value="processing">Processing</option>
+        <option value="packing">Packing</option>
+        <option value="packed">Packed</option>
+        <option value="label_purchased">Label Purchased</option>
+        <option value="drop_off">Drop Off</option>
+        <option value="shipped">Shipped</option>
+        <option value="in_transit">In Transit</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <div id="import-status-warning" style="display:none;margin-top:8px;padding:8px 12px;background:#fef3c7;border-radius:6px;font-size:12px;color:#92400e">
+        Orders imported with this status will skip the normal fulfillment flow. Inventory will still be deducted.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <label class="btn btn-primary" style="margin:0">
+        Select CSV &amp; Import
+        <input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="startOrderImport(this)">
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- ORDER IMPORT REPORT MODAL -->
+<div class="modal-overlay" id="import-report-modal">
+  <div class="modal" style="width:700px">
+    <div class="modal-header">
+      <h2>Import Report</h2>
+      <button class="modal-close" onclick="closeModal('import-report-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="import-report-body" style="max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('import-report-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- QR CODE MODAL -->
 <div class="modal-overlay" id="qr-modal">
   <div class="modal" style="width:900px">
@@ -1097,11 +1149,30 @@ async function importCSV(input) {
   input.value = '';
 }
 
-async function importOrderCSV(input) {
+function openImportOrderModal() {
+  document.getElementById('import-order-status').value = 'confirmed';
+  document.getElementById('import-status-warning').style.display = 'none';
+  document.getElementById('csv-import-orders').value = '';
+  openModal('import-order-modal');
+}
+
+// Show warning for non-standard statuses
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('import-order-status');
+  if (sel) sel.addEventListener('change', () => {
+    const warn = document.getElementById('import-status-warning');
+    warn.style.display = ['pending','confirmed'].includes(sel.value) ? 'none' : 'block';
+  });
+});
+
+async function startOrderImport(input) {
   const file = input.files[0];
   if (!file) return;
+  const status = document.getElementById('import-order-status').value;
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('status', status);
+  closeModal('import-order-modal');
   try {
     const res = await fetch(API + '/orders/import', { method: 'POST', body: formData });
     if (!res.ok) {
@@ -1112,23 +1183,79 @@ async function importOrderCSV(input) {
       return;
     }
     const result = await res.json();
-    let msg = `Import: ${result.created} orders created`;
-    if (result.errors && result.errors.length > 0) msg += `, ${result.errors.length} errors`;
-    toast(msg);
-    if (result.created_details && result.created_details.length > 0) {
-      console.log('Import details:', result.created_details);
-      result.created_details.forEach(d => {
-        const items = d.items.map(i => `${i.item_name} x${i.quantity}`).join(', ');
-        console.log(`  ${d.order_name}: ${items}`);
-      });
-    }
-    if (result.errors && result.errors.length > 0) {
-      console.log('Import errors:', result.errors);
-      toast('Check Console (F12) for error details', 'error');
-    }
+    result._importStatus = status;
+    showImportReport(result);
     loadOrders();
   } catch(e) { toast('Connection error: ' + e.message, 'error'); }
   input.value = '';
+}
+
+function showImportReport(result) {
+  const details = result.created_details || [];
+  const errors = result.errors || [];
+  let html = '';
+
+  // Status badge
+  const importStatus = result._importStatus || 'confirmed';
+  const statusLabel = importStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  html += `<div style="margin-bottom:12px;font-size:13px;color:#4b5563">Imported with status: <span class="badge badge-${importStatus}" style="font-size:12px">${statusLabel}</span></div>`;
+
+  // Summary
+  html += `<div style="display:flex;gap:12px;margin-bottom:16px">`;
+  html += `<div style="flex:1;padding:12px;background:#d1fae5;border-radius:8px;text-align:center">
+    <div style="font-size:24px;font-weight:700;color:#065f46">${result.created}</div>
+    <div style="font-size:13px;color:#065f46">Created</div></div>`;
+  html += `<div style="flex:1;padding:12px;background:${errors.length ? '#fee2e2' : '#f3f4f6'};border-radius:8px;text-align:center">
+    <div style="font-size:24px;font-weight:700;color:${errors.length ? '#991b1b' : '#6b7280'}">${errors.length}</div>
+    <div style="font-size:13px;color:${errors.length ? '#991b1b' : '#6b7280'}">Errors</div></div>`;
+  html += `</div>`;
+
+  // Successfully created orders
+  if (details.length > 0) {
+    html += `<h3 style="margin:16px 0 8px;font-size:14px;color:#065f46">Successfully Imported Orders</h3>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:13px">`;
+    html += `<thead><tr style="background:#f0fdf4">
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">#</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Order Name</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Items</th>
+    </tr></thead><tbody>`;
+    details.forEach((d, i) => {
+      const items = d.items.map(it => `${it.item_name || it.sku} x${it.quantity}`).join(', ');
+      html += `<tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:6px 8px">${i + 1}</td>
+        <td style="padding:6px 8px;font-weight:500">${d.order_name || '(auto)'}</td>
+        <td style="padding:6px 8px">${items}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  // Error list
+  if (errors.length > 0) {
+    html += `<h3 style="margin:16px 0 8px;font-size:14px;color:#991b1b">Failed / Errors</h3>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:13px">`;
+    html += `<thead><tr style="background:#fef2f2">
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Row / Order</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">SKU</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Error</th>
+    </tr></thead><tbody>`;
+    errors.forEach(e => {
+      const ref = e.row ? `Row ${e.row}` : (e.order_name || '-');
+      html += `<tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:6px 8px">${ref}</td>
+        <td style="padding:6px 8px">${e.sku || '-'}</td>
+        <td style="padding:6px 8px;color:#991b1b">${e.error}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  if (details.length === 0 && errors.length === 0) {
+    html += `<p style="text-align:center;color:#6b7280">No orders were processed from the CSV file.</p>`;
+  }
+
+  document.getElementById('import-report-body').innerHTML = html;
+  openModal('import-report-modal');
 }
 
 // VARIANTS

@@ -1,0 +1,20 @@
+services:
+  warehouse:
+    build: .
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    env_file:
+      - .env
+    volumes:
+      - uploads_data:/app/uploads
+      - qrcodes_data:/app/qrcodes
+      - db_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/warehouse.db
+      - UPLOAD_DIR=/app/uploads
+      - QR_CODE_DIR=/app/qrcodes
+
+volumes:
+  uploads_data:
+  qrcodes_data:
+  db_data:

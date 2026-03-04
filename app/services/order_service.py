@@ -52,7 +52,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         service=data.service or settings.DEFAULT_SERVICE,
         webhook_url=data.webhook_url,
         notes=data.notes,
-        status=OrderStatus.CONFIRMED,
+        status=OrderStatus(data.status) if data.status else OrderStatus.CONFIRMED,
     )
 
     if data.ship_from:
@@ -149,7 +149,8 @@ def create_order(db: Session, data: OrderCreate) -> Order:
     ) if total_items > 0 else 0.0
     order.total_price = items_subtotal + order.processing_fee
 
-    _add_status_history(order, OrderStatus.CONFIRMED, "Order created")
+    initial_status = OrderStatus(data.status) if data.status else OrderStatus.CONFIRMED
+    _add_status_history(order, initial_status, "Order created" + (" (CSV import)" if data.status else ""))
 
     # Flush items so order.items relationship is available for QR generation
     db.flush()

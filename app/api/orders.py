@@ -2,7 +2,7 @@ import asyncio
 import csv
 import io
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -106,8 +106,9 @@ def download_order_import_template():
 
 
 @router.post("/import")
-def import_orders(file: UploadFile, db: Session = Depends(get_db)):
-    """Import orders from CSV. The sku column accepts variant_sku or product sku."""
+def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depends(get_db)):
+    """Import orders from CSV. The sku column accepts variant_sku or product sku.
+    Optional status form field sets initial order status (default: confirmed)."""
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(400, "Only CSV files are supported")
 
@@ -116,6 +117,13 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(400, f"Cannot read CSV file: {e}")
     reader = csv.DictReader(io.StringIO(content))
+
+    # Validate status override
+    import_status = status.strip() if status else ""
+    if import_status:
+        valid_statuses = [s.value for s in OrderStatus]
+        if import_status not in valid_statuses:
+            raise HTTPException(400, f"Invalid status '{import_status}'. Valid: {', '.join(valid_statuses)}")
 
     # Group rows by order key (order_name or auto-generated)
     order_groups: dict[str, dict] = {}
@@ -288,6 +296,7 @@ def import_orders(file: UploadFile, db: Session = Depends(get_db)):
             carrier=group["carrier"],
             service=group["service"],
             notes=group["notes"],
+            status=import_status or None,
         )
 
         try:
