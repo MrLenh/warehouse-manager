@@ -52,11 +52,15 @@ def _resolve_customer_webhook_url(order: Order) -> str:
 
     try:
         db = SessionLocal()
-        customer = (
-            db.query(Customer)
-            .filter(sa_func.lower(Customer.name) == order.customer_name.lower().strip())
-            .first()
-        )
+        customer = None
+        if order.customer_id:
+            customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+        if not customer:
+            customer = (
+                db.query(Customer)
+                .filter(sa_func.lower(Customer.name) == order.customer_name.lower().strip())
+                .first()
+            )
         if customer and customer.webhook_url:
             return customer.webhook_url.strip()
     except Exception as e:

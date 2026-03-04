@@ -41,10 +41,13 @@ def _require_customer(user: User, db: Session) -> Customer:
 def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     customer = _require_customer(user, db)
 
-    # Orders by customer_name match
+    # Orders by customer_id or customer_name match
     orders = (
         db.query(Order)
-        .filter(sa_func.lower(Order.customer_name) == customer.name.lower().strip())
+        .filter(
+            (Order.customer_id == customer.id)
+            | (sa_func.lower(Order.customer_name) == customer.name.lower().strip())
+        )
         .all()
     )
     total_orders = len(orders)
@@ -94,7 +97,8 @@ def list_orders(
 ):
     customer = _require_customer(user, db)
     query = db.query(Order).filter(
-        sa_func.lower(Order.customer_name) == customer.name.lower().strip()
+        (Order.customer_id == customer.id)
+        | (sa_func.lower(Order.customer_name) == customer.name.lower().strip())
     )
     if status:
         query = query.filter(Order.status == status)
@@ -300,7 +304,7 @@ def get_order(order_id: str, user: User = Depends(get_current_user), db: Session
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(404, "Order not found")
-    if order.customer_name.lower().strip() != customer.name.lower().strip():
+    if order.customer_id != customer.id and order.customer_name.lower().strip() != customer.name.lower().strip():
         raise HTTPException(403, "Access denied")
     return {
         "id": order.id,

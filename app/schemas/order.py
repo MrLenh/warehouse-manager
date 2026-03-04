@@ -63,6 +63,7 @@ class OrderOut(BaseModel):
     order_number: str
     order_name: str
     customer_name: str
+    customer_id: Optional[str] = None
     customer_email: str
     customer_phone: str = ""
     shop_name: str = ""

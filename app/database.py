@@ -92,6 +92,12 @@ def _migrate_add_columns():
 
     if "orders" in tables:
         existing = {col["name"] for col in inspector.get_columns("orders")}
+        if "customer_id" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE orders ADD COLUMN customer_id VARCHAR DEFAULT NULL"))
+
+    if "orders" in tables:
+        existing = {col["name"] for col in inspector.get_columns("orders")}
         if "invoice_id" not in existing:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE orders ADD COLUMN invoice_id VARCHAR DEFAULT NULL"))

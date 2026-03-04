@@ -37,7 +37,8 @@ def _find_invoiceable_orders(db: Session, customer: Customer, date_to: date) -> 
     return (
         db.query(Order)
         .filter(
-            sa_func.lower(Order.customer_name) == customer.name.lower().strip(),
+            (Order.customer_id == customer.id)
+            | (sa_func.lower(Order.customer_name) == customer.name.lower().strip()),
             Order.created_at <= end,
             Order.invoice_id.is_(None),
             Order.status.in_(["label_purchased", "drop_off"]),

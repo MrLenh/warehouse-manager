@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.inventory_log import InventoryLog
+from sqlalchemy import func as sa_func
+
+from app.models.customer import Customer
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product, Variant
 from app.schemas.order import OrderCreate, OrderStatusUpdate
@@ -34,10 +37,18 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         if existing:
             raise ValueError(f"Order name '{data.order_name}' already exists (order {existing.order_number})")
 
+    # Auto-map customer by name (case-insensitive)
+    matched_customer = (
+        db.query(Customer)
+        .filter(sa_func.lower(Customer.name) == data.customer_name.strip().lower())
+        .first()
+    )
+
     order = Order(
         order_number=_generate_order_number(),
         order_name=data.order_name,
         customer_name=data.customer_name,
+        customer_id=matched_customer.id if matched_customer else None,
         customer_email=data.customer_email,
         customer_phone=data.customer_phone,
         shop_name=data.shop_name,

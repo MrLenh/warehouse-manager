@@ -29,6 +29,7 @@ class Order(Base):
     order_number: Mapped[str] = mapped_column(String, unique=True, index=True)
     order_name: Mapped[str] = mapped_column(String, default="", index=True)
     customer_name: Mapped[str] = mapped_column(String, nullable=False)
+    customer_id: Mapped[str | None] = mapped_column(String, ForeignKey("customers.id"), nullable=True, default=None, index=True)
     customer_email: Mapped[str] = mapped_column(String, default="")
     customer_phone: Mapped[str] = mapped_column(String, default="")
     shop_name: Mapped[str] = mapped_column(String, default="")
