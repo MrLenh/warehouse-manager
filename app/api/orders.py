@@ -67,8 +67,8 @@ def create_order(data: OrderCreate, request: Request, background_tasks: Backgrou
 
 
 @router.get("", response_model=list[OrderOut])
-def list_orders(skip: int = 0, limit: int = 100, status: OrderStatus | None = None, db: Session = Depends(get_db)):
-    return order_service.list_orders(db, skip=skip, limit=limit, status=status)
+def list_orders(skip: int = 0, limit: int = 0, status: OrderStatus | None = None, search: str | None = None, db: Session = Depends(get_db)):
+    return order_service.list_orders(db, skip=skip, limit=limit, status=status, search=search)
 
 
 @router.get("/import-template")
@@ -366,6 +366,14 @@ def get_order(order_id: str, db: Session = Depends(get_db)):
 @router.get("/by-number/{order_number}")
 def get_order_by_number(order_number: str, db: Session = Depends(get_db)):
     order = order_service.get_order_by_number(db, order_number)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    return _enrich_order(order, db)
+
+
+@router.get("/by-tracking/{tracking_number}")
+def get_order_by_tracking(tracking_number: str, db: Session = Depends(get_db)):
+    order = order_service.get_order_by_tracking(db, tracking_number)
     if not order:
         raise HTTPException(404, "Order not found")
     return _enrich_order(order, db)

@@ -244,6 +244,7 @@ tr:hover{background:#f8f9ff}
       <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
+    <div id="orders-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap"></div>
   </div>
 
   <!-- INVENTORY PANEL -->
@@ -1487,12 +1488,21 @@ async function loadOrders() {
   } catch(e) { toast('Server connection error: ' + e.message, 'error'); }
 }
 
+let ordersPerPage = 50;
+let currentOrderPage = 1;
+
 function renderOrders(list) {
   const q = document.getElementById('search-orders').value.toLowerCase();
   const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || (o.order_name || '').toLowerCase().includes(q) || (o.shop_name || '').toLowerCase().includes(q));
-  document.getElementById('orders-body').innerHTML = filtered.length === 0
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ordersPerPage));
+  if (currentOrderPage > totalPages) currentOrderPage = totalPages;
+  const start = (currentOrderPage - 1) * ordersPerPage;
+  const pageItems = filtered.slice(start, start + ordersPerPage);
+
+  document.getElementById('orders-body').innerHTML = pageItems.length === 0
     ? '<tr><td colspan="11" class="empty">No orders found</td></tr>'
-    : filtered.map(o => `<tr>
+    : pageItems.map(o => `<tr>
         <td><input type="checkbox" class="order-check" value="${o.id}" onchange="updateSelectedCount()"></td>
         <td><strong>${esc(o.order_number)}</strong></td>
         <td>${esc(o.order_name || '-')}</td>
@@ -1508,6 +1518,28 @@ function renderOrders(list) {
           ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
         </td>
       </tr>`).join('');
+
+  // Pagination controls
+  let pagHtml = '';
+  if (filtered.length > 0) {
+    pagHtml += `<span style="font-size:13px;color:#666">Showing ${start + 1}-${Math.min(start + ordersPerPage, filtered.length)} of ${filtered.length}</span>`;
+    pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(1)" ${currentOrderPage === 1 ? 'disabled' : ''}>&laquo;</button>`;
+    pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(${currentOrderPage - 1})" ${currentOrderPage === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
+    const maxBtns = 5;
+    let pStart = Math.max(1, currentOrderPage - Math.floor(maxBtns / 2));
+    let pEnd = Math.min(totalPages, pStart + maxBtns - 1);
+    if (pEnd - pStart < maxBtns - 1) pStart = Math.max(1, pEnd - maxBtns + 1);
+    for (let p = pStart; p <= pEnd; p++) {
+      pagHtml += `<button class="btn btn-sm ${p === currentOrderPage ? 'btn-primary' : 'btn-outline'}" onclick="goOrderPage(${p})">${p}</button>`;
+    }
+    pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(${currentOrderPage + 1})" ${currentOrderPage === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
+    pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(${totalPages})" ${currentOrderPage === totalPages ? 'disabled' : ''}>&raquo;</button>`;
+    pagHtml += `<select style="padding:4px 8px;border-radius:4px;border:1px solid #ddd;font-size:13px" onchange="ordersPerPage=+this.value;currentOrderPage=1;renderOrders(allOrders)">`;
+    [50, 100, 200, 500].forEach(n => { pagHtml += `<option value="${n}" ${ordersPerPage === n ? 'selected' : ''}>${n} / page</option>`; });
+    pagHtml += `</select>`;
+  }
+  document.getElementById('orders-pagination').innerHTML = pagHtml;
+
   // Overview stats
   const counts = {};
   filtered.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
@@ -1525,6 +1557,11 @@ function renderOrders(list) {
     .filter(s => s.value > 0 || s.label === 'Total')
     .map(s => `<div style="padding:8px 14px;border-radius:8px;background:${s.bg};color:${s.color};font-size:13px;font-weight:600;min-width:70px;text-align:center"><div style="font-size:20px">${s.value}</div>${s.label}</div>`).join('');
   updateSelectedCount();
+}
+
+function goOrderPage(page) {
+  currentOrderPage = page;
+  renderOrders(allOrders);
 }
 
 function toggleAllOrders(master) {
@@ -1565,7 +1602,7 @@ async function createPickingList() {
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
-document.getElementById('search-orders').addEventListener('input', () => renderOrders(allOrders));
+document.getElementById('search-orders').addEventListener('input', () => { currentOrderPage = 1; renderOrders(allOrders); });
 document.getElementById('filter-status').addEventListener('change', loadOrders);
 
 function updateServiceOptions(carrierSelId, serviceSelId, selectedService) {

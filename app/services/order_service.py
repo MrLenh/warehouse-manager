@@ -183,13 +183,29 @@ def get_order_by_number(db: Session, order_number: str) -> Order | None:
     return db.query(Order).filter(Order.order_number == order_number).first()
 
 
+def get_order_by_tracking(db: Session, tracking_number: str) -> Order | None:
+    return db.query(Order).filter(Order.tracking_number == tracking_number).first()
+
+
 def list_orders(
-    db: Session, skip: int = 0, limit: int = 100, status: OrderStatus | None = None
+    db: Session, skip: int = 0, limit: int = 0, status: OrderStatus | None = None,
+    search: str | None = None,
 ) -> list[Order]:
     q = db.query(Order)
     if status:
         q = q.filter(Order.status == status)
-    return q.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+    if search:
+        pattern = f"%{search}%"
+        q = q.filter(
+            Order.order_number.ilike(pattern)
+            | Order.order_name.ilike(pattern)
+            | Order.customer_name.ilike(pattern)
+            | Order.tracking_number.ilike(pattern)
+        )
+    q = q.order_by(Order.created_at.desc()).offset(skip)
+    if limit > 0:
+        q = q.limit(limit)
+    return q.all()
 
 
 def update_order_status(db: Session, order_id: str, data: OrderStatusUpdate) -> Order | None:
