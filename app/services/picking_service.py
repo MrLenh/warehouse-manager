@@ -327,6 +327,132 @@ def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
     return list(orders_map.values())
 
 
+def create_label_batch(db: Session, order_ids: list[str]) -> PickingList:
+    """Create a batch from label_purchased orders. All items are pre-picked, ready for print & drop-off."""
+    orders = db.query(Order).filter(Order.id.in_(order_ids)).all()
+    if not orders:
+        raise ValueError("No valid orders found")
+
+    # Only label_purchased orders can be added to a label batch
+    non_label = [o for o in orders if o.status != OrderStatus.LABEL_PURCHASED]
+    if non_label:
+        names = ", ".join(f"{o.order_number} ({o.status})" for o in non_label)
+        raise ValueError(f"Only label_purchased orders can be added to a label batch: {names}")
+
+    # Check no label_url missing
+    no_label = [o for o in orders if not o.label_url]
+    if no_label:
+        names = ", ".join(o.order_number for o in no_label)
+        raise ValueError(f"Orders missing label URL: {names}")
+
+    # Check if any order is already in an active batch
+    already_in_batch = (
+        db.query(PickItem.order_id)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id.in_(order_ids),
+            PickingList.status.in_([PickingListStatus.ACTIVE, PickingListStatus.PROCESSING]),
+        )
+        .distinct()
+        .all()
+    )
+    if already_in_batch:
+        dupe_ids = {row[0] for row in already_in_batch}
+        dupe_orders = [o for o in orders if o.id in dupe_ids]
+        names = ", ".join(o.order_number for o in dupe_orders)
+        raise ValueError(f"Orders already in an active batch: {names}")
+
+    picking_list = PickingList(
+        picking_number=_generate_picking_number(),
+        status=PickingListStatus.PROCESSING,
+    )
+    db.add(picking_list)
+    db.flush()
+
+    now = datetime.now(timezone.utc)
+    for order in orders:
+        for item in order.items:
+            for seq in range(1, item.quantity + 1):
+                qr_code = f"PICK-{uuid.uuid4().hex[:8].upper()}"
+                pick_item = PickItem(
+                    picking_list_id=picking_list.id,
+                    order_id=order.id,
+                    order_item_id=item.id,
+                    product_id=item.product_id,
+                    sku=item.variant_sku or item.sku,
+                    product_name=item.product_name,
+                    variant_label=item.variant_label,
+                    sequence=seq,
+                    qr_code=qr_code,
+                    picked=True,
+                    picked_at=now,
+                )
+                db.add(pick_item)
+
+    db.commit()
+    db.refresh(picking_list)
+    return picking_list
+
+
+def batch_drop_off(db: Session, picking_list_id: str) -> dict:
+    """Mark all label_purchased orders in a batch as drop_off and return label URLs."""
+    pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
+    if not pl:
+        raise ValueError("Picking list not found")
+
+    # Get all unique order IDs in this batch
+    batch_order_ids = {
+        row[0] for row in
+        db.query(PickItem.order_id).filter(PickItem.picking_list_id == pl.id).distinct().all()
+    }
+
+    results = []
+    for oid in batch_order_ids:
+        order = db.query(Order).filter(Order.id == oid).first()
+        if not order:
+            continue
+        if order.status in (OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED):
+            # Already done, just include the label
+            results.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "label_url": order.label_url,
+                "status": "already_done",
+            })
+            continue
+        if not order.label_url:
+            results.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "label_url": "",
+                "status": "no_label",
+            })
+            continue
+
+        order.status = OrderStatus.DROP_OFF
+        _add_status_history(order, OrderStatus.DROP_OFF, "Batch print & drop off")
+        results.append({
+            "order_id": order.id,
+            "order_number": order.order_number,
+            "label_url": order.label_url,
+            "status": "dropped_off",
+        })
+
+    # Check if all orders are now done → mark batch as done
+    all_done = all(r["status"] in ("dropped_off", "already_done") for r in results)
+    if all_done and results:
+        pl.status = PickingListStatus.DONE
+
+    db.commit()
+
+    return {
+        "picking_list_id": picking_list_id,
+        "orders": results,
+        "total": len(results),
+        "dropped_off": sum(1 for r in results if r["status"] == "dropped_off"),
+    }
+
+
 def check_batch_done(db: Session, order_id: str) -> None:
     """Check if all orders in the batch are drop_off; if so, mark batch as done."""
     # Find the batch this order belongs to

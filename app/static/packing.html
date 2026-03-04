@@ -150,6 +150,7 @@ tr:hover{background:#f8f9ff}
           <button class="btn btn-outline btn-sm" onclick="exportPickingSummary()">Picking Summary</button>
           <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">QR Labels (by SKU)</button>
           <button class="btn btn-outline btn-sm" onclick="printPickingLabel()">Picking Label</button>
+          <button class="btn btn-success btn-sm" id="batch-drop-off-btn" onclick="batchPrintAndDropOff()" style="display:none">Batch Print &amp; Drop Off</button>
           <button class="btn btn-outline btn-sm" onclick="refreshProgress()">Refresh</button>
           <button class="btn btn-danger btn-sm" id="unpack-batch-btn" onclick="unpackBatch()">Unpack Batch</button>
         </div>
@@ -315,6 +316,10 @@ async function refreshProgress() {
   document.getElementById('total-progress').style.width = pct + '%';
   document.getElementById('total-progress').textContent = pct + '%';
   document.getElementById('progress-text').textContent = `${totalPicked} / ${totalItems} items picked`;
+
+  // Show "Batch Print & Drop Off" if any order has a label and is not yet dropped off
+  const hasLabelOrders = progressData.some(o => o.label_url && !['drop_off','shipped','in_transit','delivered'].includes(o.order_status));
+  document.getElementById('batch-drop-off-btn').style.display = hasLabelOrders ? '' : 'none';
 
   // Render order cards
   renderOrderCards();
@@ -839,6 +844,37 @@ async function printAndDropOff(orderId, labelUrl) {
       toast(e.detail || 'Error updating status', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+// Batch Print & Drop Off — opens all labels and marks all as drop_off
+async function batchPrintAndDropOff() {
+  if (!currentPL) return;
+  const labelOrders = progressData.filter(o => o.label_url && !['drop_off','shipped','in_transit','delivered'].includes(o.order_status));
+  if (labelOrders.length === 0) { toast('No orders with labels to print', 'error'); return; }
+  if (!confirm(`Print & Drop Off ${labelOrders.length} order(s)?\nAll shipping labels will open in new tabs.`)) return;
+
+  const btn = document.getElementById('batch-drop-off-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing...'; }
+
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id + '/batch-drop-off', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      // Open all label URLs
+      const labelUrls = data.orders.filter(o => o.label_url && o.status === 'dropped_off').map(o => o.label_url);
+      labelUrls.forEach(url => window.open(url, '_blank'));
+      toast(`${data.dropped_off} label(s) printed & marked as Drop Off`);
+      await refreshProgress();
+      // Auto-clear active order
+      clearActiveOrder();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Batch Print & Drop Off'; }
+  }
 }
 
 // Delete batch from picking list selector

@@ -235,6 +235,7 @@ tr:hover{background:#f8f9ff}
         <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
+        <button class="btn btn-primary btn-sm" id="btn-create-label-batch" onclick="createLabelBatch()" style="display:none">Label Batch: Print &amp; Drop Off (<span id="label-batch-count">0</span>)</button>
         <a href="/packing" target="_blank" class="btn btn-outline btn-sm">Packing Station</a>
         <button class="btn btn-primary" onclick="openOrderModal()">+ Create Order</button>
       </div>
@@ -1573,8 +1574,21 @@ function updateSelectedCount() {
   const checked = document.querySelectorAll('.order-check:checked');
   const btn = document.getElementById('btn-create-picking');
   const count = document.getElementById('selected-count');
-  count.textContent = checked.length;
-  btn.style.display = checked.length > 0 ? '' : 'none';
+  const lblBtn = document.getElementById('btn-create-label-batch');
+  const lblCount = document.getElementById('label-batch-count');
+
+  // Count label_purchased orders among selected
+  const selectedOrders = Array.from(checked).map(cb => {
+    const orderId = cb.value;
+    return allOrders.find(o => o.id === orderId);
+  }).filter(Boolean);
+  const labelPurchasedCount = selectedOrders.filter(o => o.status === 'label_purchased').length;
+  const confirmedCount = selectedOrders.filter(o => o.status === 'confirmed').length;
+
+  count.textContent = confirmedCount;
+  btn.style.display = confirmedCount > 0 ? '' : 'none';
+  lblCount.textContent = labelPurchasedCount;
+  lblBtn.style.display = labelPurchasedCount > 0 ? '' : 'none';
 }
 
 async function createPickingList() {
@@ -1598,6 +1612,35 @@ async function createPickingList() {
     } else {
       const e = await res.json();
       toast(e.detail || 'Error creating picking list', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function createLabelBatch() {
+  const checked = document.querySelectorAll('.order-check:checked');
+  const selectedOrders = Array.from(checked).map(cb => {
+    const orderId = cb.value;
+    return allOrders.find(o => o.id === orderId);
+  }).filter(Boolean);
+  const labelOrders = selectedOrders.filter(o => o.status === 'label_purchased');
+  const orderIds = labelOrders.map(o => o.id);
+  if (orderIds.length === 0) { toast('Select label_purchased orders first', 'error'); return; }
+  if (!confirm(`Create label batch for ${orderIds.length} order(s)?\nThis will open packing station for batch Print & Drop Off.`)) return;
+  try {
+    const res = await fetch(API + '/picking-lists/label-batch', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ order_ids: orderIds }),
+    });
+    if (res.ok) {
+      const pl = await res.json();
+      toast(`Label batch ${pl.picking_number} created (${orderIds.length} orders)`);
+      document.getElementById('select-all-orders').checked = false;
+      document.querySelectorAll('.order-check').forEach(cb => cb.checked = false);
+      updateSelectedCount();
+      window.open('/packing/' + pl.id, '_blank');
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Error creating label batch', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 }

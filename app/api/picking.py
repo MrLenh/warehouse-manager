@@ -77,6 +77,28 @@ def scan_qr(qr_code: str, request: Request, user: User = Depends(get_current_use
     return result
 
 
+@router.post("/label-batch", response_model=PickingListOut)
+def create_label_batch(data: PickingListCreate, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a batch from label_purchased orders (all items pre-picked, ready for print & drop-off)."""
+    try:
+        pl = picking_service.create_label_batch(db, data.order_ids)
+        auth_service.log_activity(db, user.id, user.username, "create_label_batch", detail=f"{pl.picking_number} ({len(data.order_ids)} orders)", ip=request.client.host if request.client else "")
+        return _to_picking_list_out(pl)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/{picking_list_id}/batch-drop-off")
+def batch_drop_off(picking_list_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Print all labels & mark all orders in batch as drop_off."""
+    try:
+        result = picking_service.batch_drop_off(db, picking_list_id)
+        auth_service.log_activity(db, user.id, user.username, "batch_drop_off", detail=f"{result['dropped_off']}/{result['total']} orders", ip=request.client.host if request.client else "")
+        return result
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @router.delete("/{picking_list_id}")
 def delete_picking_list(picking_list_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Delete a picking list and release all orders (unpack entire batch)."""
