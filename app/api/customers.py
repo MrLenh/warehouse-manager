@@ -17,6 +17,11 @@ from app.models.user import User
 from app.schemas.customer import CustomerCreate, CustomerOut, CustomerUpdate
 from app.schemas.invoice import InvoiceCreate, InvoiceOrderOut, InvoiceOut, InvoicePreview, InvoiceStatusUpdate
 
+import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/customers", tags=["customers"])
 
 
@@ -374,13 +379,48 @@ def export_invoices_csv(
 
 
 # ---------------------------------------------------------------------------
+# Customer Webhook
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{customer_id}/webhook/test")
+def test_customer_webhook(customer_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Send a test payload to the customer's webhook URL."""
+    c = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not c:
+        raise HTTPException(404, "Customer not found")
+    if not c.webhook_url:
+        raise HTTPException(400, "No webhook URL configured for this customer")
+
+    payload = {
+        "event": "test",
+        "customer_name": c.name,
+        "customer_email": c.email,
+        "message": "This is a test webhook from Warehouse Manager.",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(c.webhook_url.strip(), json=payload)
+            return {
+                "success": resp.is_success,
+                "status_code": resp.status_code,
+                "url": c.webhook_url,
+            }
+    except Exception as e:
+        logger.error(f"Test webhook failed for customer {c.name}: {e}")
+        return {"success": False, "status_code": 0, "url": c.webhook_url, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Customers CRUD
 # ---------------------------------------------------------------------------
 
 
 @router.post("", status_code=201)
 def create_customer(body: CustomerCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    c = Customer(name=body.name, email=body.email, phone=body.phone, company=body.company, notes=body.notes)
+    c = Customer(name=body.name, email=body.email, phone=body.phone, company=body.company, notes=body.notes, webhook_url=body.webhook_url)
     db.add(c)
     db.commit()
     db.refresh(c)

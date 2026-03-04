@@ -10,6 +10,7 @@ class CustomerCreate(BaseModel):
     phone: str = ""
     company: str = ""
     notes: str = ""
+    webhook_url: str = ""
 
 
 class CustomerUpdate(BaseModel):
@@ -18,6 +19,7 @@ class CustomerUpdate(BaseModel):
     phone: Optional[str] = None
     company: Optional[str] = None
     notes: Optional[str] = None
+    webhook_url: Optional[str] = None
 
 
 class CustomerOut(BaseModel):
@@ -27,6 +29,7 @@ class CustomerOut(BaseModel):
     phone: str
     company: str
     notes: str
+    webhook_url: str = ""
     created_at: datetime
     updated_at: datetime
 

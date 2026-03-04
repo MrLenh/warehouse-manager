@@ -1493,7 +1493,7 @@ let currentOrderPage = 1;
 
 function renderOrders(list) {
   const q = document.getElementById('search-orders').value.toLowerCase();
-  const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || (o.order_name || '').toLowerCase().includes(q) || (o.shop_name || '').toLowerCase().includes(q));
+  const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || (o.order_name || '').toLowerCase().includes(q) || (o.shop_name || '').toLowerCase().includes(q) || (o.tracking_number || '').toLowerCase().includes(q));
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ordersPerPage));
   if (currentOrderPage > totalPages) currentOrderPage = totalPages;

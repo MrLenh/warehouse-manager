@@ -131,6 +131,16 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE order_items ADD COLUMN {col_name} {col_type}"))
 
+    if "customers" in tables:
+        existing = {col["name"] for col in inspector.get_columns("customers")}
+        new_cols = {
+            "webhook_url": "VARCHAR DEFAULT ''",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE customers ADD COLUMN {col_name} {col_type}"))
+
     if "users" in tables:
         existing = {col["name"] for col in inspector.get_columns("users")}
         if "customer_id" not in existing:

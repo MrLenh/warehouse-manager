@@ -89,6 +89,7 @@ tr:hover{background:#f8f9ff}
     <div class="stats">
       <span id="stat-customers">0 Customers</span>
       <span id="stat-invoices">0 Invoices</span>
+      <span id="stat-webhooks">0 Webhooks</span>
     </div>
   </div>
   <a href="/">Back to Dashboard</a>
@@ -97,6 +98,7 @@ tr:hover{background:#f8f9ff}
 <div class="tabs">
   <div class="tab active" onclick="switchTab('customers')">Customers</div>
   <div class="tab" onclick="switchTab('invoices')">Invoices</div>
+  <div class="tab" onclick="switchTab('webhooks')">Webhooks</div>
 </div>
 
 <div class="content">
@@ -121,6 +123,55 @@ tr:hover{background:#f8f9ff}
     <div id="inv-table-wrap"></div>
   </div>
 
+  <!-- WEBHOOKS PANEL -->
+  <div id="panel-webhooks" class="panel">
+    <div class="toolbar">
+      <input class="search" id="wh-search" placeholder="Search customers..." oninput="renderWebhooks()">
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="wh-filter" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px" onchange="renderWebhooks()">
+          <option value="all">All</option>
+          <option value="active">Active</option>
+          <option value="inactive">No Webhook</option>
+        </select>
+      </div>
+    </div>
+    <div id="wh-table-wrap"></div>
+
+    <div class="card" style="margin-top:24px">
+      <h3 style="margin-bottom:8px">Webhook Payload Format</h3>
+      <p style="font-size:13px;color:#666;margin-bottom:12px">Khi order được cập nhật, hệ thống sẽ gửi HTTP POST tới webhook URL với payload JSON sau:</p>
+      <pre style="background:#f8f9fa;border:1px solid #e8e8e8;border-radius:8px;padding:16px;font-size:12px;overflow-x:auto;line-height:1.6">{
+  "event": "order_update",
+  "order_number": "ORD-20260304-ABC123",
+  "order_name": "Don hang A",
+  "status": "shipped",
+  "customer_name": "Nguyen Van A",
+  "customer_email": "a@email.com",
+  "shop_name": "Shop ABC",
+  "pricing": {
+    "shipping_cost": 8.50,
+    "processing_fee": 1.75,
+    "total_price": 10.25
+  },
+  "tracking": {
+    "tracking_number": "1Z999AA10123456784",
+    "tracking_status": "in_transit",
+    "tracking_url": "https://track.example.com/...",
+    "carrier": "USPS",
+    "service": "GroundAdvantage",
+    "carrier_label_url": "https://labels.example.com/label.pdf"
+  },
+  "shipping_address": {
+    "name": "...", "street1": "...", "street2": "...",
+    "city": "...", "state": "...", "zip": "...", "country": "US"
+  },
+  "status_history": [
+    {"status": "confirmed", "timestamp": "...", "note": "..."}
+  ]
+}</pre>
+    </div>
+  </div>
+
 </div>
 
 <!-- Customer Modal -->
@@ -138,6 +189,7 @@ tr:hover{background:#f8f9ff}
         <div class="form-group"><label>Phone</label><input id="cust-phone"></div>
       </div>
       <div class="form-group"><label>Company</label><input id="cust-company"></div>
+      <div class="form-group"><label>Webhook URL</label><input id="cust-webhook-url" type="url" placeholder="https://example.com/webhook"></div>
       <div class="form-group"><label>Notes</label><textarea id="cust-notes" rows="3"></textarea></div>
     </div>
     <div class="modal-footer">
@@ -199,6 +251,34 @@ tr:hover{background:#f8f9ff}
   </div>
 </div>
 
+<!-- Webhook Edit Modal -->
+<div class="modal-overlay" id="wh-modal">
+  <div class="modal" style="width:550px">
+    <div class="modal-header">
+      <h2 id="wh-modal-title">Edit Webhook</h2>
+      <button class="modal-close" onclick="closeWhModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="wh-edit-id">
+      <div class="form-group">
+        <label>Customer</label>
+        <input id="wh-cust-name" disabled style="background:#f0f2f5;color:#666">
+      </div>
+      <div class="form-group">
+        <label>Webhook URL</label>
+        <input id="wh-url" type="url" placeholder="https://your-system.com/webhook">
+        <div style="font-size:12px;color:#888;margin-top:4px">Hệ thống sẽ gửi HTTP POST với JSON payload tới URL này khi order được cập nhật.</div>
+      </div>
+      <div id="wh-test-result" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="testWebhook()" id="btn-test-wh" style="margin-right:auto">Test Webhook</button>
+      <button class="btn btn-outline" onclick="closeWhModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveWebhook()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = '/api/v1';
 
@@ -215,11 +295,13 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s || 
 // ---- Tabs ----
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t, i) => {
-    t.classList.toggle('active', (tab === 'customers' && i === 0) || (tab === 'invoices' && i === 1));
+    t.classList.toggle('active', (tab === 'customers' && i === 0) || (tab === 'invoices' && i === 1) || (tab === 'webhooks' && i === 2));
   });
   document.getElementById('panel-customers').classList.toggle('active', tab === 'customers');
   document.getElementById('panel-invoices').classList.toggle('active', tab === 'invoices');
+  document.getElementById('panel-webhooks').classList.toggle('active', tab === 'webhooks');
   if (tab === 'invoices') { loadInvoiceFilterCustomers(); loadInvoices(); }
+  if (tab === 'webhooks') { loadWebhooks(); }
 }
 
 // ===========================================================================
@@ -241,12 +323,13 @@ async function loadCustomers() {
 function renderCustomers() {
   const wrap = document.getElementById('cust-table-wrap');
   if (!allCustomers.length) { wrap.innerHTML = '<div class="empty">No customers found</div>'; return; }
-  wrap.innerHTML = `<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Created</th><th></th></tr></thead><tbody>` +
+  wrap.innerHTML = `<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Webhook</th><th>Created</th><th></th></tr></thead><tbody>` +
     allCustomers.map(c => `<tr>
       <td><strong>${esc(c.name)}</strong></td>
       <td>${esc(c.email)}</td>
       <td>${esc(c.phone)}</td>
       <td>${esc(c.company)}</td>
+      <td>${c.webhook_url ? '<span class="badge badge-paid" title="'+esc(c.webhook_url)+'">Active</span>' : '<span style="color:#999">-</span>'}</td>
       <td>${new Date(c.created_at).toLocaleDateString()}</td>
       <td class="actions-cell">
         <button class="btn btn-sm btn-outline" onclick="editCust('${c.id}')">Edit</button>
@@ -262,6 +345,7 @@ function openCustModal(cust) {
   document.getElementById('cust-email').value = cust ? cust.email : '';
   document.getElementById('cust-phone').value = cust ? cust.phone : '';
   document.getElementById('cust-company').value = cust ? cust.company : '';
+  document.getElementById('cust-webhook-url').value = cust ? (cust.webhook_url || '') : '';
   document.getElementById('cust-notes').value = cust ? cust.notes : '';
   document.getElementById('cust-modal').classList.add('show');
 }
@@ -275,6 +359,7 @@ async function saveCust() {
     email: document.getElementById('cust-email').value.trim(),
     phone: document.getElementById('cust-phone').value.trim(),
     company: document.getElementById('cust-company').value.trim(),
+    webhook_url: document.getElementById('cust-webhook-url').value.trim(),
     notes: document.getElementById('cust-notes').value.trim(),
   };
   if (!body.name) { toast('Name is required', 'error'); return; }
@@ -560,6 +645,140 @@ async function deleteInvoice() {
     toast('Invoice deleted');
     closeInvDetail();
     loadInvoices();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ===========================================================================
+// WEBHOOKS
+// ===========================================================================
+let whCustomers = [];
+
+async function loadWebhooks() {
+  try {
+    const res = await fetch(API + '/customers?limit=500');
+    const data = await res.json();
+    whCustomers = data.customers || [];
+    const activeCount = whCustomers.filter(c => c.webhook_url).length;
+    document.getElementById('stat-webhooks').textContent = activeCount + ' Webhooks';
+    renderWebhooks();
+  } catch (e) { console.error(e); }
+}
+
+function renderWebhooks() {
+  const wrap = document.getElementById('wh-table-wrap');
+  const q = (document.getElementById('wh-search').value || '').toLowerCase();
+  const filter = document.getElementById('wh-filter').value;
+
+  let list = whCustomers;
+  if (q) {
+    list = list.filter(c => c.name.toLowerCase().includes(q) || (c.company || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q));
+  }
+  if (filter === 'active') list = list.filter(c => c.webhook_url);
+  if (filter === 'inactive') list = list.filter(c => !c.webhook_url);
+
+  if (!list.length) { wrap.innerHTML = '<div class="empty">No customers found</div>'; return; }
+
+  wrap.innerHTML = `<table><thead><tr><th>Customer</th><th>Company</th><th>Webhook URL</th><th>Status</th><th style="width:180px"></th></tr></thead><tbody>` +
+    list.map(c => `<tr>
+      <td><strong>${esc(c.name)}</strong><br><span style="font-size:12px;color:#888">${esc(c.email)}</span></td>
+      <td>${esc(c.company)}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.webhook_url)}">${c.webhook_url ? '<code style="font-size:12px;background:#f0f2f5;padding:2px 8px;border-radius:4px">' + esc(c.webhook_url) + '</code>' : '<span style="color:#ccc">Not configured</span>'}</td>
+      <td>${c.webhook_url ? '<span class="badge badge-paid">Active</span>' : '<span class="badge badge-requested">Inactive</span>'}</td>
+      <td class="actions-cell">
+        <button class="btn btn-sm btn-outline" onclick="openWhModal('${c.id}')">Edit</button>
+        ${c.webhook_url ? `<button class="btn btn-sm btn-primary" onclick="quickTestWebhook('${c.id}')">Test</button>` : ''}
+        ${c.webhook_url ? `<button class="btn btn-sm btn-danger" onclick="removeWebhook('${c.id}','${esc(c.name)}')">Remove</button>` : ''}
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+function openWhModal(custId) {
+  const c = whCustomers.find(x => x.id === custId);
+  if (!c) return;
+  document.getElementById('wh-edit-id').value = c.id;
+  document.getElementById('wh-cust-name').value = c.name + (c.company ? ' (' + c.company + ')' : '');
+  document.getElementById('wh-url').value = c.webhook_url || '';
+  document.getElementById('wh-test-result').innerHTML = '';
+  document.getElementById('wh-modal-title').textContent = c.webhook_url ? 'Edit Webhook' : 'Add Webhook';
+  document.getElementById('wh-modal').classList.add('show');
+}
+
+function closeWhModal() { document.getElementById('wh-modal').classList.remove('show'); }
+
+async function saveWebhook() {
+  const id = document.getElementById('wh-edit-id').value;
+  const url = document.getElementById('wh-url').value.trim();
+
+  try {
+    const res = await fetch(API + '/customers/' + id, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({webhook_url: url}),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    toast(url ? 'Webhook saved' : 'Webhook removed');
+    closeWhModal();
+    loadWebhooks();
+    loadCustomers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function testWebhook() {
+  const id = document.getElementById('wh-edit-id').value;
+  const url = document.getElementById('wh-url').value.trim();
+  const resultDiv = document.getElementById('wh-test-result');
+
+  if (!url) { toast('Enter a webhook URL first', 'error'); return; }
+
+  // Save first, then test
+  try {
+    await fetch(API + '/customers/' + id, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({webhook_url: url}),
+    });
+  } catch (e) { /* ignore save error, try test anyway */ }
+
+  resultDiv.innerHTML = '<div style="padding:12px;background:#f8f9fa;border-radius:8px;font-size:13px;color:#666">Sending test webhook...</div>';
+
+  try {
+    const res = await fetch(API + '/customers/' + id + '/webhook/test', {method: 'POST'});
+    const data = await res.json();
+    if (data.success) {
+      resultDiv.innerHTML = '<div style="padding:12px;background:#d4edda;border-radius:8px;font-size:13px;color:#155724">Test successful! Status: ' + data.status_code + '</div>';
+    } else {
+      resultDiv.innerHTML = '<div style="padding:12px;background:#f8d7da;border-radius:8px;font-size:13px;color:#721c24">Test failed. ' + (data.error ? esc(data.error) : 'Status: ' + data.status_code) + '</div>';
+    }
+    loadWebhooks();
+  } catch (e) {
+    resultDiv.innerHTML = '<div style="padding:12px;background:#f8d7da;border-radius:8px;font-size:13px;color:#721c24">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function quickTestWebhook(custId) {
+  try {
+    const res = await fetch(API + '/customers/' + custId + '/webhook/test', {method: 'POST'});
+    const data = await res.json();
+    if (data.success) {
+      toast('Webhook test successful (Status: ' + data.status_code + ')');
+    } else {
+      toast('Webhook test failed: ' + (data.error || 'Status ' + data.status_code), 'error');
+    }
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function removeWebhook(custId, name) {
+  if (!confirm('Remove webhook for "' + name + '"?')) return;
+  try {
+    const res = await fetch(API + '/customers/' + custId, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({webhook_url: ''}),
+    });
+    if (!res.ok) { toast('Error removing webhook', 'error'); return; }
+    toast('Webhook removed');
+    loadWebhooks();
+    loadCustomers();
   } catch (e) { toast(e.message, 'error'); }
 }
 
