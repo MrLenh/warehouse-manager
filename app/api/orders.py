@@ -359,6 +359,15 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
     return {"created": created, "created_details": created_details, "errors": errors}
 
 
+@router.post("/merge-by-name")
+def merge_orders_by_name(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Merge all orders that share the same order_name into a single order per name."""
+    result = order_service.merge_orders_by_name(db)
+    if result["merged"] > 0:
+        auth_service.log_activity(db, user.id, user.username, "merge_orders", detail=f"Merged {result['merged']} groups", ip=request.client.host if request.client else "")
+    return result
+
+
 @router.get("/{order_id}")
 def get_order(order_id: str, db: Session = Depends(get_db)):
     order = order_service.get_order(db, order_id)

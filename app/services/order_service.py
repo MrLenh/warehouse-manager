@@ -359,6 +359,84 @@ def delete_order(db: Session, order_id: str) -> bool:
     return True
 
 
+def merge_orders_by_name(db: Session) -> dict:
+    """Find all orders sharing the same order_name and merge them into one order per name.
+    Items from duplicate orders are moved to the earliest order; duplicates are deleted.
+    Inventory is NOT touched since items were already deducted when each order was created.
+    """
+    from app.models.picking import PickItem
+
+    # Find order_names that have more than 1 order (ignore empty names)
+    dupes = (
+        db.query(Order.order_name, sa_func.count(Order.id))
+        .filter(Order.order_name != "", Order.order_name.isnot(None))
+        .group_by(Order.order_name)
+        .having(sa_func.count(Order.id) > 1)
+        .all()
+    )
+
+    merged_count = 0
+    merged_details = []
+
+    for order_name, count in dupes:
+        # Get all orders with this name, oldest first
+        orders = (
+            db.query(Order)
+            .filter(Order.order_name == order_name)
+            .order_by(Order.created_at.asc())
+            .all()
+        )
+        if len(orders) < 2:
+            continue
+
+        primary = orders[0]
+        duplicates = orders[1:]
+        absorbed_order_numbers = []
+
+        for dup in duplicates:
+            # Move items from duplicate to primary
+            for item in dup.items:
+                item.order_id = primary.id
+            db.flush()
+
+            # Remove duplicate from picking lists
+            db.query(PickItem).filter(PickItem.order_id == dup.id).delete()
+
+            absorbed_order_numbers.append(dup.order_number)
+
+            # Append notes from duplicate
+            if dup.notes and dup.notes not in (primary.notes or ""):
+                primary.notes = ((primary.notes + "; ") if primary.notes else "") + dup.notes
+
+            # Delete the duplicate order (items already moved, cascade won't delete them)
+            db.delete(dup)
+
+        db.flush()
+
+        # Recalculate processing fee & total for primary
+        total_items = sum(item.quantity for item in primary.items)
+        items_subtotal = sum(item.quantity * item.unit_price for item in primary.items)
+        from app.config import settings
+        primary.processing_fee = (
+            settings.PROCESSING_FEE_FIRST_ITEM
+            + max(0, total_items - 1) * settings.PROCESSING_FEE_EXTRA_ITEM
+        ) if total_items > 0 else 0.0
+        primary.total_price = items_subtotal + primary.processing_fee + primary.shipping_cost
+
+        _add_status_history(primary, primary.status, f"Merged with orders: {', '.join(absorbed_order_numbers)}")
+
+        merged_count += 1
+        merged_details.append({
+            "order_name": order_name,
+            "primary_order_number": primary.order_number,
+            "absorbed_order_numbers": absorbed_order_numbers,
+            "total_items": total_items,
+        })
+
+    db.commit()
+    return {"merged": merged_count, "details": merged_details}
+
+
 def cancel_order(db: Session, order_id: str) -> Order | None:
     order = get_order(db, order_id)
     if not order:
