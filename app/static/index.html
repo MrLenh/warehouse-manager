@@ -232,6 +232,7 @@ tr:hover{background:#f8f9ff}
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
+        <button class="btn btn-outline btn-sm" onclick="exportOrders()">Export CSV</button>
         <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
@@ -1490,6 +1491,16 @@ async function saveInventory() {
 }
 
 // ORDERS
+function exportOrders() {
+  const status = document.getElementById('filter-status').value;
+  const search = document.getElementById('search-orders').value.trim();
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (search) params.set('search', search);
+  const qs = params.toString();
+  window.open(API + '/orders/export' + (qs ? '?' + qs : ''), '_blank');
+}
+
 async function loadOrders() {
   const status = document.getElementById('filter-status').value;
   const url = status ? API + '/orders?status=' + status : API + '/orders';
