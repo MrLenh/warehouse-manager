@@ -11,6 +11,13 @@ class OrderItemCreate(BaseModel):
     variant_id: str = ""
     quantity: int = 1
 
+    @field_validator("quantity")
+    @classmethod
+    def quantity_must_be_positive(cls, v):
+        if v < 1:
+            raise ValueError("Item quantity must be at least 1")
+        return v
+
 
 class AddressInput(BaseModel):
     name: str
@@ -31,6 +38,14 @@ class OrderCreate(BaseModel):
     ship_to: AddressInput
     ship_from: AddressInput | None = None
     items: list[OrderItemCreate]
+
+    @field_validator("items")
+    @classmethod
+    def items_must_not_be_empty(cls, v):
+        if not v:
+            raise ValueError("Order must have at least 1 item")
+        return v
+
     carrier: str = ""  # empty = use config default
     service: str = ""  # empty = use config default
     webhook_url: str = ""

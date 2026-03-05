@@ -101,12 +101,16 @@ def create_order(db: Session, data: OrderCreate) -> Order:
             ).first()
             if not variant:
                 raise ValueError(f"Variant {item_data.variant_id} not found for product {product.sku}")
+            if variant.quantity <= 0:
+                raise ValueError(f"Variant {variant.variant_sku} is out of stock")
             if variant.quantity < item_data.quantity:
                 raise ValueError(f"Insufficient stock for variant {variant.variant_sku}. Available: {variant.quantity}")
             # Build variant label from attributes
             attrs = json.loads(variant.attributes) if isinstance(variant.attributes, str) else variant.attributes
             variant_label = " / ".join(attrs.values()) if attrs else ""
         else:
+            if product.quantity <= 0:
+                raise ValueError(f"Product {product.sku} is out of stock")
             if product.quantity < item_data.quantity:
                 raise ValueError(f"Insufficient stock for {product.sku}. Available: {product.quantity}")
 
