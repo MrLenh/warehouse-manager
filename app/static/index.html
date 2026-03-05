@@ -1237,15 +1237,16 @@ function showImportReport(result) {
     html += `<h3 style="margin:16px 0 8px;font-size:14px;color:#991b1b">Failed / Errors</h3>`;
     html += `<table style="width:100%;border-collapse:collapse;font-size:13px">`;
     html += `<thead><tr style="background:#fef2f2">
-      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Row / Order</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Row</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Order</th>
       <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">SKU</th>
       <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Error</th>
     </tr></thead><tbody>`;
     errors.forEach(e => {
-      const ref = e.row ? `Row ${e.row}` : (e.order_name || '-');
       html += `<tr style="border-bottom:1px solid #e5e7eb">
-        <td style="padding:6px 8px">${ref}</td>
-        <td style="padding:6px 8px">${e.sku || '-'}</td>
+        <td style="padding:6px 8px">${e.row ? e.row : '-'}</td>
+        <td style="padding:6px 8px;font-weight:500">${e.order_name || '-'}</td>
+        <td style="padding:6px 8px;font-family:monospace">${e.sku || '-'}</td>
         <td style="padding:6px 8px;color:#991b1b">${e.error}</td>
       </tr>`;
     });

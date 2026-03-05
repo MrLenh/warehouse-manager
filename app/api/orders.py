@@ -143,7 +143,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
         sku = (row.get("sku") or "").strip()
 
         if not sku:
-            errors.append({"row": row_num, "error": "SKU is required"})
+            errors.append({"row": row_num, "order_name": order_name or "(no name)", "error": "SKU is required"})
             continue
 
         quantity = int(row.get("quantity") or 1)
@@ -163,7 +163,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
 
         if order_name not in order_groups:
             if not customer_name:
-                errors.append({"row": row_num, "error": "customer_name or ship_to_name is required"})
+                errors.append({"row": row_num, "order_name": order_name or "(no name)", "sku": sku, "error": "customer_name or ship_to_name is required"})
                 continue
 
             # Parse shipping_cost (float, default 0)
@@ -261,10 +261,13 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
             if product:
                 # If product has variants, user must specify variant_sku
                 if product.variants and len(product.variants) > 0:
+                    variant_skus = ", ".join(v.variant_sku for v in product.variants[:5])
+                    more = f" ... (+{len(product.variants)-5})" if len(product.variants) > 5 else ""
                     errors.append({
                         "row": row_num,
+                        "order_name": group.get("display_order_name") or order_name,
                         "sku": sku_val,
-                        "error": f"Product '{sku_val}' has variants. Please use variant_sku instead.",
+                        "error": f"Product '{sku_val}' has variants. Please use variant_sku instead. Available: {variant_skus}{more}",
                     })
                     has_error = True
                     break
@@ -277,7 +280,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                 })
                 continue
 
-            errors.append({"row": row_num, "sku": sku_val, "error": f"SKU '{sku_val}' not found"})
+            errors.append({"row": row_num, "order_name": group.get("display_order_name") or order_name, "sku": sku_val, "error": f"SKU '{sku_val}' not found"})
             has_error = True
             break
 
@@ -350,7 +353,8 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                 ],
             })
         except ValueError as e:
-            errors.append({"order_name": order_name, "error": str(e)})
+            skus = ", ".join(ri["sku"] for ri in resolved_items)
+            errors.append({"order_name": display_name or order_name, "sku": skus, "error": str(e)})
 
     return {"created": created, "created_details": created_details, "errors": errors}
 
