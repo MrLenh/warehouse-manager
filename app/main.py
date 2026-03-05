@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
-from app.api import auth, customers, orders, picking, portal, products, reports, stock_requests, webhooks
+from app.api import auth, customers, jobs, orders, picking, portal, products, reports, stock_requests, webhooks
 from app.config import settings
 from app.database import init_db
 from app.services.auth_service import decode_token, ensure_default_admin
@@ -65,7 +65,11 @@ async def lifespan(app: FastAPI):
         ensure_default_admin(db)
     finally:
         db.close()
+    # Start background scheduler
+    from app.services.scheduler_service import init_scheduler, shutdown_scheduler
+    init_scheduler()
     yield
+    shutdown_scheduler()
 
 
 app = FastAPI(
@@ -140,6 +144,7 @@ app.include_router(webhooks.router, prefix="/api/v1")
 app.include_router(picking.router, prefix="/api/v1")
 app.include_router(customers.router, prefix="/api/v1")
 app.include_router(portal.router, prefix="/api/v1")
+app.include_router(jobs.router, prefix="/api/v1")
 
 
 # Mount persistent uploads directory (survives deploys)

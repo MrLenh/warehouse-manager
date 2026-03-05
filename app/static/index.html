@@ -175,6 +175,7 @@ tr:hover{background:#f8f9ff}
   <div class="tab" data-tab="orders">Orders</div>
   <div class="tab" data-tab="inventory">Inventory</div>
   <div class="tab" data-tab="reports">Reports</div>
+  <div class="tab" data-tab="jobs" id="tab-jobs" style="display:none">Jobs</div>
   <div class="tab" data-tab="users" id="tab-users" style="display:none">Users</div>
 </div>
 
@@ -386,6 +387,18 @@ tr:hover{background:#f8f9ff}
       </table>
     </div>
   </div>
+</div>
+
+  <!-- JOBS PANEL -->
+  <div class="panel" id="panel-jobs">
+    <div class="toolbar">
+      <h3 style="font-size:16px;font-weight:600">Background Jobs</h3>
+      <button class="btn btn-outline btn-sm" onclick="loadJobs()">Refresh</button>
+    </div>
+    <div id="jobs-list"></div>
+    <div id="jobs-last-result" style="margin-top:16px"></div>
+  </div>
+
 </div>
 
 <!-- CREATE/EDIT USER MODAL -->
@@ -2537,6 +2550,7 @@ async function loadCurrentUser() {
       document.getElementById('current-user').textContent = currentUser.display_name || currentUser.username;
       if (currentUser.role === 'admin') {
         document.getElementById('tab-users').style.display = '';
+        document.getElementById('tab-jobs').style.display = '';
       }
     }
   } catch {}
@@ -2853,6 +2867,7 @@ function switchTab(name) {
   if (tab) tab.classList.add('active');
   const panel = document.getElementById('panel-' + name);
   if (panel) panel.classList.add('active');
+  if (name === 'jobs') loadJobs();
 }
 
 async function handleGlobalScan(raw) {
@@ -2952,6 +2967,96 @@ document.addEventListener('keydown', function(e) {
     document.getElementById('global-scan').focus();
   }
 });
+
+// === JOBS MANAGEMENT ===
+let jobsData = [];
+async function loadJobs() {
+  try {
+    const res = await fetch(API + '/jobs');
+    if (res.ok) {
+      jobsData = await res.json();
+      renderJobs();
+    }
+  } catch (err) { toast('Failed to load jobs: ' + err.message, 'error'); }
+}
+
+function renderJobs() {
+  const el = document.getElementById('jobs-list');
+  if (!jobsData.length) { el.innerHTML = '<p style="color:#888;padding:20px">No background jobs configured.</p>'; return; }
+  el.innerHTML = `<table><thead><tr><th>Job</th><th>Status</th><th>Interval</th><th>Next Run</th><th>Last Result</th><th>Actions</th></tr></thead><tbody>` +
+    jobsData.map(j => {
+      const running = j.running;
+      const statusBadge = running
+        ? '<span class="badge badge-delivered">Running</span>'
+        : '<span class="badge badge-pending">Paused</span>';
+      const interval = j.trigger || '-';
+      const nextRun = j.next_run ? new Date(j.next_run).toLocaleString() : '-';
+      const lastResult = j.last_result
+        ? (j.last_result.error
+          ? `<span style="color:#dc3545">Error: ${esc(j.last_result.error)}</span>`
+          : `Checked: ${j.last_result.checked || 0}, Updated: ${j.last_result.updated || 0}${j.last_result.errors ? ', Errors: ' + j.last_result.errors : ''}`)
+        : '<span style="color:#888">Never run</span>';
+      return `<tr>
+        <td><strong>${esc(j.name)}</strong><br><span style="font-size:11px;color:#888">${esc(j.id)}</span></td>
+        <td>${statusBadge}</td>
+        <td style="font-size:13px">${esc(interval)}</td>
+        <td style="font-size:13px">${nextRun}</td>
+        <td style="font-size:13px">${lastResult}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            ${running
+              ? `<button class="btn btn-warning btn-sm" onclick="pauseJob('${j.id}')">Pause</button>`
+              : `<button class="btn btn-success btn-sm" onclick="startJobPrompt('${j.id}')">Start</button>`}
+            <button class="btn btn-primary btn-sm" onclick="runJobNow('${j.id}')">Run Now</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+
+  // Show last run details if available
+  const resultEl = document.getElementById('jobs-last-result');
+  const tracking = jobsData.find(j => j.id === 'tracking_check');
+  if (tracking && tracking.last_result && tracking.last_result.details && tracking.last_result.details.length > 0) {
+    resultEl.innerHTML = `<h4 style="margin-bottom:8px">Last Tracking Updates</h4><table><thead><tr><th>Order</th><th>Tracking #</th><th>Old Status</th><th>New Status</th><th>Order Status</th></tr></thead><tbody>` +
+      tracking.last_result.details.map(d => `<tr><td>${esc(d.order_number)}</td><td>${esc(d.tracking)}</td><td><span class="badge badge-${d.old_status || 'unknown'}">${esc(d.old_status || '-')}</span></td><td><span class="badge badge-${d.new_status}">${esc(d.new_status)}</span></td><td><span class="badge badge-${d.order_status}">${esc(d.order_status)}</span></td></tr>`).join('') +
+      '</tbody></table>';
+  } else {
+    resultEl.innerHTML = '';
+  }
+}
+
+async function startJobPrompt(jobId) {
+  const mins = prompt('Interval in minutes (default 30):', '30');
+  if (mins === null) return;
+  const interval = parseInt(mins) || 30;
+  try {
+    const res = await fetch(API + '/jobs/' + jobId + '/start?interval_minutes=' + interval, { method: 'POST' });
+    if (res.ok) { toast('Job started (every ' + interval + ' min)'); loadJobs(); }
+    else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function pauseJob(jobId) {
+  try {
+    const res = await fetch(API + '/jobs/' + jobId + '/pause', { method: 'POST' });
+    if (res.ok) { toast('Job paused'); loadJobs(); }
+    else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function runJobNow(jobId) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Running...';
+  try {
+    const res = await fetch(API + '/jobs/' + jobId + '/run', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      toast('Job completed');
+      loadJobs();
+    } else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Run Now'; }
+}
 
 // Init
 (async () => {
