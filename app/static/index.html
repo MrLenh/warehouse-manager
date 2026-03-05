@@ -236,6 +236,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
         <button class="btn btn-primary btn-sm" id="btn-create-label-batch" onclick="createLabelBatch()" style="display:none">Create Label Batch (<span id="label-batch-count">0</span>)</button>
+        <button class="btn btn-sm" id="btn-mark-shipped" onclick="batchMarkShipped()" style="display:none;background:#17a2b8;color:#fff">Mark Shipped (<span id="mark-shipped-count">0</span>)</button>
         <a href="/packing" target="_blank" class="btn btn-outline btn-sm">Packing Station</a>
         <button class="btn btn-primary" onclick="openOrderModal()">+ Create Order</button>
       </div>
@@ -1585,11 +1586,17 @@ function updateSelectedCount() {
   }).filter(Boolean);
   const labelPurchasedCount = selectedOrders.filter(o => o.status === 'label_purchased').length;
   const confirmedCount = selectedOrders.filter(o => o.status === 'confirmed').length;
+  const shippableCount = selectedOrders.filter(o => ['pending','confirmed','processing'].includes(o.status)).length;
 
   count.textContent = confirmedCount;
   btn.style.display = confirmedCount > 0 ? '' : 'none';
   lblCount.textContent = labelPurchasedCount;
   lblBtn.style.display = labelPurchasedCount > 0 ? '' : 'none';
+
+  const shipBtn = document.getElementById('btn-mark-shipped');
+  const shipCount = document.getElementById('mark-shipped-count');
+  shipCount.textContent = shippableCount;
+  shipBtn.style.display = shippableCount > 0 ? '' : 'none';
 }
 
 async function createPickingList() {
@@ -1644,6 +1651,29 @@ async function createLabelBatch() {
       toast(e.detail || 'Error creating label batch', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function batchMarkShipped() {
+  const checked = document.querySelectorAll('.order-check:checked');
+  const selectedOrders = Array.from(checked).map(cb => allOrders.find(o => o.id === cb.value)).filter(Boolean);
+  const shippable = selectedOrders.filter(o => ['pending','confirmed','processing'].includes(o.status));
+  if (shippable.length === 0) { toast('Select pending/confirmed/processing orders first', 'error'); return; }
+  if (!confirm(`Mark ${shippable.length} order(s) as Shipped?\nThis will skip label purchase and go directly to Shipped status.`)) return;
+  let success = 0, fail = 0;
+  for (const o of shippable) {
+    try {
+      const res = await fetch(API + '/orders/' + o.id + '/status', {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({status: 'shipped'}),
+      });
+      if (res.ok) success++; else fail++;
+    } catch { fail++; }
+  }
+  toast(`Marked ${success} order(s) as Shipped` + (fail ? `, ${fail} failed` : ''));
+  document.getElementById('select-all-orders').checked = false;
+  document.querySelectorAll('.order-check').forEach(cb => cb.checked = false);
+  updateSelectedCount();
+  loadOrders();
 }
 
 document.getElementById('search-orders').addEventListener('input', () => { currentOrderPage = 1; renderOrders(allOrders); });
@@ -1935,6 +1965,9 @@ async function viewOrder(id) {
         if(wiEl) wiEl.value = p.width || 0;
         if(hEl) hEl.value = p.height || 0;
       }).catch(()=>{});
+    }
+    if (['pending','confirmed','processing'].includes(o.status)) {
+      footerHtml += `<button class="btn" style="background:#17a2b8;color:#fff" onclick="if(confirm('Mark this order as Shipped?'))updateOrderStatus('${o.id}','shipped')">Mark Shipped</button>`;
     }
     if (o.status !== 'pending') {
       footerHtml += `<button class="btn btn-warning" onclick="updateOrderStatus('${o.id}','pending')">Pending</button>`;
