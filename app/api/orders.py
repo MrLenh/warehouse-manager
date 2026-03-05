@@ -1,8 +1,9 @@
 import asyncio
 import csv
 import io
+from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -27,6 +28,18 @@ ORDER_CSV_COLUMNS = [
     "carrier", "service",
     "sku", "item_name", "quantity", "notes",
     "shipping_cost", "tracking_number", "tracking_url", "easypost_shipment_id", "label_url",
+]
+
+EXPORT_CSV_COLUMNS = [
+    "order_number", "order_name", "status", "shop_name",
+    "customer_name", "customer_email", "customer_phone",
+    "ship_to_name", "ship_to_street1", "ship_to_street2",
+    "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
+    "carrier", "service",
+    "sku", "variant_sku", "item_name", "quantity", "unit_price",
+    "processing_fee", "shipping_cost", "total_price",
+    "tracking_number", "tracking_url", "easypost_shipment_id", "label_url",
+    "notes", "created_at",
 ]
 
 
@@ -69,6 +82,98 @@ def create_order(data: OrderCreate, request: Request, background_tasks: Backgrou
 @router.get("", response_model=list[OrderOut])
 def list_orders(skip: int = 0, limit: int = 0, status: OrderStatus | None = None, search: str | None = None, db: Session = Depends(get_db)):
     return order_service.list_orders(db, skip=skip, limit=limit, status=status, search=search)
+
+
+@router.get("/export")
+def export_orders(
+    status: OrderStatus | None = None,
+    search: str | None = None,
+    shop_name: str | None = None,
+    date_from: str | None = Query(None, description="Start date YYYY-MM-DD"),
+    date_to: str | None = Query(None, description="End date YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+):
+    """Export orders as CSV with optional filters (status, search, shop_name, date range)."""
+    orders = order_service.list_orders(db, skip=0, limit=0, status=status, search=search)
+
+    # Additional filters
+    if shop_name:
+        shop_lower = shop_name.strip().lower()
+        orders = [o for o in orders if o.shop_name.lower() == shop_lower]
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+            orders = [o for o in orders if o.created_at >= dt_from]
+        except ValueError:
+            raise HTTPException(400, "date_from must be YYYY-MM-DD")
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            orders = [o for o in orders if o.created_at <= dt_to]
+        except ValueError:
+            raise HTTPException(400, "date_to must be YYYY-MM-DD")
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(EXPORT_CSV_COLUMNS)
+
+    for order in orders:
+        if not order.items:
+            # Order with no items (shouldn't happen, but handle gracefully)
+            writer.writerow([
+                order.order_number, order.order_name, order.status, order.shop_name,
+                order.customer_name, order.customer_email, order.customer_phone,
+                order.ship_to_name, order.ship_to_street1, order.ship_to_street2,
+                order.ship_to_city, order.ship_to_state, order.ship_to_zip, order.ship_to_country,
+                order.carrier, order.service,
+                "", "", "", "", "",
+                order.processing_fee, order.shipping_cost, order.total_price,
+                order.tracking_number, order.tracking_url, order.easypost_shipment_id, order.label_url,
+                order.notes, order.created_at.strftime("%Y-%m-%d %H:%M:%S") if order.created_at else "",
+            ])
+        else:
+            for i, item in enumerate(order.items):
+                writer.writerow([
+                    order.order_number if i == 0 else "",
+                    order.order_name if i == 0 else "",
+                    order.status if i == 0 else "",
+                    order.shop_name if i == 0 else "",
+                    order.customer_name if i == 0 else "",
+                    order.customer_email if i == 0 else "",
+                    order.customer_phone if i == 0 else "",
+                    order.ship_to_name if i == 0 else "",
+                    order.ship_to_street1 if i == 0 else "",
+                    order.ship_to_street2 if i == 0 else "",
+                    order.ship_to_city if i == 0 else "",
+                    order.ship_to_state if i == 0 else "",
+                    order.ship_to_zip if i == 0 else "",
+                    order.ship_to_country if i == 0 else "",
+                    order.carrier if i == 0 else "",
+                    order.service if i == 0 else "",
+                    item.sku, item.variant_sku, item.product_name, item.quantity, item.unit_price,
+                    order.processing_fee if i == 0 else "",
+                    order.shipping_cost if i == 0 else "",
+                    order.total_price if i == 0 else "",
+                    order.tracking_number if i == 0 else "",
+                    order.tracking_url if i == 0 else "",
+                    order.easypost_shipment_id if i == 0 else "",
+                    order.label_url if i == 0 else "",
+                    order.notes if i == 0 else "",
+                    order.created_at.strftime("%Y-%m-%d %H:%M:%S") if i == 0 and order.created_at else "",
+                ])
+
+    buf.seek(0)
+    filename = "orders_export"
+    if status:
+        filename += f"_{status.value}"
+    if shop_name:
+        filename += f"_{shop_name.strip()}"
+    filename += ".csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.get("/import-template")
