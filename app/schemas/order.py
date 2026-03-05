@@ -10,6 +10,7 @@ class OrderItemCreate(BaseModel):
     product_id: str
     variant_id: str = ""
     quantity: int = 1
+    item_name: str = ""
 
     @field_validator("quantity")
     @classmethod
@@ -65,6 +66,7 @@ class OrderItemOut(BaseModel):
     sku: str
     variant_sku: str = ""
     variant_label: str = ""
+    name: str = ""
     product_name: str
     quantity: int
     unit_price: float

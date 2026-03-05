@@ -200,6 +200,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
             sku=product.sku,
             variant_sku=variant.variant_sku if variant else "",
             variant_label=variant_label,
+            name=item_data.item_name,
             product_name=product.name,
             quantity=item_data.quantity,
             unit_price=unit_price,

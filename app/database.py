@@ -131,6 +131,7 @@ def _migrate_add_columns():
             "variant_label": "VARCHAR DEFAULT ''",
             "product_name": "VARCHAR DEFAULT ''",
             "unit_price": "FLOAT DEFAULT 0.0",
+            "name": "VARCHAR DEFAULT ''",
         }
         with engine.begin() as conn:
             for col_name, col_type in new_cols.items():
