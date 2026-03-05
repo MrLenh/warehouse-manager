@@ -4,9 +4,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.stock_request import StockRequestStatus
 from app.schemas.stock_request import (
+    BoxScanResult,
     StockRequestCreate,
     StockRequestOut,
     StockRequestReceive,
+    StockRequestTrackingUpdate,
 )
 from app.services import stock_request_service
 
@@ -81,3 +83,19 @@ def cancel_stock_request(sr_id: str, db: Session = Depends(get_db)):
     if not sr:
         raise HTTPException(404, "Stock request not found")
     return sr
+
+
+@router.patch("/{sr_id}/tracking", response_model=StockRequestOut)
+def update_tracking(sr_id: str, data: StockRequestTrackingUpdate, db: Session = Depends(get_db)):
+    """Update tracking ID and carrier for a stock request shipment."""
+    sr = stock_request_service.update_tracking(db, sr_id, data)
+    if not sr:
+        raise HTTPException(404, "Stock request not found")
+    return sr
+
+
+@router.post("/scan-box/{barcode}", response_model=BoxScanResult)
+def scan_box_barcode(barcode: str, db: Session = Depends(get_db)):
+    """Scan a box barcode to mark it as received. Returns box and item info."""
+    result = stock_request_service.scan_box_barcode(db, barcode)
+    return result

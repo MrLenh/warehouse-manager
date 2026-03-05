@@ -160,6 +160,25 @@ def _migrate_add_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE products ADD COLUMN customer_id VARCHAR DEFAULT NULL"))
 
+    # Stock requests: tracking_id, carrier
+    if "stock_requests" in tables:
+        existing = {col["name"] for col in inspector.get_columns("stock_requests")}
+        new_cols = {
+            "tracking_id": "VARCHAR DEFAULT ''",
+            "carrier": "VARCHAR DEFAULT ''",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in new_cols.items():
+                if col_name not in existing:
+                    conn.execute(text(f"ALTER TABLE stock_requests ADD COLUMN {col_name} {col_type}"))
+
+    # Stock request items: box_count
+    if "stock_request_items" in tables:
+        existing = {col["name"] for col in inspector.get_columns("stock_request_items")}
+        if "box_count" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE stock_request_items ADD COLUMN box_count INTEGER DEFAULT 0"))
+
 
 def _migrate_order_status_enum():
     """Add new enum values to order status (PostgreSQL only)."""

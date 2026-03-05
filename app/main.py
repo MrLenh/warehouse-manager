@@ -244,7 +244,7 @@ def clear_all_data():
             "activity_logs",
             "pick_items", "picking_lists",
             "invoices",
-            "order_items", "orders", "stock_request_items",
+            "order_items", "orders", "stock_request_boxes", "stock_request_items",
             "stock_requests", "inventory_logs", "variants", "products",
             "customers",
         ]
