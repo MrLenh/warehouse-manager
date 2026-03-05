@@ -12,7 +12,7 @@ from sqlalchemy import func as sa_func
 from app.models.customer import Customer
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product, Variant
-from app.schemas.order import OrderCreate, OrderStatusUpdate
+from app.schemas.order import OrderCreate, OrderStatusUpdate, OrderUpdate
 
 
 def _generate_order_number() -> str:
@@ -310,6 +310,114 @@ def update_order_status(db: Session, order_id: str, data: OrderStatusUpdate) -> 
         return None
     order.status = data.status
     _add_status_history(order, data.status.value, data.note)
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+def update_order(db: Session, order_id: str, data: OrderUpdate) -> Order | None:
+    """Update order fields and item names/quantities."""
+    order = get_order(db, order_id)
+    if not order:
+        return None
+
+    # Update order-level fields
+    if data.order_name is not None:
+        # Check duplicate if changing name
+        if data.order_name and data.order_name != order.order_name:
+            existing = db.query(Order).filter(Order.order_name == data.order_name, Order.id != order.id).first()
+            if existing:
+                raise ValueError(f"Order name '{data.order_name}' already exists (order {existing.order_number})")
+        order.order_name = data.order_name
+    if data.customer_name is not None:
+        order.customer_name = data.customer_name
+    if data.customer_email is not None:
+        order.customer_email = data.customer_email
+    if data.customer_phone is not None:
+        order.customer_phone = data.customer_phone
+    if data.shop_name is not None:
+        order.shop_name = data.shop_name
+    if data.carrier is not None:
+        order.carrier = data.carrier
+    if data.service is not None:
+        order.service = data.service
+    if data.notes is not None:
+        order.notes = data.notes
+
+    # Update shipping address
+    if data.ship_to:
+        if data.ship_to.name is not None:
+            order.ship_to_name = data.ship_to.name
+        if data.ship_to.street1 is not None:
+            order.ship_to_street1 = data.ship_to.street1
+        if data.ship_to.street2 is not None:
+            order.ship_to_street2 = data.ship_to.street2
+        if data.ship_to.city is not None:
+            order.ship_to_city = data.ship_to.city
+        if data.ship_to.state is not None:
+            order.ship_to_state = data.ship_to.state
+        if data.ship_to.zip is not None:
+            order.ship_to_zip = data.ship_to.zip
+        if data.ship_to.country is not None:
+            order.ship_to_country = data.ship_to.country
+
+    # Update items (name, quantity)
+    if data.items:
+        items_by_id = {item.id: item for item in order.items}
+        for item_update in data.items:
+            order_item = items_by_id.get(item_update.id)
+            if not order_item:
+                raise ValueError(f"Order item '{item_update.id}' not found in this order")
+            if item_update.name is not None:
+                order_item.name = item_update.name
+            if item_update.quantity is not None and item_update.quantity != order_item.quantity:
+                diff = item_update.quantity - order_item.quantity
+                # Adjust inventory
+                if order_item.variant_id:
+                    variant = db.query(Variant).filter(Variant.id == order_item.variant_id).first()
+                    if variant:
+                        if diff > 0 and variant.quantity < diff:
+                            raise ValueError(f"Insufficient stock for variant {variant.variant_sku}. Available: {variant.quantity}")
+                        variant.quantity -= diff
+                        db.add(InventoryLog(
+                            product_id=order_item.product_id,
+                            change=-diff,
+                            reason="order_updated",
+                            reference_id=order.id,
+                            balance_after=variant.quantity,
+                            note=f"[Variant {variant.variant_sku}] Qty changed {order_item.quantity} → {item_update.quantity} for order {order.order_number}",
+                        ))
+                else:
+                    product = db.query(Product).filter(Product.id == order_item.product_id).first()
+                    if product:
+                        if diff > 0 and product.quantity < diff:
+                            raise ValueError(f"Insufficient stock for {product.sku}. Available: {product.quantity}")
+                        product.quantity -= diff
+                        db.add(InventoryLog(
+                            product_id=product.id,
+                            change=-diff,
+                            reason="order_updated",
+                            reference_id=order.id,
+                            balance_after=product.quantity,
+                            note=f"Qty changed {order_item.quantity} → {item_update.quantity} for order {order.order_number}",
+                        ))
+                # Update FIFO batches
+                if diff > 0:
+                    _consume_batches_fifo(db, order_item.product_id, order_item.variant_id or "", diff)
+                elif diff < 0:
+                    _restore_batches_fifo(db, order_item.product_id, order_item.variant_id or "", -diff)
+                _recalculate_price_from_batches(db, order_item.product_id, order_item.variant_id or "")
+                order_item.quantity = item_update.quantity
+
+        # Recalculate pricing
+        total_items = sum(item.quantity for item in order.items)
+        items_subtotal = sum(item.quantity * item.unit_price for item in order.items)
+        order.processing_fee = (
+            settings.PROCESSING_FEE_FIRST_ITEM
+            + max(0, total_items - 1) * settings.PROCESSING_FEE_EXTRA_ITEM
+        ) if total_items > 0 else 0.0
+        order.total_price = items_subtotal + order.processing_fee + order.shipping_cost
+
     db.commit()
     db.refresh(order)
     return order

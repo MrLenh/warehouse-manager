@@ -11,7 +11,7 @@ from app.api.auth import get_current_user
 from app.database import get_db
 from app.models.order import OrderStatus
 from app.models.user import User
-from app.schemas.order import AddressUpdate, BuyLabelRequest, OrderCreate, OrderOut, OrderStatusUpdate
+from app.schemas.order import AddressUpdate, BuyLabelRequest, OrderCreate, OrderOut, OrderStatusUpdate, OrderUpdate
 from easypost.errors import EasyPostError
 
 from app.services import auth_service, order_service, shipping_service
@@ -372,6 +372,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                     "variant_id": variant.id,
                     "quantity": item["quantity"],
                     "resolved_name": resolved_name,
+                    "item_name": csv_item_name,
                     "sku": sku_val,
                 })
                 continue
@@ -396,6 +397,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                     "variant_id": "",
                     "quantity": item["quantity"],
                     "resolved_name": csv_item_name or product.name,
+                    "item_name": csv_item_name,
                     "sku": sku_val,
                 })
                 continue
@@ -430,6 +432,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                     product_id=ri["product_id"],
                     variant_id=ri["variant_id"],
                     quantity=ri["quantity"],
+                    item_name=ri["item_name"],
                 )
                 for ri in resolved_items
             ],
@@ -493,6 +496,25 @@ def get_order(order_id: str, db: Session = Depends(get_db)):
     order = order_service.get_order(db, order_id)
     if not order:
         raise HTTPException(404, "Order not found")
+    return _enrich_order(order, db)
+
+
+@router.patch("/{order_id}", response_model=OrderOut)
+def update_order(
+    order_id: str,
+    data: OrderUpdate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update order fields (name, customer info, address, items name/quantity)."""
+    try:
+        order = order_service.update_order(db, order_id, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not order:
+        raise HTTPException(404, "Order not found")
+    auth_service.log_activity(db, user.id, user.username, "update_order", detail=order.order_number, ip=request.client.host if request.client else "")
     return _enrich_order(order, db)
 
 

@@ -138,6 +138,32 @@ class AddressUpdate(BaseModel):
     country: str | None = None
 
 
+class OrderItemUpdate(BaseModel):
+    id: str
+    name: str | None = None
+    quantity: int | None = None
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_must_be_positive(cls, v):
+        if v is not None and v < 1:
+            raise ValueError("Item quantity must be at least 1")
+        return v
+
+
+class OrderUpdate(BaseModel):
+    order_name: str | None = None
+    customer_name: str | None = None
+    customer_email: str | None = None
+    customer_phone: str | None = None
+    shop_name: str | None = None
+    carrier: str | None = None
+    service: str | None = None
+    notes: str | None = None
+    ship_to: AddressUpdate | None = None
+    items: list[OrderItemUpdate] | None = None
+
+
 class BuyLabelRequest(BaseModel):
     carrier: str = ""  # empty = use order's carrier or config default
     service: str = ""  # empty = use order's service or config default
