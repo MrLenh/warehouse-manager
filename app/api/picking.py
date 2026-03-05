@@ -88,6 +88,17 @@ def create_label_batch(data: PickingListCreate, request: Request, user: User = D
         raise HTTPException(400, str(e))
 
 
+@router.post("/{picking_list_id}/batch-buy-label")
+def batch_buy_label(picking_list_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Buy labels for all fully-picked orders in a batch."""
+    try:
+        result = picking_service.batch_buy_labels(db, picking_list_id)
+        auth_service.log_activity(db, user.id, user.username, "batch_buy_label", detail=f"{result['purchased']}/{result['total']} orders", ip=request.client.host if request.client else "")
+        return result
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 @router.post("/{picking_list_id}/batch-drop-off")
 def batch_drop_off(picking_list_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Print all labels & mark all orders in batch as drop_off."""

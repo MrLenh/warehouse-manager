@@ -396,6 +396,74 @@ def create_label_batch(db: Session, order_ids: list[str]) -> PickingList:
     return picking_list
 
 
+def batch_buy_labels(db: Session, picking_list_id: str) -> dict:
+    """Buy labels for all fully-picked orders in a batch that don't have labels yet."""
+    from app.services import shipping_service
+
+    pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
+    if not pl:
+        raise ValueError("Picking list not found")
+
+    # Get all unique order IDs in this batch
+    batch_order_ids = {
+        row[0] for row in
+        db.query(PickItem.order_id).filter(PickItem.picking_list_id == pl.id).distinct().all()
+    }
+
+    # Get progress to check which orders are fully picked
+    progress = get_picking_list_progress(db, picking_list_id)
+    fully_picked_ids = {o["order_id"] for o in progress if o["picked"] >= o["total"]}
+
+    results = []
+    for oid in batch_order_ids:
+        order = db.query(Order).filter(Order.id == oid).first()
+        if not order:
+            continue
+
+        # Skip if already has label
+        if order.label_url:
+            results.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "status": "already_has_label",
+            })
+            continue
+
+        # Skip if not fully picked
+        if oid not in fully_picked_ids:
+            results.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "status": "not_fully_picked",
+            })
+            continue
+
+        try:
+            shipping_service.buy_label(db, oid)
+            results.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "status": "purchased",
+            })
+        except Exception as e:
+            results.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "status": "error",
+                "error": str(e),
+            })
+
+    db.commit()
+
+    return {
+        "picking_list_id": picking_list_id,
+        "orders": results,
+        "total": len(results),
+        "purchased": sum(1 for r in results if r["status"] == "purchased"),
+        "errors": sum(1 for r in results if r["status"] == "error"),
+    }
+
+
 def batch_drop_off(db: Session, picking_list_id: str) -> dict:
     """Mark all label_purchased orders in a batch as drop_off and return label URLs."""
     pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()

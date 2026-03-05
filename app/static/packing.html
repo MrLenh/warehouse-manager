@@ -150,6 +150,7 @@ tr:hover{background:#f8f9ff}
           <button class="btn btn-outline btn-sm" onclick="exportPickingSummary()">Picking Summary</button>
           <button class="btn btn-outline btn-sm" onclick="exportQrCodes()">QR Labels (by SKU)</button>
           <button class="btn btn-outline btn-sm" onclick="printPickingLabel()">Picking Label</button>
+          <button class="btn btn-primary btn-sm" id="batch-buy-label-btn" onclick="batchBuyLabel()" style="display:none">Batch Buy Label</button>
           <button class="btn btn-success btn-sm" id="batch-drop-off-btn" onclick="batchPrintAndDropOff()" style="display:none">Batch Print &amp; Drop Off</button>
           <button class="btn btn-outline btn-sm" onclick="refreshProgress()">Refresh</button>
           <button class="btn btn-danger btn-sm" id="unpack-batch-btn" onclick="unpackBatch()">Unpack Batch</button>
@@ -316,6 +317,10 @@ async function refreshProgress() {
   document.getElementById('total-progress').style.width = pct + '%';
   document.getElementById('total-progress').textContent = pct + '%';
   document.getElementById('progress-text').textContent = `${totalPicked} / ${totalItems} items picked`;
+
+  // Show "Batch Buy Label" if any fully-picked order has no label yet
+  const hasNeedLabelOrders = progressData.some(o => o.picked >= o.total && !o.label_url && !['drop_off','shipped','in_transit','delivered','pending'].includes(o.order_status));
+  document.getElementById('batch-buy-label-btn').style.display = hasNeedLabelOrders ? '' : 'none';
 
   // Show "Batch Print & Drop Off" if any order has a label and is not yet dropped off
   const hasLabelOrders = progressData.some(o => o.label_url && !['drop_off','shipped','in_transit','delivered'].includes(o.order_status));
@@ -844,6 +849,37 @@ async function printAndDropOff(orderId, labelUrl) {
       toast(e.detail || 'Error updating status', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+// Batch Buy Label — purchase labels for all fully-picked orders
+async function batchBuyLabel() {
+  if (!currentPL) return;
+  const needLabel = progressData.filter(o => o.picked >= o.total && !o.label_url && !['drop_off','shipped','in_transit','delivered','pending'].includes(o.order_status));
+  if (needLabel.length === 0) { toast('No orders need labels', 'error'); return; }
+  if (!confirm(`Buy labels for ${needLabel.length} order(s)?`)) return;
+
+  const btn = document.getElementById('batch-buy-label-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Purchasing...'; }
+
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id + '/batch-buy-label', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      const errors = data.orders.filter(o => o.status === 'error');
+      if (errors.length > 0) {
+        toast(`${data.purchased} label(s) purchased, ${errors.length} error(s): ${errors.map(e => e.order_number + ': ' + e.error).join('; ')}`, errors.length === data.total ? 'error' : 'warning');
+      } else {
+        toast(`${data.purchased} label(s) purchased!`);
+      }
+      await refreshProgress();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error buying labels', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Batch Buy Label'; }
+  }
 }
 
 // Batch Print & Drop Off — opens all labels and marks all as drop_off
