@@ -87,14 +87,27 @@ def list_orders(skip: int = 0, limit: int = 0, status: OrderStatus | None = None
 @router.get("/export")
 def export_orders(
     status: OrderStatus | None = None,
+    statuses: str | None = Query(None, description="Comma-separated statuses, e.g. pending,confirmed,processing"),
     search: str | None = None,
     shop_name: str | None = None,
     date_from: str | None = Query(None, description="Start date YYYY-MM-DD"),
     date_to: str | None = Query(None, description="End date YYYY-MM-DD"),
     db: Session = Depends(get_db),
 ):
-    """Export orders as CSV with optional filters (status, search, shop_name, date range)."""
-    orders = order_service.list_orders(db, skip=0, limit=0, status=status, search=search)
+    """Export orders as CSV with optional filters (status, statuses, search, shop_name, date range).
+    Use `statuses` param for multiple statuses: ?statuses=pending,confirmed,processing
+    """
+    # Parse multiple statuses
+    parsed_statuses = None
+    if statuses:
+        valid_values = {s.value for s in OrderStatus}
+        raw_list = [s.strip() for s in statuses.split(",") if s.strip()]
+        invalid = [s for s in raw_list if s not in valid_values]
+        if invalid:
+            raise HTTPException(400, f"Invalid status(es): {', '.join(invalid)}. Valid: {', '.join(valid_values)}")
+        parsed_statuses = [OrderStatus(s) for s in raw_list]
+
+    orders = order_service.list_orders(db, skip=0, limit=0, status=status, search=search, statuses=parsed_statuses)
 
     # Additional filters
     if shop_name:
@@ -164,7 +177,9 @@ def export_orders(
 
     buf.seek(0)
     filename = "orders_export"
-    if status:
+    if parsed_statuses:
+        filename += "_" + "_".join(s.value for s in parsed_statuses)
+    elif status:
         filename += f"_{status.value}"
     if shop_name:
         filename += f"_{shop_name.strip()}"

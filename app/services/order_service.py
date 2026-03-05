@@ -282,10 +282,12 @@ def get_order_by_tracking(db: Session, tracking_number: str) -> Order | None:
 
 def list_orders(
     db: Session, skip: int = 0, limit: int = 0, status: OrderStatus | None = None,
-    search: str | None = None,
+    search: str | None = None, statuses: list[OrderStatus] | None = None,
 ) -> list[Order]:
     q = db.query(Order)
-    if status:
+    if statuses:
+        q = q.filter(Order.status.in_(statuses))
+    elif status:
         q = q.filter(Order.status == status)
     if search:
         pattern = f"%{search}%"
