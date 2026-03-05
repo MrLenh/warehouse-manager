@@ -529,7 +529,7 @@ async function doScan() {
       msg += ` | Order: ${data.order_number} (${data.order_picked}/${data.order_total})`;
       if (data.order_complete) {
         if (data.has_label) {
-          msg += ' | ORDER COMPLETE - Label ready! Opening print...';
+          msg += ' | ORDER COMPLETE - Label ready! Please double-check items before printing.';
         } else {
           msg += ' | ORDER COMPLETE - Ready for shipping label!';
         }
@@ -537,13 +537,12 @@ async function doScan() {
       resultEl.textContent = msg;
       await refreshProgress();
 
-      // Auto print & drop-off if order complete and label already purchased
+      // Show reminder to double-check items if order complete and label already purchased
       if (data.order_complete && data.has_label) {
-        const orderProgress = progressData.find(x => x.order_id === data.order_id);
-        if (orderProgress && orderProgress.label_url) {
-          toast('Label already purchased — printing & marking drop off', 'success');
-          await printAndDropOff(data.order_id, orderProgress.label_url);
-        }
+        toast('Label already purchased — please double-check items then use Print Label & Drop Off buttons', 'info');
+        activeOrderId = data.order_id;
+        showActiveOrder();
+        renderOrderCards();
       }
 
       // Update scanner placeholder
@@ -606,8 +605,10 @@ function showActiveOrder() {
       </div>`;
     } else {
       bottomHtml = `<div class="ao-complete">
-        <p>All items picked! Ready to ship.</p>
-        <button class="btn btn-success btn-lg" onclick="printAndDropOff('${o.order_id}','${esc(o.label_url)}')">Print Shipping Label & Drop Off</button>
+        <p>All items picked! Please double-check all items before printing label.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-success btn-lg" onclick="printAndDropOff('${o.order_id}','${esc(o.label_url)}')">Print Label &amp; Drop Off</button>
+        </div>
       </div>`;
     }
   } else if (isDroppedOff) {
@@ -828,6 +829,25 @@ async function buyLmLabel() {
     _buyingLmLabel = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Buy Label'; }
   }
+}
+
+async function dropOffOnly(orderId) {
+  try {
+    const res = await fetch(API + '/orders/' + orderId + '/status', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ status: 'drop_off' }),
+    });
+    if (res.ok) {
+      toast('Order marked as Drop Off');
+      await refreshProgress();
+      if (activeOrderId === orderId) {
+        clearActiveOrder();
+      }
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error updating status', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
 async function printAndDropOff(orderId, labelUrl) {
