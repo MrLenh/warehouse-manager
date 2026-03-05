@@ -142,7 +142,20 @@ tr:hover{background:#f8f9ff}
 .img-zoom-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;cursor:zoom-out}
 .img-zoom-overlay.show{display:flex}
 .img-zoom-overlay img{max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
+.scan-cam-btn{background:none;border:none;cursor:pointer;padding:4px;display:none;align-items:center;justify-content:center;border-radius:50%;transition:.2s}
+.scan-cam-btn:hover{background:rgba(255,255,255,.2)}
+@media(max-width:768px){.scan-cam-btn{display:inline-flex}}
+.scan-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
+.scan-modal-overlay.show{display:flex}
+.scan-modal-box{background:#fff;border-radius:16px;width:95vw;max-width:420px;overflow:hidden}
+.scan-modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #eee}
+.scan-modal-header h3{font-size:16px;margin:0}
+.scan-modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:#666;padding:0 4px}
+.scan-modal-close:hover{color:#333}
+#scanner-container{width:100%;min-height:300px}
+.scan-result-bar{padding:12px 18px;background:#f8f9fa;text-align:center;font-size:13px;color:#555;border-top:1px solid #eee}
 </style>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
@@ -150,6 +163,9 @@ tr:hover{background:#f8f9ff}
   <h1>Warehouse Manager</h1>
   <div class="stats">
     <input type="text" id="global-scan" placeholder="Scan QR..." style="width:180px;padding:6px 12px;border:none;border-radius:20px;font-size:13px;background:rgba(255,255,255,.25);color:#fff;outline:none" autocomplete="off">
+    <button class="scan-cam-btn" onclick="openCameraScanner()" title="Scan with camera">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    </button>
     <span id="stat-products">0 Products</span>
     <span id="stat-orders">0 Orders</span>
     <span id="stat-low-stock">0 Low Stock</span>
@@ -2918,7 +2934,22 @@ async function handleGlobalScan(raw) {
     return;
   }
 
-  // 3. PICK- code: redirect to packing station to scan
+  // 3. PL- code: picking list number → open picking summary page
+  if (code.startsWith('PL-')) {
+    try {
+      const res = await fetch(API + '/picking-lists/by-number/' + encodeURIComponent(code));
+      if (res.ok) {
+        const pl = await res.json();
+        window.open('/picking/' + pl.id, '_blank');
+        toast('Picking list: ' + pl.picking_number);
+        return;
+      }
+    } catch {}
+    toast('Picking list not found: ' + code, 'error');
+    return;
+  }
+
+  // 4. PICK- code: redirect to packing station to scan
   if (code.startsWith('PICK-')) {
     try {
       const res = await fetch(API + '/picking-lists/scan?qr_code=' + encodeURIComponent(code), { method: 'POST' });
@@ -2932,7 +2963,7 @@ async function handleGlobalScan(raw) {
     return;
   }
 
-  // 4. SKU lookup (product or variant)
+  // 5. SKU lookup (product or variant)
   try {
     const res = await fetch(API + '/products/qr/lookup?sku=' + encodeURIComponent(code));
     if (res.ok) {
@@ -3064,6 +3095,60 @@ async function runJobNow(jobId) {
   loadProducts();
   loadOrders();
 })();
+// === CAMERA BARCODE SCANNER ===
+let html5QrScanner = null;
+
+function openCameraScanner() {
+  document.getElementById('scan-modal').classList.add('show');
+  document.getElementById('scan-result-text').textContent = 'Point camera at a barcode or QR code';
+  startCameraScanner();
+}
+
+function closeCameraScanner() {
+  document.getElementById('scan-modal').classList.remove('show');
+  stopCameraScanner();
+}
+
+function startCameraScanner() {
+  if (html5QrScanner) { stopCameraScanner(); }
+  html5QrScanner = new Html5Qrcode('scanner-container');
+  html5QrScanner.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+    onScanSuccess,
+    () => {}
+  ).catch(err => {
+    document.getElementById('scan-result-text').textContent = 'Camera error: ' + err;
+  });
+}
+
+function stopCameraScanner() {
+  if (html5QrScanner) {
+    html5QrScanner.stop().catch(() => {});
+    html5QrScanner.clear();
+    html5QrScanner = null;
+  }
+}
+
+function onScanSuccess(decodedText) {
+  stopCameraScanner();
+  document.getElementById('scan-result-text').textContent = 'Scanned: ' + decodedText;
+  closeCameraScanner();
+  handleGlobalScan(decodedText);
+}
 </script>
+
+<!-- Camera Scanner Modal -->
+<div class="scan-modal-overlay" id="scan-modal" onclick="if(event.target===this)closeCameraScanner()">
+  <div class="scan-modal-box">
+    <div class="scan-modal-header">
+      <h3>Scan Barcode / QR Code</h3>
+      <button class="scan-modal-close" onclick="closeCameraScanner()">&times;</button>
+    </div>
+    <div id="scanner-container"></div>
+    <div class="scan-result-bar" id="scan-result-text">Point camera at a barcode or QR code</div>
+  </div>
+</div>
+
 </body>
 </html>

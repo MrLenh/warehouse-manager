@@ -81,6 +81,10 @@ def get_picking_list(db: Session, picking_list_id: str) -> PickingList | None:
     return db.query(PickingList).filter(PickingList.id == picking_list_id).first()
 
 
+def get_picking_list_by_number(db: Session, picking_number: str) -> PickingList | None:
+    return db.query(PickingList).filter(PickingList.picking_number == picking_number).first()
+
+
 def list_picking_lists(db: Session, skip: int = 0, limit: int = 100, include_archived: bool = False) -> list[PickingList]:
     q = db.query(PickingList)
     if not include_archived:

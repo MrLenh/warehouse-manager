@@ -50,6 +50,14 @@ def list_picking_lists(skip: int = 0, limit: int = 100, db: Session = Depends(ge
     return [_to_picking_list_out(pl) for pl in pls]
 
 
+@router.get("/by-number/{picking_number}")
+def get_picking_list_by_number(picking_number: str, db: Session = Depends(get_db)):
+    pl = picking_service.get_picking_list_by_number(db, picking_number)
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+    return _to_picking_list_out(pl)
+
+
 @router.get("/{picking_list_id}", response_model=PickingListOut)
 def get_picking_list(picking_list_id: str, db: Session = Depends(get_db)):
     pl = picking_service.get_picking_list(db, picking_list_id)
