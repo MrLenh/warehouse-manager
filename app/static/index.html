@@ -1860,6 +1860,22 @@ async function viewOrder(id) {
       <tbody>${o.items.map(i => `<tr><td style="width:64px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;transition:transform .15s" onclick="openImageZoom(this.src)" onmouseenter="this.style.transform=\'scale(1.1)\'" onmouseleave="this.style.transform=\'scale(1)\'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\'"><span style="display:none;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>' : '<span style="display:inline-block;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table>
     ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">View Shipping Label</a></div>' : ''}
+    ${o.label_url && currentUser && currentUser.role === 'admin' && o.status !== 'cancelled' && o.status !== 'delivered' ? `
+    <div id="rebuy-label-section" style="margin-top:12px;padding:12px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">
+      <h4 style="margin:0 0 8px;font-size:14px;color:#856404">Re-buy Label (Admin)</h4>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:8px 12px;background:#f8f9fa;border-radius:8px;font-size:13px">
+        <span style="font-weight:600;color:#555">Package:</span>
+        <label style="display:flex;align-items:center;gap:3px">Wt(oz)<input id="rbl-weight" type="number" step="0.1" min="0.1" style="width:70px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">L(in)<input id="rbl-length" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">W(in)<input id="rbl-width" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+        <label style="display:flex;align-items:center;gap:3px">H(in)<input id="rbl-height" type="number" step="0.1" min="0" style="width:60px;padding:4px 6px;border:1px solid #ccc;border-radius:4px" value="0"></label>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="rbl-carrier" onchange="updateServiceOptions('rbl-carrier','rbl-service')" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${Object.keys(CARRIERS).map(c => '<option value="'+c+'" '+(c===(o.carrier||'USPS')?'selected':'')+'>'+c+'</option>').join('')}</select>
+        <select id="rbl-service" style="padding:6px 8px;border-radius:6px;border:1px solid #ddd">${(CARRIERS[o.carrier||'USPS']||[]).map(s => '<option value="'+s+'" '+(s===(o.service||'GroundAdvantage')?'selected':'')+'>'+s+'</option>').join('')}</select>
+        <button id="btn-rebuy-label" class="btn btn-warning" onclick="rebuyLabel('${o.id}')">Re-buy Label</button>
+      </div>
+    </div>` : ''}
     ${o.notes ? '<div style="margin-top:12px"><strong>Notes:</strong> '+esc(o.notes)+'</div>' : ''}
     <div style="margin-top:16px;text-align:center">
       <h4 style="margin:0 0 8px;font-size:14px">QR Code (Picking / Packing)</h4>
@@ -1900,6 +1916,19 @@ async function viewOrder(id) {
         const lEl = document.getElementById('bl-length');
         const wiEl = document.getElementById('bl-width');
         const hEl = document.getElementById('bl-height');
+        if(wEl) wEl.value = p.weight || 0;
+        if(lEl) lEl.value = p.length || 0;
+        if(wiEl) wiEl.value = p.width || 0;
+        if(hEl) hEl.value = p.height || 0;
+      }).catch(()=>{});
+    }
+    // Load parcel info for rebuy section
+    if (o.label_url && currentUser && currentUser.role === 'admin') {
+      fetch(API + '/orders/' + o.id + '/parcel-info').then(r=>r.json()).then(p=>{
+        const wEl = document.getElementById('rbl-weight');
+        const lEl = document.getElementById('rbl-length');
+        const wiEl = document.getElementById('rbl-width');
+        const hEl = document.getElementById('rbl-height');
         if(wEl) wEl.value = p.weight || 0;
         if(lEl) lEl.value = p.length || 0;
         if(wiEl) wiEl.value = p.width || 0;
@@ -2061,6 +2090,49 @@ async function buyLabel(orderId) {
   finally {
     _buyingLabel = false;
     if (btn) { btn.disabled = false; btn.textContent = 'Buy Label'; }
+  }
+}
+
+// RE-BUY LABEL (admin only)
+let _rebuyingLabel = false;
+async function rebuyLabel(orderId) {
+  if (_rebuyingLabel) return;
+  const carrierEl = document.getElementById('rbl-carrier');
+  const serviceEl = document.getElementById('rbl-service');
+  const carrier = carrierEl ? carrierEl.value : defaultCarrier;
+  const service = serviceEl ? serviceEl.value : defaultService;
+  const w = parseFloat(document.getElementById('rbl-weight')?.value) || 0;
+  const l = parseFloat(document.getElementById('rbl-length')?.value) || 0;
+  const wi = parseFloat(document.getElementById('rbl-width')?.value) || 0;
+  const h = parseFloat(document.getElementById('rbl-height')?.value) || 0;
+  const dimStr = w > 0 ? `\nWeight: ${w}oz` + (l > 0 ? ` | ${l} x ${wi} x ${h} in` : '') : '';
+  if (!confirm(`Re-buy label: ${carrier} ${service}?\nThis will REFUND the current label and purchase a new one.${dimStr}`)) return;
+
+  _rebuyingLabel = true;
+  const btn = document.getElementById('btn-rebuy-label');
+  if (btn) { btn.disabled = true; btn.textContent = 'Re-purchasing...'; }
+
+  try {
+    toast('Refunding old label & purchasing new one...', 'success');
+    const body = {carrier, service};
+    if (w > 0) { body.weight_oz = w; body.length_in = l; body.width_in = wi; body.height_in = h; }
+    const res = await fetch(API + '/orders/' + orderId + '/rebuy-label', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      toast(`Label re-purchased: ${carrier} ${service}`);
+      closeModal('order-detail-modal');
+      loadOrders();
+    } else {
+      try { const e = await res.json(); toast(e.detail || 'Error re-buying label', 'error'); }
+      catch { toast('Error re-buying label', 'error'); }
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally {
+    _rebuyingLabel = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Re-buy Label'; }
   }
 }
 

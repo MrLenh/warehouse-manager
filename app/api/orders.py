@@ -502,6 +502,37 @@ def buy_label(
     return order
 
 
+@router.post("/{order_id}/rebuy-label", response_model=OrderOut)
+def rebuy_label(
+    order_id: str,
+    data: BuyLabelRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Re-buy label: refund existing label and purchase a new one. Admin only."""
+    if user.role != "admin":
+        raise HTTPException(403, "Admin only")
+    parcel_override = None
+    if data.weight_oz > 0:
+        parcel_override = {"weight": data.weight_oz}
+        if data.length_in > 0 and data.width_in > 0 and data.height_in > 0:
+            parcel_override["length"] = data.length_in
+            parcel_override["width"] = data.width_in
+            parcel_override["height"] = data.height_in
+    try:
+        order = shipping_service.rebuy_label(db, order_id, carrier=data.carrier, service=data.service,
+                                              parcel_override=parcel_override)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+    except EasyPostError as e:
+        raise HTTPException(400, f"Shipping API error: {e}")
+    auth_service.log_activity(db, user.id, user.username, "rebuy_label", detail=f"{order.order_number} {data.carrier} {data.service}", ip=request.client.host if request.client else "")
+    background_tasks.add_task(_fire_webhook, order)
+    return order
+
+
 @router.get("/{order_id}/rates")
 def get_rates(order_id: str, weight_oz: float = 0, length_in: float = 0,
               width_in: float = 0, height_in: float = 0, db: Session = Depends(get_db)):

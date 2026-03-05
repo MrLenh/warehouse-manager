@@ -204,6 +204,36 @@ def refund_shipment(db: Session, order: Order) -> str:
     return refund_status
 
 
+def rebuy_label(db: Session, order_id: str, carrier: str = "", service: str = "",
+                parcel_override: dict | None = None) -> Order:
+    """Refund existing label and buy a new one. Admin only (enforced at API layer)."""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise ValueError("Order not found")
+    if not order.easypost_shipment_id or not order.label_url:
+        raise ValueError("Order does not have an existing label to re-buy")
+
+    # Refund old label
+    refund_status = refund_shipment(db, order)
+    old_shipment_id = order.easypost_shipment_id
+
+    # Clear old shipment id so buy_label won't reject
+    order.easypost_shipment_id = ""
+    db.commit()
+
+    # Buy new label
+    new_order = buy_label(db, order_id, carrier=carrier, service=service,
+                          parcel_override=parcel_override)
+
+    _add_status_history(
+        new_order, new_order.status,
+        f"Label re-purchased (old shipment {old_shipment_id} refund: {refund_status})",
+    )
+    db.commit()
+    db.refresh(new_order)
+    return new_order
+
+
 def get_parcel_info(order_id: str, db: Session) -> dict:
     """Get calculated parcel weight and dimensions for an order."""
     order = db.query(Order).filter(Order.id == order_id).first()
