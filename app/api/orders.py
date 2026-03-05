@@ -26,7 +26,7 @@ ORDER_CSV_COLUMNS = [
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
-    "sku", "item_name", "quantity", "notes",
+    "sku", "name", "item_name", "quantity", "notes",
     "shipping_cost", "tracking_number", "tracking_url", "easypost_shipment_id", "label_url",
 ]
 
@@ -36,7 +36,7 @@ EXPORT_CSV_COLUMNS = [
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
-    "sku", "variant_sku", "item_name", "quantity", "unit_price",
+    "sku", "variant_sku", "name", "item_name", "quantity", "unit_price",
     "processing_fee", "shipping_cost", "total_price",
     "tracking_number", "tracking_url", "easypost_shipment_id", "label_url",
     "notes", "created_at",
@@ -139,7 +139,7 @@ def export_orders(
                 order.ship_to_name, order.ship_to_street1, order.ship_to_street2,
                 order.ship_to_city, order.ship_to_state, order.ship_to_zip, order.ship_to_country,
                 order.carrier, order.service,
-                "", "", "", "", "",
+                "", "", "", "", "", "",
                 order.processing_fee, order.shipping_cost, order.total_price,
                 order.tracking_number, order.tracking_url, order.easypost_shipment_id, order.label_url,
                 order.notes, order.created_at.strftime("%Y-%m-%d %H:%M:%S") if order.created_at else "",
@@ -163,7 +163,7 @@ def export_orders(
                     order.ship_to_country if i == 0 else "",
                     order.carrier if i == 0 else "",
                     order.service if i == 0 else "",
-                    item.sku, item.variant_sku, item.product_name, item.quantity, item.unit_price,
+                    item.sku, item.variant_sku, item.name, item.product_name, item.quantity, item.unit_price,
                     order.processing_fee if i == 0 else "",
                     order.shipping_cost if i == 0 else "",
                     order.total_price if i == 0 else "",
@@ -202,7 +202,7 @@ def download_order_import_template():
         "Don hang A", "Shop ABC", "Nguyen Van A", "a@email.com", "0901234567",
         "Nguyen Van A", "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",
         "", "",
-        "SP-001", "San pham A", "2", "Giao buoi sang",
+        "SP-001", "Ten item A", "San pham A", "2", "Giao buoi sang",
         "", "", "", "", "",
     ])
     # Order 2: multiple items with full shipping info
@@ -210,7 +210,7 @@ def download_order_import_template():
         "Don hang B", "Shop XYZ", "Tran Thi B", "b@email.com", "0912345678",
         "Tran Thi B", "456 Hai Ba Trung", "Phong 302", "Ha Noi", "HN", "10000", "US",
         "UPS", "Ground",
-        "SP-002-RED-M", "San pham B - Red M", "1", "Can boc qua",
+        "SP-002-RED-M", "Ten item B", "San pham B - Red M", "1", "Can boc qua",
         "8.50", "1Z999AA10123456784", "https://track.ups.com/1Z999AA10123456784", "shp_abc123", "https://labels.example.com/label.pdf",
     ])
     # Order 2: additional item row - only needs sku + quantity (same order_name)
@@ -218,7 +218,7 @@ def download_order_import_template():
         "Don hang B", "", "", "", "",
         "", "", "", "", "", "", "",
         "", "",
-        "SP-003", "San pham C", "3", "",
+        "SP-003", "Ten item C", "San pham C", "3", "",
         "", "", "", "", "",
     ])
     buf.seek(0)
@@ -319,9 +319,11 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
             group_order.append(order_name)
 
         item_name = (row.get("item_name") or "").strip()
+        item_display_name = (row.get("name") or "").strip()
 
         order_groups[order_name]["items"].append({
             "sku": sku,
+            "name": item_display_name,
             "item_name": item_name,
             "quantity": quantity,
             "row": row_num,
@@ -360,6 +362,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
         for item in group["items"]:
             sku_val = item["sku"]
             csv_item_name = item["item_name"]
+            csv_name = item["name"]
             row_num = item["row"]
 
             # Try variant_sku first
@@ -373,6 +376,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                     "quantity": item["quantity"],
                     "resolved_name": resolved_name,
                     "item_name": csv_item_name,
+                    "name": csv_name,
                     "sku": sku_val,
                 })
                 continue
@@ -398,6 +402,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                     "quantity": item["quantity"],
                     "resolved_name": csv_item_name or product.name,
                     "item_name": csv_item_name,
+                    "name": csv_name,
                     "sku": sku_val,
                 })
                 continue
@@ -432,6 +437,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
                     product_id=ri["product_id"],
                     variant_id=ri["variant_id"],
                     quantity=ri["quantity"],
+                    name=ri["name"],
                     item_name=ri["item_name"],
                 )
                 for ri in resolved_items

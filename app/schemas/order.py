@@ -10,6 +10,7 @@ class OrderItemCreate(BaseModel):
     product_id: str
     variant_id: str = ""
     quantity: int = 1
+    name: str = ""
     item_name: str = ""
 
     @field_validator("quantity")
