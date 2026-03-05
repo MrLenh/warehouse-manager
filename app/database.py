@@ -160,12 +160,13 @@ def _migrate_add_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE products ADD COLUMN customer_id VARCHAR DEFAULT NULL"))
 
-    # Stock requests: tracking_id, carrier
+    # Stock requests: tracking_id, carrier, ship_from
     if "stock_requests" in tables:
         existing = {col["name"] for col in inspector.get_columns("stock_requests")}
         new_cols = {
             "tracking_id": "VARCHAR DEFAULT ''",
             "carrier": "VARCHAR DEFAULT ''",
+            "ship_from": "VARCHAR DEFAULT ''",
         }
         with engine.begin() as conn:
             for col_name, col_type in new_cols.items():

@@ -750,6 +750,10 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group"><label>Supplier</label><input type="text" id="sr-supplier" placeholder="Supplier name"></div>
+        <div class="form-group"><label>Ship From</label><input type="text" id="sr-ship-from" placeholder="Ship from location"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Tracking <span style="color:#999;font-size:12px">(optional)</span></label><input type="text" id="sr-tracking" placeholder="Tracking number"></div>
         <div class="form-group"><label>Notes</label><input type="text" id="sr-notes" placeholder="Notes"></div>
       </div>
       <h3 style="margin:12px 0 8px;font-size:15px">Products</h3>
@@ -2275,6 +2279,8 @@ document.getElementById('filter-sr-status').addEventListener('change', loadStock
 
 function openStockRequestModal() {
   document.getElementById('sr-supplier').value = '';
+  document.getElementById('sr-ship-from').value = '';
+  document.getElementById('sr-tracking').value = '';
   document.getElementById('sr-notes').value = '';
   document.getElementById('sr-items-list').innerHTML = '';
   addSrItemRow();
@@ -2295,6 +2301,7 @@ function addSrItemRow() {
     <select class="sri-variant" style="display:none"></select>
     <input type="number" class="sri-qty" value="1" min="1" style="max-width:80px" placeholder="SL">
     <input type="number" class="sri-cost" value="0" step="0.01" style="max-width:100px" placeholder="Unit cost">
+    <input type="number" class="sri-box-count" value="0" min="0" style="max-width:80px" placeholder="Boxes">
     <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">X</button>
   `;
   document.getElementById('sr-items-list').appendChild(div);
@@ -2364,6 +2371,7 @@ async function saveStockRequest() {
       product_id: pid ? pid.value : '',
       quantity_requested: parseInt(r.querySelector('.sri-qty').value) || 1,
       unit_cost: parseFloat(r.querySelector('.sri-cost').value) || 0,
+      box_count: parseInt(r.querySelector('.sri-box-count').value) || 0,
     };
     const variantSel = r.querySelector('.sri-variant');
     if (variantSel && variantSel.style.display !== 'none' && variantSel.value) {
@@ -2374,6 +2382,8 @@ async function saveStockRequest() {
   if (items.length === 0 || items.some(i => !i.product_id)) { toast('Please select a product for all rows', 'error'); return; }
   const body = {
     supplier: document.getElementById('sr-supplier').value,
+    ship_from: document.getElementById('sr-ship-from').value,
+    tracking_id: document.getElementById('sr-tracking').value || null,
     notes: document.getElementById('sr-notes').value,
     items,
   };

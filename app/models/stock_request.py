@@ -28,6 +28,7 @@ class StockRequest(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     request_number: Mapped[str] = mapped_column(String, unique=True, index=True)
     supplier: Mapped[str] = mapped_column(String, default="")
+    ship_from: Mapped[str] = mapped_column(String, default="")
     status: Mapped[str] = mapped_column(
         Enum(StockRequestStatus, values_callable=lambda x: [e.value for e in x]),
         default=StockRequestStatus.DRAFT,

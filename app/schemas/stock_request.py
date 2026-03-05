@@ -15,6 +15,7 @@ class StockRequestItemCreate(BaseModel):
 
 class StockRequestCreate(BaseModel):
     supplier: str = ""
+    ship_from: str = ""
     tracking_id: str = ""
     carrier: str = ""
     notes: str = ""
@@ -79,6 +80,7 @@ class StockRequestOut(BaseModel):
     id: str
     request_number: str
     supplier: str
+    ship_from: str = ""
     status: str
     tracking_id: str = ""
     carrier: str = ""

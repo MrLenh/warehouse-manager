@@ -31,6 +31,7 @@ def create_stock_request(db: Session, data: StockRequestCreate) -> StockRequest:
     sr = StockRequest(
         request_number=_generate_request_number(),
         supplier=data.supplier,
+        ship_from=data.ship_from,
         tracking_id=data.tracking_id,
         carrier=data.carrier,
         notes=data.notes,
