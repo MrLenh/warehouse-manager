@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.inventory_log import InventoryLog
+from app.models.stock_batch import StockBatch
 from sqlalchemy import func as sa_func
 
 from app.models.customer import Customer
@@ -18,6 +19,79 @@ def _generate_order_number() -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     short = uuid.uuid4().hex[:6].upper()
     return f"ORD-{ts}-{short}"
+
+
+def _consume_batches_fifo(db: Session, product_id: str, variant_id: str, quantity: int) -> None:
+    """Consume stock from oldest batches first (FIFO)."""
+    batches = (
+        db.query(StockBatch)
+        .filter(
+            StockBatch.product_id == product_id,
+            StockBatch.variant_id == (variant_id or ""),
+            StockBatch.quantity_remaining > 0,
+        )
+        .order_by(StockBatch.created_at.asc())
+        .all()
+    )
+    remaining = quantity
+    for batch in batches:
+        if remaining <= 0:
+            break
+        consume = min(batch.quantity_remaining, remaining)
+        batch.quantity_remaining -= consume
+        remaining -= consume
+
+
+def _restore_batches_fifo(db: Session, product_id: str, variant_id: str, quantity: int) -> None:
+    """Restore stock to newest batches first (reverse FIFO) on order cancellation."""
+    batches = (
+        db.query(StockBatch)
+        .filter(
+            StockBatch.product_id == product_id,
+            StockBatch.variant_id == (variant_id or ""),
+        )
+        .order_by(StockBatch.created_at.desc())
+        .all()
+    )
+    remaining = quantity
+    for batch in batches:
+        if remaining <= 0:
+            break
+        can_restore = batch.quantity_received - batch.quantity_remaining
+        restore = min(can_restore, remaining)
+        batch.quantity_remaining += restore
+        remaining -= restore
+
+
+def _recalculate_price_from_batches(db: Session, product_id: str, variant_id: str = "") -> None:
+    """Recalculate product/variant price as weighted average cost from remaining FIFO batches."""
+    batches = (
+        db.query(StockBatch)
+        .filter(
+            StockBatch.product_id == product_id,
+            StockBatch.variant_id == (variant_id or ""),
+            StockBatch.quantity_remaining > 0,
+        )
+        .all()
+    )
+    if not batches:
+        return
+
+    total_qty = sum(b.quantity_remaining for b in batches)
+    total_cost = sum(b.quantity_remaining * b.unit_cost for b in batches)
+    if total_qty == 0:
+        return
+
+    weighted_avg = round(total_cost / total_qty, 2)
+
+    if variant_id:
+        variant = db.query(Variant).filter(Variant.id == variant_id).first()
+        if variant:
+            variant.price_override = weighted_avg
+    else:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if product:
+            product.price = weighted_avg
 
 
 def _add_status_history(order: Order, status: str, note: str = "") -> None:
@@ -154,6 +228,10 @@ def create_order(db: Session, data: OrderCreate) -> Order:
                 note=f"Reserved for order {order.order_number}",
             )
         db.add(log)
+
+        # Consume from oldest stock batches (FIFO)
+        _consume_batches_fifo(db, product.id, variant.id if variant else "", item_data.quantity)
+        _recalculate_price_from_batches(db, product.id, variant.id if variant else "")
         total_items += item_data.quantity
         items_subtotal += item_data.quantity * unit_price
 
@@ -267,6 +345,9 @@ def delete_order(db: Session, order_id: str) -> bool:
                         balance_after=product.quantity,
                         note=f"Restored from deleted order {order.order_number}",
                     ))
+            # Restore FIFO batches and recalculate price
+            _restore_batches_fifo(db, item.product_id, item.variant_id or "", item.quantity)
+            _recalculate_price_from_batches(db, item.product_id, item.variant_id or "")
 
     # Delete related pick_items
     from app.models.picking import PickItem
@@ -323,6 +404,9 @@ def cancel_order(db: Session, order_id: str) -> Order | None:
                     note=f"Restored from cancelled order {order.order_number}",
                 )
                 db.add(log)
+        # Restore FIFO batches and recalculate price
+        _restore_batches_fifo(db, item.product_id, item.variant_id or "", item.quantity)
+        _recalculate_price_from_batches(db, item.product_id, item.variant_id or "")
 
     # Remove from any active packing list
     from app.models.picking import PickItem, PickingList, PickingListStatus

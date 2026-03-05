@@ -15,6 +15,7 @@ class StockRequestItemCreate(BaseModel):
 class StockRequestCreate(BaseModel):
     supplier: str = ""
     notes: str = ""
+    auto_receive: bool = False
     items: list[StockRequestItemCreate]
 
 
