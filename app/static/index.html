@@ -1661,19 +1661,20 @@ function updateSelectedCount() {
   const lblBtn = document.getElementById('btn-create-label-batch');
   const lblCount = document.getElementById('label-batch-count');
 
-  // Count label_purchased orders among selected
+  // Count batchable orders among selected
   const selectedOrders = Array.from(checked).map(cb => {
     const orderId = cb.value;
     return allOrders.find(o => o.id === orderId);
   }).filter(Boolean);
   const labelPurchasedCount = selectedOrders.filter(o => o.status === 'label_purchased').length;
   const confirmedCount = selectedOrders.filter(o => o.status === 'confirmed').length;
+  const batchableCount = confirmedCount + labelPurchasedCount;
   const shippableCount = selectedOrders.filter(o => ['pending','confirmed','processing'].includes(o.status)).length;
 
-  count.textContent = confirmedCount;
-  btn.style.display = confirmedCount > 0 ? '' : 'none';
+  count.textContent = batchableCount;
+  btn.style.display = batchableCount > 0 ? '' : 'none';
   lblCount.textContent = labelPurchasedCount;
-  lblBtn.style.display = labelPurchasedCount > 0 ? '' : 'none';
+  lblBtn.style.display = false ? '' : 'none'; // hidden — merged into Create Picking List
 
   const shipBtn = document.getElementById('btn-mark-shipped');
   const shipCount = document.getElementById('mark-shipped-count');
@@ -1683,9 +1684,16 @@ function updateSelectedCount() {
 
 async function createPickingList() {
   const checked = document.querySelectorAll('.order-check:checked');
-  const orderIds = Array.from(checked).map(cb => cb.value);
-  if (orderIds.length === 0) { toast('Select orders first', 'error'); return; }
-  if (!confirm(`Create picking list for ${orderIds.length} order(s)?`)) return;
+  const selectedOrders = Array.from(checked).map(cb => allOrders.find(o => o.id === cb.value)).filter(Boolean);
+  const batchable = selectedOrders.filter(o => o.status === 'confirmed' || o.status === 'label_purchased');
+  const orderIds = batchable.map(o => o.id);
+  if (orderIds.length === 0) { toast('Select confirmed or label_purchased orders first', 'error'); return; }
+  const cCount = batchable.filter(o => o.status === 'confirmed').length;
+  const lCount = batchable.filter(o => o.status === 'label_purchased').length;
+  const parts = [];
+  if (cCount) parts.push(`${cCount} confirmed`);
+  if (lCount) parts.push(`${lCount} label_purchased`);
+  if (!confirm(`Create picking list for ${orderIds.length} order(s)? (${parts.join(', ')})\nLabel_purchased orders will keep their labels — no need to buy again.`)) return;
   try {
     const res = await fetch(API + '/picking-lists', {
       method: 'POST', headers: {'Content-Type':'application/json'},

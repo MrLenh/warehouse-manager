@@ -16,16 +16,18 @@ def _generate_picking_number() -> str:
 
 
 def create_picking_list(db: Session, order_ids: list[str]) -> PickingList:
-    """Create a picking list from selected orders. Generates one PickItem per unit (qty=1)."""
+    """Create a picking list from selected orders. Generates one PickItem per unit (qty=1).
+    Accepts both confirmed and label_purchased orders in the same batch."""
     orders = db.query(Order).filter(Order.id.in_(order_ids)).all()
     if not orders:
         raise ValueError("No valid orders found")
 
-    # Only confirmed orders can be added to a batch
-    non_confirmed = [o for o in orders if o.status != OrderStatus.CONFIRMED]
-    if non_confirmed:
-        names = ", ".join(f"{o.order_number} ({o.status})" for o in non_confirmed)
-        raise ValueError(f"Only confirmed orders can be batched: {names}")
+    # Only confirmed and label_purchased orders can be added to a batch
+    allowed = {OrderStatus.CONFIRMED, OrderStatus.LABEL_PURCHASED}
+    not_allowed = [o for o in orders if o.status not in allowed]
+    if not_allowed:
+        names = ", ".join(f"{o.order_number} ({o.status})" for o in not_allowed)
+        raise ValueError(f"Only confirmed/label_purchased orders can be batched: {names}")
 
     # Check if any order is already in an active batch
     already_in_batch = (
@@ -70,7 +72,9 @@ def create_picking_list(db: Session, order_ids: list[str]) -> PickingList:
 
     # Move orders to processing
     for order in orders:
+        detail = "Added to label batch for picking" if order.status == OrderStatus.LABEL_PURCHASED else "Added to picking batch"
         order.status = OrderStatus.PROCESSING
+        _add_status_history(order, OrderStatus.PROCESSING, detail)
 
     db.commit()
     db.refresh(picking_list)
