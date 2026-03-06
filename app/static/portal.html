@@ -263,6 +263,17 @@ a.track-link:hover{text-decoration:underline}
   </div>
 </div>
 
+<!-- Import Report modal -->
+<div class="modal-overlay" id="import-report-modal">
+  <div class="modal" style="width:700px">
+    <div class="modal-header"><h2>Import Report</h2><button class="modal-close" onclick="closeModal('import-report-modal')">&times;</button></div>
+    <div class="modal-body" id="import-report-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('import-report-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast-el"></div>
 
@@ -460,12 +471,75 @@ async function importCSV(input) {
       toast(`Imported ${data.created} orders` + (data.errors.length ? `, ${data.errors.length} errors` : ''));
       loadOrders();
       loadDashboard();
-      if (data.errors.length) console.warn('Import errors:', data.errors);
+      showImportReport(data);
     } else {
       toast(data.detail || 'Import failed', 'error');
     }
   } catch (err) { toast(err.message, 'error'); }
   input.value = '';
+}
+
+function showImportReport(result) {
+  const details = result.created_details || [];
+  const errors = result.errors || [];
+  if (details.length === 0 && errors.length === 0) return; // nothing to show
+
+  let html = '';
+  // Summary
+  html += `<div style="display:flex;gap:12px;margin-bottom:16px">`;
+  html += `<div style="flex:1;padding:12px;background:#d1fae5;border-radius:8px;text-align:center">
+    <div style="font-size:24px;font-weight:700;color:#065f46">${result.created}</div>
+    <div style="font-size:13px;color:#065f46">Created</div></div>`;
+  html += `<div style="flex:1;padding:12px;background:${errors.length ? '#fee2e2' : '#f3f4f6'};border-radius:8px;text-align:center">
+    <div style="font-size:24px;font-weight:700;color:${errors.length ? '#991b1b' : '#6b7280'}">${errors.length}</div>
+    <div style="font-size:13px;color:${errors.length ? '#991b1b' : '#6b7280'}">Errors</div></div>`;
+  html += `</div>`;
+
+  // Successfully created orders
+  if (details.length > 0) {
+    html += `<h3 style="margin:16px 0 8px;font-size:14px;color:#065f46">Successfully Imported Orders</h3>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:13px">`;
+    html += `<thead><tr style="background:#f0fdf4">
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">#</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Order Name</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Items</th>
+    </tr></thead><tbody>`;
+    details.forEach((d, i) => {
+      const items = Array.isArray(d.items)
+        ? d.items.map(it => `${esc(it.item_name || it.sku)} x${it.quantity}`).join(', ')
+        : `${d.items} item(s)`;
+      html += `<tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:6px 8px">${i + 1}</td>
+        <td style="padding:6px 8px;font-weight:500">${esc(d.order_name) || '(auto)'}</td>
+        <td style="padding:6px 8px">${items}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  // Error list
+  if (errors.length > 0) {
+    html += `<h3 style="margin:16px 0 8px;font-size:14px;color:#991b1b">Failed / Errors</h3>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:13px">`;
+    html += `<thead><tr style="background:#fef2f2">
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Row</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Order</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">SKU</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #d1d5db">Error</th>
+    </tr></thead><tbody>`;
+    errors.forEach(e => {
+      html += `<tr style="border-bottom:1px solid #e5e7eb">
+        <td style="padding:6px 8px">${e.row ? e.row : '-'}</td>
+        <td style="padding:6px 8px;font-weight:500">${esc(e.order_name) || '-'}</td>
+        <td style="padding:6px 8px;font-family:monospace">${esc(e.sku) || '-'}</td>
+        <td style="padding:6px 8px;color:#991b1b">${esc(e.error)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  document.getElementById('import-report-body').innerHTML = html;
+  openModal('import-report-modal');
 }
 
 // --- Products / Inventory ---
