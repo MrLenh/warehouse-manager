@@ -548,6 +548,57 @@ def merge_orders_by_name(db: Session) -> dict:
     return {"merged": merged_count, "details": merged_details}
 
 
+def reprocess_order(db: Session, order_id: str) -> Order | None:
+    """Re-process a drop_off order.
+    - If order is in a batch: reset to processing, unpick all items so batch requires re-picking.
+    - If order is NOT in a batch: reset to confirmed (no label) or label_purchased (has label).
+    """
+    from app.models.picking import PickItem, PickingList, PickingListStatus
+
+    order = get_order(db, order_id)
+    if not order:
+        return None
+    if order.status != OrderStatus.DROP_OFF:
+        raise ValueError(f"Only drop_off orders can be re-processed (current: {order.status})")
+
+    # Check if order is in a batch
+    pick_items = (
+        db.query(PickItem)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id == order.id,
+            PickingList.status.in_([PickingListStatus.ACTIVE, PickingListStatus.PROCESSING, PickingListStatus.DONE]),
+        )
+        .all()
+    )
+
+    if pick_items:
+        # Order is in a batch → reset to processing, unpick all items
+        for pi in pick_items:
+            pi.picked = False
+            pi.picked_at = None
+
+        # Ensure batch is back to processing (not done)
+        pl = db.query(PickingList).filter(PickingList.id == pick_items[0].picking_list_id).first()
+        if pl and pl.status == PickingListStatus.DONE:
+            pl.status = PickingListStatus.PROCESSING
+
+        order.status = OrderStatus.PROCESSING
+        _add_status_history(order, OrderStatus.PROCESSING, "Re-processing: order returned to batch for re-picking")
+    else:
+        # Order is NOT in a batch
+        if order.label_url:
+            order.status = OrderStatus.LABEL_PURCHASED
+            _add_status_history(order, OrderStatus.LABEL_PURCHASED, "Re-processing: returned to label_purchased")
+        else:
+            order.status = OrderStatus.CONFIRMED
+            _add_status_history(order, OrderStatus.CONFIRMED, "Re-processing: returned to confirmed")
+
+    db.commit()
+    db.refresh(order)
+    return order
+
+
 def cancel_order(db: Session, order_id: str) -> Order | None:
     order = get_order(db, order_id)
     if not order:

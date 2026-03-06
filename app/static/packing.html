@@ -428,6 +428,10 @@ function renderOrderCards() {
         actionsHtml += ` <span style="font-size:12px;color:#888">Track: ${esc(o.tracking_number)}</span>`;
       }
     }
+    // Re-process button - only for drop_off orders
+    if (o.order_status === 'drop_off') {
+      actionsHtml += ` <button class="btn btn-sm" style="background:#6f42c1;color:#fff" onclick="reprocessOrder('${o.order_id}','${esc(o.order_number)}')" title="Re-process this order">Re-process</button>`;
+    }
     // Pending button - only if not already pending/dropped off
     if (!isPending && !isDroppedOff) {
       actionsHtml += ` <button class="btn btn-warning btn-sm" onclick="pauseOrder('${o.order_id}')" title="Pause this order">Pending</button>`;
@@ -676,6 +680,7 @@ function showActiveOrder() {
       <p style="color:#17a2b8">Order dropped off!</p>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
         ${hasLabel ? `<button class="btn btn-warning" onclick="confirmReprintLabel('${o.order_id}','${esc(o.order_number)}','${esc(o.label_url)}')">Reprint Label</button>` : ''}
+        <button class="btn" style="background:#6f42c1;color:#fff" onclick="reprocessOrder('${o.order_id}','${esc(o.order_number)}')">Re-process</button>
         <button class="btn btn-primary" onclick="clearActiveOrder()">Next Order</button>
       </div>
     </div>`;
@@ -766,6 +771,20 @@ async function resumeOrder(orderId) {
   });
   if (res.ok) { toast('Order resumed'); refreshProgress(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function reprocessOrder(orderId, orderNumber) {
+  if (!confirm(`Re-process order ${orderNumber}?\n\nIn-batch: will go back to processing (re-pick required).\nNot in batch: will go back to confirmed/label_purchased.`)) return;
+  const res = await fetch(API + '/orders/' + orderId + '/reprocess', { method: 'POST' });
+  if (res.ok) {
+    const o = await res.json();
+    toast(`Order ${orderNumber} re-processing → ${o.status}`);
+    if (activeOrderId === orderId) clearActiveOrder();
+    refreshProgress();
+  } else {
+    const e = await res.json();
+    toast(e.detail || 'Error re-processing', 'error');
+  }
 }
 
 // Label modal

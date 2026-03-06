@@ -2020,6 +2020,9 @@ async function viewOrder(id) {
     if (['pending','confirmed','processing'].includes(o.status)) {
       footerHtml += `<button class="btn" style="background:#17a2b8;color:#fff" onclick="if(confirm('Mark this order as Shipped?'))updateOrderStatus('${o.id}','shipped')">Mark Shipped</button>`;
     }
+    if (o.status === 'drop_off') {
+      footerHtml += `<button class="btn" style="background:#6f42c1;color:#fff" onclick="reprocessOrder('${o.id}','${esc(o.order_number)}')">Re-process</button>`;
+    }
     if (o.status !== 'pending') {
       footerHtml += `<button class="btn btn-warning" onclick="updateOrderStatus('${o.id}','pending')">Pending</button>`;
     }
@@ -2050,6 +2053,19 @@ async function cancelOrder(id, hasLabel) {
     closeModal('order-detail-modal'); loadOrders();
   }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function reprocessOrder(id, orderNumber) {
+  if (!confirm(`Re-process order ${orderNumber}?\n\nIn-batch: will go back to processing (re-pick required).\nNot in batch: will go back to confirmed/label_purchased.`)) return;
+  const res = await fetch(API + '/orders/' + id + '/reprocess', { method: 'POST' });
+  if (res.ok) {
+    const o = await res.json();
+    toast(`Order ${orderNumber} re-processing → ${o.status}`);
+    closeModal('order-detail-modal'); loadOrders();
+  } else {
+    const e = await res.json();
+    toast(e.detail || 'Error re-processing', 'error');
+  }
 }
 
 function openEditAddress(orderId) {

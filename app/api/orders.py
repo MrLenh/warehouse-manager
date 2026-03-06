@@ -563,6 +563,26 @@ def update_status(
     return order
 
 
+@router.post("/{order_id}/reprocess", response_model=OrderOut)
+def reprocess_order(
+    order_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Re-process a drop_off order. In-batch orders go back to processing; others go to confirmed/label_purchased."""
+    try:
+        order = order_service.reprocess_order(db, order_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not order:
+        raise HTTPException(404, "Order not found")
+    auth_service.log_activity(db, user.id, user.username, "reprocess_order", detail=f"{order.order_number} → {order.status}", ip=request.client.host if request.client else "")
+    background_tasks.add_task(_fire_webhook, order)
+    return order
+
+
 @router.post("/{order_id}/cancel", response_model=OrderOut)
 def cancel_order(order_id: str, request: Request, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
