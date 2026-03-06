@@ -123,7 +123,13 @@ tr:hover{background:#f8f9ff}
 <div class="container">
   <!-- Picking List Selection -->
   <div id="pl-selector" class="card">
-    <h3>Select Picking List</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">Select Picking List</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="pl-search" placeholder="Search batch..." oninput="filterPickingLists()" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:200px;outline:none">
+        <span id="pl-count" style="font-size:12px;color:#888"></span>
+      </div>
+    </div>
     <div class="pl-list" id="pl-list"></div>
     <div id="pl-empty" class="empty" style="display:none">No picking lists available. Create one from the Orders tab.</div>
   </div>
@@ -238,6 +244,7 @@ let currentPL = null; // current picking list
 let progressData = []; // per-order progress
 let activeOrderId = null; // order currently being packed
 let refreshTimer = null; // auto-refresh interval
+let currentUserRole = 'staff'; // current user role
 
 const CARRIERS = {
   'USPS': ['GroundAdvantage', 'Priority', 'Express', 'ParcelSelect', 'LibraryMail', 'MediaMail', 'First'],
@@ -256,23 +263,58 @@ function toast(msg, type = 'success') {
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
 // Load picking lists
+let allPickingLists = []; // cache for filtering
+
 async function loadPickingLists() {
   const res = await fetch(API + '/picking-lists');
-  const lists = await res.json();
+  allPickingLists = await res.json();
+  renderPickingLists();
+}
+
+function filterPickingLists() {
+  renderPickingLists();
+}
+
+function renderPickingLists() {
   const container = document.getElementById('pl-list');
   const empty = document.getElementById('pl-empty');
+  const countEl = document.getElementById('pl-count');
+  const searchTerm = (document.getElementById('pl-search')?.value || '').toLowerCase().trim();
+
+  let lists = allPickingLists;
+  if (searchTerm) {
+    lists = lists.filter(pl =>
+      pl.picking_number.toLowerCase().includes(searchTerm) ||
+      (pl.assigned_to || '').toLowerCase().includes(searchTerm) ||
+      pl.status.toLowerCase().includes(searchTerm)
+    );
+  }
 
   if (lists.length === 0) {
     container.innerHTML = '';
     empty.style.display = '';
+    empty.textContent = searchTerm ? 'No batches match your search.' : 'No picking lists available. Create one from the Orders tab.';
+    countEl.textContent = searchTerm ? `0 / ${allPickingLists.length}` : '';
     return;
   }
   empty.style.display = 'none';
+  countEl.textContent = searchTerm ? `${lists.length} / ${allPickingLists.length}` : `${lists.length} batch${lists.length !== 1 ? 'es' : ''}`;
+
+  // Sort: processing first, then active, then done — within each group by newest first
+  const statusOrder = { processing: 0, active: 1, done: 2 };
+  lists = [...lists].sort((a, b) => {
+    const sa = statusOrder[a.status] ?? 3;
+    const sb = statusOrder[b.status] ?? 3;
+    if (sa !== sb) return sa - sb;
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+
+  const isAdmin = currentUserRole === 'admin';
 
   container.innerHTML = lists.map(pl => {
     const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
     const canDelete = pl.status === 'active';
-    const canArchive = pl.status === 'done' || pl.order_count === 0;
+    const canArchive = isAdmin && (pl.status === 'done' || pl.order_count === 0);
     return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" data-pl-id="${pl.id}" onclick="selectPickingList('${pl.id}')">
       <div style="display:flex;justify-content:space-between;align-items:start">
         <h4>${esc(pl.picking_number)}</h4>
@@ -1060,7 +1102,11 @@ function confirmReprintLabel(orderId, orderNumber, labelUrl) {
 async function loadCurrentUser() {
   try {
     const res = await fetch('/api/v1/auth/me');
-    if (res.ok) { const u = await res.json(); document.getElementById('current-user').textContent = u.display_name || u.username; }
+    if (res.ok) {
+      const u = await res.json();
+      document.getElementById('current-user').textContent = u.display_name || u.username;
+      currentUserRole = u.role || 'staff';
+    }
   } catch {}
 }
 async function doLogout() {
@@ -1069,8 +1115,7 @@ async function doLogout() {
 }
 
 // Init
-loadCurrentUser();
-loadPickingLists();
+loadCurrentUser().then(() => loadPickingLists());
 
 // Auto-select if URL has picking list ID
 const pathParts = window.location.pathname.split('/');
