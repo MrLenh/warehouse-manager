@@ -594,10 +594,15 @@ def reprocess_order(db: Session, order_id: str) -> Order | None:
             pi.picked = False
             pi.picked_at = None
 
-        # Ensure batch is back to processing (not done)
+        # Re-evaluate batch status based on remaining picked items
+        db.flush()  # ensure unpicked state is visible to query
         pl = db.query(PickingList).filter(PickingList.id == pick_items[0].picking_list_id).first()
-        if pl and pl.status == PickingListStatus.DONE:
-            pl.status = PickingListStatus.PROCESSING
+        if pl and pl.status in (PickingListStatus.PROCESSING, PickingListStatus.DONE):
+            any_picked = db.query(PickItem).filter(
+                PickItem.picking_list_id == pl.id,
+                PickItem.picked == True,
+            ).first()
+            pl.status = PickingListStatus.PROCESSING if any_picked else PickingListStatus.ACTIVE
 
         order.status = OrderStatus.PROCESSING
         _add_status_history(order, OrderStatus.PROCESSING, "Re-processing: order returned to batch for re-picking")
