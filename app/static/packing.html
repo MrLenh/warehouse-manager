@@ -88,6 +88,13 @@ tr:hover{background:#f8f9ff}
 .pl-card h4{font-size:15px;margin-bottom:4px}
 .pl-card .meta{font-size:12px;color:#888}
 
+/* Collapsible order cards */
+.order-card-body{display:none;margin-top:8px}
+.order-card.expanded .order-card-body{display:block}
+.order-card-toggle{background:none;border:none;cursor:pointer;font-size:16px;color:#888;padding:2px 6px;transition:.2s;line-height:1}
+.order-card-toggle:hover{color:#333}
+.order-card.expanded .order-card-toggle{transform:rotate(90deg)}
+
 .empty{text-align:center;padding:40px;color:#999;font-size:15px}
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
@@ -372,6 +379,8 @@ function renderOrderCards() {
     } else if (hasLabel) {
       if (!isDroppedOff) {
         actionsHtml = `<button class="btn btn-success btn-sm" onclick="printAndDropOff('${o.order_id}','${esc(o.label_url)}')">Print Label</button>`;
+      } else {
+        actionsHtml = `<button class="btn btn-warning btn-sm" onclick="confirmReprintLabel('${o.order_id}','${esc(o.order_number)}','${esc(o.label_url)}')">Reprint Label</button>`;
       }
       if (o.tracking_number) {
         actionsHtml += ` <span style="font-size:12px;color:#888">Track: ${esc(o.tracking_number)}</span>`;
@@ -397,21 +406,30 @@ function renderOrderCards() {
       <td>${i.picked_at ? new Date(i.picked_at).toLocaleTimeString() : '-'}</td>
     </tr>`).join('');
 
-    return `<div class="card order-card ${isComplete ? 'complete' : ''} ${isDroppedOff || isPending ? 'dimmed' : ''}">
+    const isActive = o.order_id === activeOrderId;
+    const expandedClass = isActive ? ' expanded' : '';
+
+    return `<div class="card order-card ${isComplete ? 'complete' : ''} ${isDroppedOff || isPending ? 'dimmed' : ''}${expandedClass}" data-order-id="${o.order_id}">
       <div class="order-card-header">
-        <h4>${esc(o.order_number)} ${o.order_name ? '(' + esc(o.order_name) + ')' : ''} - ${esc(o.customer_name)}</h4>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="order-card-toggle" onclick="toggleOrderCard(this)" title="Expand/collapse">&#9654;</button>
+          <h4><a href="/order/${o.order_id}" target="_blank" style="color:inherit;text-decoration:none;border-bottom:1px dashed #999" title="Open order detail">${esc(o.order_number)}</a> ${o.order_name ? '(' + esc(o.order_name) + ')' : ''} - ${esc(o.customer_name)}</h4>
+        </div>
         <div class="order-card-actions">
+          <span style="font-size:12px;color:#888">${o.picked}/${o.total}</span>
           <span class="badge badge-${o.order_status}">${o.order_status}</span>
           ${actionsHtml}
         </div>
       </div>
-      <div class="progress-bar" style="height:16px">
-        <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${o.picked}/${o.total}</div>
+      <div class="progress-bar" style="height:12px">
+        <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${pct}%</div>
       </div>
-      <table style="margin-top:8px;box-shadow:none">
-        <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-      </table>
+      <div class="order-card-body">
+        <table style="margin-top:8px;box-shadow:none">
+          <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+      </div>
     </div>`;
   }).join('');
 }
@@ -614,7 +632,10 @@ function showActiveOrder() {
   } else if (isDroppedOff) {
     bottomHtml = `<div class="ao-complete" style="border-color:#17a2b8;background:#e8f8fb">
       <p style="color:#17a2b8">Order dropped off!</p>
-      <button class="btn btn-primary" onclick="clearActiveOrder()">Next Order</button>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        ${hasLabel ? `<button class="btn btn-warning" onclick="confirmReprintLabel('${o.order_id}','${esc(o.order_number)}','${esc(o.label_url)}')">Reprint Label</button>` : ''}
+        <button class="btn btn-primary" onclick="clearActiveOrder()">Next Order</button>
+      </div>
     </div>`;
   } else {
     const remaining = o.total - o.picked;
@@ -622,7 +643,7 @@ function showActiveOrder() {
   }
 
   panel.innerHTML = `
-    <h3>Packing: ${esc(o.order_number)} ${o.order_name ? '(' + esc(o.order_name) + ')' : ''}</h3>
+    <h3>Packing: <a href="/order/${o.order_id}" target="_blank" style="color:#667eea;text-decoration:none;border-bottom:1px dashed #667eea" title="Open order detail">${esc(o.order_number)}</a> ${o.order_name ? '(' + esc(o.order_name) + ')' : ''}</h3>
     <div class="ao-top">
       <div class="ao-info">
         <p><strong>Customer:</strong> ${esc(o.customer_name)}</p>
@@ -1019,6 +1040,20 @@ async function unpackOrder(orderId, orderNumber) {
       toast(e.detail || 'Error removing order', 'error');
     }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+// Toggle order card expand/collapse
+function toggleOrderCard(btn) {
+  const card = btn.closest('.order-card');
+  if (card) card.classList.toggle('expanded');
+}
+
+// Reprint label for dropped-off orders
+function confirmReprintLabel(orderId, orderNumber, labelUrl) {
+  if (confirm(`Reprint shipping label for order ${orderNumber}?\nThe label will open in a new tab.`)) {
+    window.open(labelUrl, '_blank');
+    toast(`Reprinting label for ${orderNumber}`, 'info');
+  }
 }
 
 // Auth
