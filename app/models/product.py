@@ -24,6 +24,8 @@ class Product(Base):
     location: Mapped[str] = mapped_column(String, default="")
     qr_code_path: Mapped[str] = mapped_column(String, default="")
     image_url: Mapped[str] = mapped_column(String, default="")
+    image_data: Mapped[str] = mapped_column(Text, default="")  # base64-encoded image
+    image_content_type: Mapped[str] = mapped_column(String, default="")  # e.g. image/png
     customer_id: Mapped[str | None] = mapped_column(String, ForeignKey("customers.id"), nullable=True, default=None)
 
     # Variant option types for this product, e.g. '["color","size"]'

@@ -21,35 +21,59 @@ PUBLIC_PATHS = {"/login", "/health", "/api/v1/auth/login", "/api/v1/auth/logout"
 
 
 def _migrate_uploads():
-    """Move images from old app/static/uploads/ to persistent UPLOAD_DIR.
-    Also updates image_url in DB from /static/uploads/X to /uploads/X."""
-    import shutil
+    """Migrate filesystem images into the database for deploy persistence.
+
+    Handles images from:
+    - old app/static/uploads/ directory
+    - UPLOAD_DIR (./uploads/)
+    Stores image bytes as base64 in Product.image_data and updates image_url
+    to the DB-served endpoint /api/v1/products/{id}/image.
+    """
+    import base64
+    import mimetypes
 
     from app.config import settings
     from app.database import SessionLocal
     from app.models.product import Product
 
     old_dir = pathlib.Path(__file__).parent / "static" / "uploads"
-    new_dir = pathlib.Path(settings.UPLOAD_DIR)
-    new_dir.mkdir(parents=True, exist_ok=True)
+    upload_dir = pathlib.Path(settings.UPLOAD_DIR)
 
-    # Move files from old location
-    if old_dir.exists():
-        for f in old_dir.iterdir():
-            if f.is_file() and f.name != ".gitkeep":
-                dest = new_dir / f.name
-                if not dest.exists():
-                    shutil.copy2(f, dest)
-
-    # Fix image_url in DB: /static/uploads/X → /uploads/X
     db = SessionLocal()
     try:
-        products = db.query(Product).filter(Product.image_url.like("/static/uploads/%")).all()
+        # Find products with filesystem-based image_url that haven't been migrated to DB yet
+        products = db.query(Product).filter(
+            Product.image_url != "",
+            Product.image_url.notlike("/api/v1/products/%"),
+            (Product.image_data == "") | (Product.image_data.is_(None)),
+        ).all()
+
+        migrated = 0
         for p in products:
-            p.image_url = p.image_url.replace("/static/uploads/", "/uploads/")
-        if products:
+            # Extract filename from URL like /uploads/X or /static/uploads/X
+            filename = p.image_url.split("/")[-1] if "/" in p.image_url else ""
+            if not filename:
+                continue
+
+            # Try to find the file on disk
+            filepath = None
+            for search_dir in [upload_dir, old_dir]:
+                candidate = search_dir / filename
+                if candidate.exists():
+                    filepath = candidate
+                    break
+
+            if filepath and filepath.exists():
+                ext = filepath.suffix.lower()
+                content_type = mimetypes.types_map.get(ext, "application/octet-stream")
+                p.image_data = base64.b64encode(filepath.read_bytes()).decode("ascii")
+                p.image_content_type = content_type
+                p.image_url = f"/api/v1/products/{p.id}/image"
+                migrated += 1
+
+        if migrated:
             db.commit()
-            logger.info("Migrated %d product image URLs to /uploads/", len(products))
+            logger.info("Migrated %d product images from filesystem to database", migrated)
     finally:
         db.close()
 

@@ -1,6 +1,8 @@
+import base64
 import csv
 import io
 import json
+import mimetypes
 import pathlib
 import uuid
 
@@ -231,7 +233,7 @@ def _get_upload_dir() -> pathlib.Path:
 
 @router.post("/{product_id}/upload-image", response_model=ProductOut)
 def upload_product_image(product_id: str, file: UploadFile, db: Session = Depends(get_db)):
-    """Upload an image file for a product. Saves to UPLOAD_DIR and sets image_url."""
+    """Upload an image file for a product. Stores in DB for deploy persistence."""
     product = product_service.get_product(db, product_id)
     if not product:
         raise HTTPException(404, "Product not found")
@@ -247,17 +249,27 @@ def upload_product_image(product_id: str, file: UploadFile, db: Session = Depend
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, f"File too large. Max {MAX_FILE_SIZE // 1024 // 1024}MB")
 
-    upload_dir = _get_upload_dir()
-    filename = f"{product.sku}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = upload_dir / filename
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    filepath.write_bytes(content)
-
-    image_url = f"/uploads/{filename}"
-    product.image_url = image_url
+    content_type = mimetypes.types_map.get(ext, "application/octet-stream")
+    product.image_data = base64.b64encode(content).decode("ascii")
+    product.image_content_type = content_type
+    product.image_url = f"/api/v1/products/{product.id}/image"
     db.commit()
     db.refresh(product)
     return product
+
+
+@router.get("/{product_id}/image")
+def get_product_image(product_id: str, db: Session = Depends(get_db)):
+    """Serve product image from DB storage."""
+    product = product_service.get_product(db, product_id)
+    if not product or not product.image_data:
+        raise HTTPException(404, "Image not found")
+    data = base64.b64decode(product.image_data)
+    return Response(
+        content=data,
+        media_type=product.image_content_type or "image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @router.get("/{product_id}", response_model=ProductOut)

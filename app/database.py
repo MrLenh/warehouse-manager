@@ -44,6 +44,8 @@ def _migrate_add_columns():
         existing = {col["name"] for col in inspector.get_columns("products")}
         new_cols = {
             "image_url": "VARCHAR DEFAULT ''",
+            "image_data": "TEXT DEFAULT ''",
+            "image_content_type": "VARCHAR DEFAULT ''",
         }
         with engine.begin() as conn:
             for col_name, col_type in new_cols.items():
