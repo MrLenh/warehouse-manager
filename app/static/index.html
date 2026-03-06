@@ -6,6 +6,7 @@
 <title>Warehouse Manager</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+.status-opt:hover{background:#f0f2f5}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
 .header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .header h1{font-size:20px;font-weight:600}
@@ -235,20 +236,28 @@ tr:hover{background:#f8f9ff}
         <select id="filter-sku" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;min-width:160px">
           <option value="">All SKUs</option>
         </select>
-        <select id="filter-status" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
-          <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="processing">Processing</option>
-          <option value="packing">Packing</option>
-          <option value="packed">Packed</option>
-          <option value="label_purchased">Label Purchased</option>
-          <option value="drop_off">Drop Off</option>
-          <option value="shipped">Shipped</option>
-          <option value="in_transit">In Transit</option>
-          <option value="delivered">Delivered</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
+        <div id="filter-status-wrap" style="position:relative;display:inline-block">
+          <button type="button" id="filter-status-btn" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;cursor:pointer;min-width:160px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <span id="filter-status-label">All Statuses</span>
+            <span style="font-size:10px">&#9660;</span>
+          </button>
+          <div id="filter-status-dropdown" style="display:none;position:absolute;top:100%;left:0;z-index:1000;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:200px;max-height:320px;overflow-y:auto;margin-top:4px;padding:6px 0">
+            <label style="display:flex;align-items:center;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:1px solid #eee;margin-bottom:2px">
+              <input type="checkbox" id="status-select-all" checked style="margin-right:8px"> All Statuses
+            </label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="pending" style="margin-right:8px"> Pending</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="confirmed" style="margin-right:8px"> Confirmed</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="processing" style="margin-right:8px"> Processing</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="packing" style="margin-right:8px"> Packing</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="packed" style="margin-right:8px"> Packed</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="label_purchased" style="margin-right:8px"> Label Purchased</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="drop_off" style="margin-right:8px"> Drop Off</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="shipped" style="margin-right:8px"> Shipped</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="in_transit" style="margin-right:8px"> In Transit</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="delivered" style="margin-right:8px"> Delivered</label>
+            <label class="status-opt" style="display:flex;align-items:center;padding:5px 12px;cursor:pointer;font-size:13px"><input type="checkbox" value="cancelled" style="margin-right:8px"> Cancelled</label>
+          </div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
@@ -1524,7 +1533,7 @@ async function saveInventory() {
 
 // ORDERS
 function exportOrders() {
-  const status = document.getElementById('filter-status').value;
+  const status = getStatusParam();
   const search = document.getElementById('search-orders').value.trim();
   const params = new URLSearchParams();
   if (status) params.set('status', status);
@@ -1534,7 +1543,7 @@ function exportOrders() {
 }
 
 async function loadSkuOptions() {
-  const status = document.getElementById('filter-status').value;
+  const status = getStatusParam();
   const skuSel = document.getElementById('filter-sku');
   const prev = skuSel.value;
   try {
@@ -1548,7 +1557,7 @@ async function loadSkuOptions() {
 }
 
 async function loadOrders() {
-  const status = document.getElementById('filter-status').value;
+  const status = getStatusParam();
   const sku = document.getElementById('filter-sku').value;
   const params = new URLSearchParams();
   if (status) params.set('status', status);
@@ -1750,8 +1759,43 @@ async function batchMarkShipped() {
 }
 
 document.getElementById('search-orders').addEventListener('input', () => { currentOrderPage = 1; renderOrders(allOrders); });
-document.getElementById('filter-status').addEventListener('change', () => { loadSkuOptions(); loadOrders(); });
 document.getElementById('filter-sku').addEventListener('change', loadOrders);
+
+// Multi-status filter logic
+function getSelectedStatuses() {
+  return Array.from(document.querySelectorAll('.status-opt input:checked')).map(cb => cb.value);
+}
+function getStatusParam() {
+  const sel = getSelectedStatuses();
+  const allOpts = document.querySelectorAll('.status-opt input');
+  if (sel.length === 0 || sel.length === allOpts.length) return '';
+  return sel.join(',');
+}
+function updateStatusLabel() {
+  const sel = getSelectedStatuses();
+  const allOpts = document.querySelectorAll('.status-opt input');
+  const lbl = document.getElementById('filter-status-label');
+  if (sel.length === 0 || sel.length === allOpts.length) { lbl.textContent = 'All Statuses'; }
+  else if (sel.length === 1) { lbl.textContent = sel[0].replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()); }
+  else { lbl.textContent = sel.length + ' Statuses'; }
+  document.getElementById('status-select-all').checked = sel.length === allOpts.length;
+}
+document.getElementById('filter-status-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const dd = document.getElementById('filter-status-dropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('filter-status-wrap');
+  if (!wrap.contains(e.target)) document.getElementById('filter-status-dropdown').style.display = 'none';
+});
+document.getElementById('status-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.status-opt input').forEach(cb => cb.checked = e.target.checked);
+  updateStatusLabel(); loadSkuOptions(); loadOrders();
+});
+document.querySelectorAll('.status-opt input').forEach(cb => {
+  cb.addEventListener('change', () => { updateStatusLabel(); loadSkuOptions(); loadOrders(); });
+});
 loadSkuOptions();
 
 function updateServiceOptions(carrierSelId, serviceSelId, selectedService) {

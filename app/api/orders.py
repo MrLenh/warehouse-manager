@@ -80,19 +80,28 @@ def create_order(data: OrderCreate, request: Request, background_tasks: Backgrou
 
 
 @router.get("", response_model=list[OrderOut])
-def list_orders(skip: int = 0, limit: int = 0, status: OrderStatus | None = None, search: str | None = None, sku: str | None = None, db: Session = Depends(get_db)):
-    return order_service.list_orders(db, skip=skip, limit=limit, status=status, search=search, sku=sku)
+def list_orders(skip: int = 0, limit: int = 0, status: str | None = None, search: str | None = None, sku: str | None = None, db: Session = Depends(get_db)):
+    # Support comma-separated statuses, e.g. ?status=pending,confirmed,processing
+    if status and "," in status:
+        statuses_list = [OrderStatus(s.strip()) for s in status.split(",") if s.strip()]
+        return order_service.list_orders(db, skip=skip, limit=limit, statuses=statuses_list, search=search, sku=sku)
+    single_status = OrderStatus(status) if status else None
+    return order_service.list_orders(db, skip=skip, limit=limit, status=single_status, search=search, sku=sku)
 
 
 @router.get("/skus")
-def list_order_skus(status: OrderStatus | None = None, db: Session = Depends(get_db)):
+def list_order_skus(status: str | None = None, db: Session = Depends(get_db)):
     """Return distinct variant SKUs from orders, optionally filtered by order status."""
-    return order_service.list_order_skus(db, status=status)
+    if status and "," in status:
+        statuses_list = [OrderStatus(s.strip()) for s in status.split(",") if s.strip()]
+        return order_service.list_order_skus(db, statuses=statuses_list)
+    single_status = OrderStatus(status) if status else None
+    return order_service.list_order_skus(db, status=single_status)
 
 
 @router.get("/export")
 def export_orders(
-    status: OrderStatus | None = None,
+    status: str | None = None,
     statuses: str | None = Query(None, description="Comma-separated statuses, e.g. pending,confirmed,processing"),
     search: str | None = None,
     shop_name: str | None = None,
@@ -102,18 +111,26 @@ def export_orders(
 ):
     """Export orders as CSV with optional filters (status, statuses, search, shop_name, date range).
     Use `statuses` param for multiple statuses: ?statuses=pending,confirmed,processing
+    Or use `status` with comma-separated values: ?status=pending,confirmed,processing
     """
-    # Parse multiple statuses
+    # Parse multiple statuses from either param
     parsed_statuses = None
+    valid_values = {s.value for s in OrderStatus}
     if statuses:
-        valid_values = {s.value for s in OrderStatus}
         raw_list = [s.strip() for s in statuses.split(",") if s.strip()]
         invalid = [s for s in raw_list if s not in valid_values]
         if invalid:
             raise HTTPException(400, f"Invalid status(es): {', '.join(invalid)}. Valid: {', '.join(valid_values)}")
         parsed_statuses = [OrderStatus(s) for s in raw_list]
+    elif status and "," in status:
+        raw_list = [s.strip() for s in status.split(",") if s.strip()]
+        invalid = [s for s in raw_list if s not in valid_values]
+        if invalid:
+            raise HTTPException(400, f"Invalid status(es): {', '.join(invalid)}. Valid: {', '.join(valid_values)}")
+        parsed_statuses = [OrderStatus(s) for s in raw_list]
 
-    orders = order_service.list_orders(db, skip=0, limit=0, status=status, search=search, statuses=parsed_statuses)
+    single_status = OrderStatus(status) if status and "," not in status else None
+    orders = order_service.list_orders(db, skip=0, limit=0, status=single_status, search=search, statuses=parsed_statuses)
 
     # Additional filters
     if shop_name:
