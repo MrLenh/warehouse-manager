@@ -284,6 +284,7 @@ def get_order_by_tracking(db: Session, tracking_number: str) -> Order | None:
 def list_orders(
     db: Session, skip: int = 0, limit: int = 0, status: OrderStatus | None = None,
     search: str | None = None, statuses: list[OrderStatus] | None = None,
+    sku: str | None = None,
 ) -> list[Order]:
     q = db.query(Order)
     if statuses:
@@ -297,6 +298,12 @@ def list_orders(
             | Order.order_name.ilike(pattern)
             | Order.customer_name.ilike(pattern)
             | Order.tracking_number.ilike(pattern)
+        )
+    if sku:
+        q = q.filter(
+            Order.items.any(
+                (OrderItem.sku == sku) | (OrderItem.variant_sku == sku)
+            )
         )
     q = q.order_by(Order.created_at.desc()).offset(skip)
     if limit > 0:

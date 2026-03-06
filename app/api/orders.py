@@ -80,8 +80,8 @@ def create_order(data: OrderCreate, request: Request, background_tasks: Backgrou
 
 
 @router.get("", response_model=list[OrderOut])
-def list_orders(skip: int = 0, limit: int = 0, status: OrderStatus | None = None, search: str | None = None, db: Session = Depends(get_db)):
-    return order_service.list_orders(db, skip=skip, limit=limit, status=status, search=search)
+def list_orders(skip: int = 0, limit: int = 0, status: OrderStatus | None = None, search: str | None = None, sku: str | None = None, db: Session = Depends(get_db)):
+    return order_service.list_orders(db, skip=skip, limit=limit, status=status, search=search, sku=sku)
 
 
 @router.get("/export")

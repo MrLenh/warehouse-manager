@@ -232,6 +232,7 @@ tr:hover{background:#f8f9ff}
     <div class="toolbar">
       <div style="display:flex;gap:10px;align-items:center">
         <input type="text" class="search" id="search-orders" placeholder="Search orders...">
+        <input type="text" class="search" id="filter-sku" placeholder="Filter by SKU..." style="width:160px">
         <select id="filter-status" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
@@ -1532,7 +1533,12 @@ function exportOrders() {
 
 async function loadOrders() {
   const status = document.getElementById('filter-status').value;
-  const url = status ? API + '/orders?status=' + status : API + '/orders';
+  const sku = document.getElementById('filter-sku').value.trim();
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (sku) params.set('sku', sku);
+  const qs = params.toString();
+  const url = API + '/orders' + (qs ? '?' + qs : '');
   try {
     const res = await fetch(url);
     if (!res.ok) { const txt = await res.text(); toast(txt.slice(0,100) || 'Error loading orders', 'error'); return; }
@@ -1729,6 +1735,7 @@ async function batchMarkShipped() {
 
 document.getElementById('search-orders').addEventListener('input', () => { currentOrderPage = 1; renderOrders(allOrders); });
 document.getElementById('filter-status').addEventListener('change', loadOrders);
+document.getElementById('filter-sku').addEventListener('change', loadOrders);
 
 function updateServiceOptions(carrierSelId, serviceSelId, selectedService) {
   const carrier = document.getElementById(carrierSelId).value;
