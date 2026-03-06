@@ -84,6 +84,12 @@ def list_orders(skip: int = 0, limit: int = 0, status: OrderStatus | None = None
     return order_service.list_orders(db, skip=skip, limit=limit, status=status, search=search, sku=sku)
 
 
+@router.get("/skus")
+def list_order_skus(status: OrderStatus | None = None, db: Session = Depends(get_db)):
+    """Return distinct variant SKUs from orders, optionally filtered by order status."""
+    return order_service.list_order_skus(db, status=status)
+
+
 @router.get("/export")
 def export_orders(
     status: OrderStatus | None = None,

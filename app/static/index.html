@@ -232,7 +232,9 @@ tr:hover{background:#f8f9ff}
     <div class="toolbar">
       <div style="display:flex;gap:10px;align-items:center">
         <input type="text" class="search" id="search-orders" placeholder="Search orders...">
-        <input type="text" class="search" id="filter-sku" placeholder="Filter by SKU..." style="width:160px">
+        <select id="filter-sku" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;min-width:160px">
+          <option value="">All SKUs</option>
+        </select>
         <select id="filter-status" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
@@ -1531,9 +1533,23 @@ function exportOrders() {
   window.open(API + '/orders/export' + (qs ? '?' + qs : ''), '_blank');
 }
 
+async function loadSkuOptions() {
+  const status = document.getElementById('filter-status').value;
+  const skuSel = document.getElementById('filter-sku');
+  const prev = skuSel.value;
+  try {
+    const url = API + '/orders/skus' + (status ? '?status=' + status : '');
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const skus = await res.json();
+    skuSel.innerHTML = '<option value="">All SKUs</option>' + skus.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    if (skus.includes(prev)) skuSel.value = prev;
+  } catch(e) { /* ignore */ }
+}
+
 async function loadOrders() {
   const status = document.getElementById('filter-status').value;
-  const sku = document.getElementById('filter-sku').value.trim();
+  const sku = document.getElementById('filter-sku').value;
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   if (sku) params.set('sku', sku);
@@ -1734,8 +1750,9 @@ async function batchMarkShipped() {
 }
 
 document.getElementById('search-orders').addEventListener('input', () => { currentOrderPage = 1; renderOrders(allOrders); });
-document.getElementById('filter-status').addEventListener('change', loadOrders);
+document.getElementById('filter-status').addEventListener('change', () => { loadSkuOptions(); loadOrders(); });
 document.getElementById('filter-sku').addEventListener('change', loadOrders);
+loadSkuOptions();
 
 function updateServiceOptions(carrierSelId, serviceSelId, selectedService) {
   const carrier = document.getElementById(carrierSelId).value;

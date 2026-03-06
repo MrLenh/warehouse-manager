@@ -281,6 +281,15 @@ def get_order_by_tracking(db: Session, tracking_number: str) -> Order | None:
     return db.query(Order).filter(Order.tracking_number == tracking_number).first()
 
 
+def list_order_skus(db: Session, status: OrderStatus | None = None) -> list[str]:
+    """Return distinct variant SKUs from order items, optionally filtered by order status."""
+    q = db.query(OrderItem.variant_sku).join(Order)
+    if status:
+        q = q.filter(Order.status == status)
+    q = q.filter(OrderItem.variant_sku != "").distinct()
+    return sorted([row[0] for row in q.all()])
+
+
 def list_orders(
     db: Session, skip: int = 0, limit: int = 0, status: OrderStatus | None = None,
     search: str | None = None, statuses: list[OrderStatus] | None = None,
