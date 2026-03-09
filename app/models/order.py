@@ -8,6 +8,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
+class OrderPriority(str, PyEnum):
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
 class OrderStatus(str, PyEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
@@ -54,6 +61,10 @@ class Order(Base):
     status: Mapped[str] = mapped_column(
         Enum(OrderStatus, values_callable=lambda x: [e.value for e in x]),
         default=OrderStatus.CONFIRMED,
+    )
+    priority: Mapped[str] = mapped_column(
+        Enum(OrderPriority, values_callable=lambda x: [e.value for e in x]),
+        default=OrderPriority.NORMAL,
     )
     status_history: Mapped[str] = mapped_column(Text, default="[]")  # JSON list of {status, timestamp}
 

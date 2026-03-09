@@ -236,6 +236,13 @@ tr:hover{background:#f8f9ff}
         <select id="filter-sku" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;min-width:160px">
           <option value="">All SKUs</option>
         </select>
+        <select id="filter-priority" style="padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;min-width:140px">
+          <option value="">All Priorities</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
+        </select>
         <div id="filter-status-wrap" style="position:relative;display:inline-block">
           <button type="button" id="filter-status-btn" style="padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;cursor:pointer;min-width:160px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:6px">
             <span id="filter-status-label">All Statuses</span>
@@ -273,7 +280,7 @@ tr:hover{background:#f8f9ff}
     </div>
     <div id="orders-overview" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"></div>
     <table>
-      <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
+      <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Priority</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
     <div id="orders-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap"></div>
@@ -1559,9 +1566,11 @@ async function loadSkuOptions() {
 async function loadOrders() {
   const status = getStatusParam();
   const sku = document.getElementById('filter-sku').value;
+  const priority = document.getElementById('filter-priority').value;
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   if (sku) params.set('sku', sku);
+  if (priority) params.set('priority', priority);
   const qs = params.toString();
   const url = API + '/orders' + (qs ? '?' + qs : '');
   try {
@@ -1585,8 +1594,12 @@ function renderOrders(list) {
   const start = (currentOrderPage - 1) * ordersPerPage;
   const pageItems = filtered.slice(start, start + ordersPerPage);
 
+  const priorityBadge = (p) => {
+    const colors = {urgent:'#dc3545',high:'#fd7e14',normal:'#6c757d',low:'#adb5bd'};
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:#fff;background:${colors[p]||colors.normal}">${(p||'normal')}</span>`;
+  };
   document.getElementById('orders-body').innerHTML = pageItems.length === 0
-    ? '<tr><td colspan="11" class="empty">No orders found</td></tr>'
+    ? '<tr><td colspan="12" class="empty">No orders found</td></tr>'
     : pageItems.map(o => `<tr>
         <td><input type="checkbox" class="order-check" value="${o.id}" onchange="updateSelectedCount()"></td>
         <td><strong>${esc(o.order_number)}</strong></td>
@@ -1595,6 +1608,7 @@ function renderOrders(list) {
         <td>${esc(o.customer_name)}</td>
         <td>${o.items.length} items</td>
         <td>$${o.total_price.toFixed(2)}</td>
+        <td>${priorityBadge(o.priority)}</td>
         <td><span class="badge badge-${o.status}">${o.status}</span></td>
         <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? '<br><span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px;margin-top:2px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
         <td>${new Date(o.created_at).toLocaleDateString('en-US')}</td>
@@ -1768,6 +1782,7 @@ async function batchMarkShipped() {
 
 document.getElementById('search-orders').addEventListener('input', () => { currentOrderPage = 1; renderOrders(allOrders); });
 document.getElementById('filter-sku').addEventListener('change', loadOrders);
+document.getElementById('filter-priority').addEventListener('change', loadOrders);
 
 // Multi-status filter logic
 function getSelectedStatuses() {
@@ -2004,6 +2019,16 @@ async function viewOrder(id) {
         </div>
       </div>
       <div class="detail-item"><div class="label">Status</div><div class="value"><span class="badge badge-${o.status}">${o.status}</span></div></div>
+      <div class="detail-item"><div class="label">Priority</div><div class="value">${
+        ['confirmed','label_purchased','processing'].includes(o.status)
+        ? `<select id="priority-edit" onchange="updateOrderPriority('${o.id}',this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid #ddd;font-size:13px;font-weight:600">
+            <option value="low" ${o.priority==='low'?'selected':''}>Low</option>
+            <option value="normal" ${o.priority==='normal'?'selected':''}>Normal</option>
+            <option value="high" ${o.priority==='high'?'selected':''}>High</option>
+            <option value="urgent" ${o.priority==='urgent'?'selected':''}>Urgent</option>
+          </select>`
+        : `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:#fff;background:${{urgent:'#dc3545',high:'#fd7e14',normal:'#6c757d',low:'#adb5bd'}[o.priority||'normal']}">${o.priority||'normal'}</span>`
+      }</div></div>
       <div class="detail-item"><div class="label">Shipping</div><div class="value">${esc(o.carrier || 'USPS')} - ${esc(o.service || 'First')}</div></div>
       <div class="detail-item"><div class="label">Total</div><div class="value">$${o.total_price.toFixed(2)}</div></div>
       <div class="detail-item"><div class="label">Shipping Cost</div><div class="value">$${o.shipping_cost.toFixed(2)}</div></div>
@@ -2114,6 +2139,12 @@ async function viewOrder(id) {
 async function updateOrderStatus(id, status) {
   const res = await fetch(API + '/orders/' + id + '/status', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status}) });
   if (res.ok) { toast('Status updated'); closeModal('order-detail-modal'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function updateOrderPriority(id, priority) {
+  const res = await fetch(API + '/orders/' + id, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({priority}) });
+  if (res.ok) { toast('Priority updated'); loadOrders(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.database import get_db
-from app.models.order import OrderStatus
+from app.models.order import OrderPriority, OrderStatus
 from app.models.user import User
 from app.schemas.order import AddressUpdate, BuyLabelRequest, OrderCreate, OrderOut, OrderStatusUpdate, OrderUpdate
 from easypost.errors import EasyPostError
@@ -80,13 +80,14 @@ def create_order(data: OrderCreate, request: Request, background_tasks: Backgrou
 
 
 @router.get("", response_model=list[OrderOut])
-def list_orders(skip: int = 0, limit: int = 0, status: str | None = None, search: str | None = None, sku: str | None = None, db: Session = Depends(get_db)):
+def list_orders(skip: int = 0, limit: int = 0, status: str | None = None, search: str | None = None, sku: str | None = None, priority: str | None = None, db: Session = Depends(get_db)):
     # Support comma-separated statuses, e.g. ?status=pending,confirmed,processing
+    parsed_priority = OrderPriority(priority) if priority else None
     if status and "," in status:
         statuses_list = [OrderStatus(s.strip()) for s in status.split(",") if s.strip()]
-        return order_service.list_orders(db, skip=skip, limit=limit, statuses=statuses_list, search=search, sku=sku)
+        return order_service.list_orders(db, skip=skip, limit=limit, statuses=statuses_list, search=search, sku=sku, priority=parsed_priority)
     single_status = OrderStatus(status) if status else None
-    return order_service.list_orders(db, skip=skip, limit=limit, status=single_status, search=search, sku=sku)
+    return order_service.list_orders(db, skip=skip, limit=limit, status=single_status, search=search, sku=sku, priority=parsed_priority)
 
 
 @router.get("/skus")

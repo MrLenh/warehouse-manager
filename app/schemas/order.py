@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
-from app.models.order import OrderStatus
+from app.models.order import OrderPriority, OrderStatus
 
 
 class OrderItemCreate(BaseModel):
@@ -52,6 +52,7 @@ class OrderCreate(BaseModel):
     service: str = ""  # empty = use config default
     webhook_url: str = ""
     notes: str = ""
+    priority: Optional[str] = None  # low, normal, high, urgent
     status: Optional[str] = None  # override initial status (for CSV sync)
 
 
@@ -86,6 +87,7 @@ class OrderOut(BaseModel):
     customer_phone: str = ""
     shop_name: str = ""
     status: str
+    priority: str = "normal"
     carrier: str = "USPS"
     service: str = "GroundAdvantage"
     items: list[OrderItemOut]
@@ -160,6 +162,7 @@ class OrderUpdate(BaseModel):
     shop_name: str | None = None
     carrier: str | None = None
     service: str | None = None
+    priority: str | None = None
     notes: str | None = None
     ship_to: AddressUpdate | None = None
     items: list[OrderItemUpdate] | None = None

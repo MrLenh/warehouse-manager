@@ -10,7 +10,7 @@ from app.models.stock_batch import StockBatch
 from sqlalchemy import func as sa_func
 
 from app.models.customer import Customer
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem, OrderPriority, OrderStatus
 from app.models.product import Product, Variant
 from app.schemas.order import OrderCreate, OrderStatusUpdate, OrderUpdate
 
@@ -138,6 +138,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
         webhook_url=data.webhook_url,
         notes=data.notes,
         status=OrderStatus(data.status) if data.status else OrderStatus.CONFIRMED,
+        priority=OrderPriority(data.priority) if data.priority else OrderPriority.NORMAL,
     )
 
     if data.ship_from:
@@ -295,13 +296,15 @@ def list_order_skus(db: Session, status: OrderStatus | None = None, statuses: li
 def list_orders(
     db: Session, skip: int = 0, limit: int = 0, status: OrderStatus | None = None,
     search: str | None = None, statuses: list[OrderStatus] | None = None,
-    sku: str | None = None,
+    sku: str | None = None, priority: OrderPriority | None = None,
 ) -> list[Order]:
     q = db.query(Order)
     if statuses:
         q = q.filter(Order.status.in_(statuses))
     elif status:
         q = q.filter(Order.status == status)
+    if priority:
+        q = q.filter(Order.priority == priority)
     if search:
         pattern = f"%{search}%"
         q = q.filter(
@@ -359,6 +362,8 @@ def update_order(db: Session, order_id: str, data: OrderUpdate) -> Order | None:
         order.carrier = data.carrier
     if data.service is not None:
         order.service = data.service
+    if data.priority is not None:
+        order.priority = OrderPriority(data.priority)
     if data.notes is not None:
         order.notes = data.notes
 
