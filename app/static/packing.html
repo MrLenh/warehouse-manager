@@ -450,6 +450,7 @@ function renderOrderCards() {
       <td>#${i.sequence}</td>
       <td style="font-size:11px;color:#888;font-family:monospace">${esc(i.qr_code)}</td>
       <td>${i.picked_at ? new Date(i.picked_at).toLocaleTimeString() : '-'}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();printItemLabel('${i.id}')" title="Print item label" style="padding:2px 8px;font-size:11px">Label</button></td>
     </tr>`).join('');
 
     const isActive = o.order_id === activeOrderId;
@@ -472,7 +473,7 @@ function renderOrderCards() {
       </div>
       <div class="order-card-body">
         <table style="margin-top:8px;box-shadow:none">
-          <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th></tr></thead>
+          <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th><th style="width:50px">Label</th></tr></thead>
           <tbody>${itemsHtml}</tbody>
         </table>
       </div>
@@ -658,6 +659,7 @@ function showActiveOrder() {
     <td>${esc(i.product_name)}</td>
     <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
     <td>#${i.sequence}</td>
+    <td><button class="btn btn-outline btn-sm" onclick="printItemLabel('${i.id}')" title="Print item label" style="padding:2px 8px;font-size:11px">Label</button></td>
   </tr>`).join('');
 
   let bottomHtml = '';
@@ -711,7 +713,7 @@ function showActiveOrder() {
       <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${pct}%</div>
     </div>
     <table style="margin-top:12px;box-shadow:none;font-size:13px">
-      <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th></tr></thead>
+      <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th style="width:50px">Label</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
     ${bottomHtml}
@@ -728,6 +730,13 @@ function clearActiveOrder() {
 
 function printOrderLabel(orderId) {
   window.open(API + '/orders/' + orderId + '/qrcode', '_blank');
+}
+
+function printItemLabel(itemId) {
+  const url = API + '/picking-lists/items/' + itemId + '/label';
+  const w = window.open('', '_blank', 'width=700,height=400');
+  w.document.write(`<html><head><title>Item Label</title><style>@media print{@page{size:2in 1in;margin:0}body{margin:0}img{width:100%;height:auto}}</style></head><body style="text-align:center;padding:20px"><img src="${url}" style="max-width:100%" onload=""><br><button onclick="window.print()" style="margin-top:12px;padding:8px 24px;font-size:14px;cursor:pointer">Print</button></body></html>`);
+  w.document.close();
 }
 
 // Export QR codes

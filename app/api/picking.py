@@ -158,6 +158,42 @@ def remove_order_from_picking_list(picking_list_id: str, order_id: str, request:
         raise HTTPException(400, str(e))
 
 
+@router.get("/items/{item_id}/label")
+def export_pick_item_label(item_id: str, db: Session = Depends(get_db)):
+    """Export a single pick item label as PNG (2x1 inch) for reprinting."""
+    from app.models.order import Order
+    from app.models.picking import PickItem
+
+    item = db.query(PickItem).filter(PickItem.id == item_id).first()
+    if not item:
+        raise HTTPException(404, "Pick item not found")
+
+    order = db.query(Order).filter(Order.id == item.order_id).first()
+
+    lines = [
+        ("34", item.sku, "#000000"),
+        ("24", item.product_name, "#000000"),
+    ]
+    if item.variant_label:
+        lines.append(("20", item.variant_label, "#333333"))
+    lines.append(("18", f"#{item.sequence} | {item.qr_code}", "#333333"))
+    if order:
+        order_label = order.order_number
+        if order.order_name:
+            order_label += f" ({order.order_name})"
+        lines.append(("18", order_label, "#333333"))
+
+    label_img = _draw_label_2x1(item.qr_code, lines)
+
+    buf = io.BytesIO()
+    label_img.save(buf, format="PNG", dpi=(DPI, DPI))
+    buf.seek(0)
+
+    return StreamingResponse(buf, media_type="image/png", headers={
+        "Content-Disposition": f"inline; filename=item-{item.qr_code}.png"
+    })
+
+
 @router.get("/{picking_list_id}/label")
 def export_picking_list_label(picking_list_id: str, db: Session = Depends(get_db)):
     """Export a QR label for the picking list itself (links to mobile summary page)."""
