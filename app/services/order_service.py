@@ -11,8 +11,44 @@ from sqlalchemy import func as sa_func
 
 from app.models.customer import Customer
 from app.models.order import Order, OrderItem, OrderPriority, OrderStatus
+from app.models.picking import PickItem, PickingList, PickingListStatus
 from app.models.product import Product, Variant
 from app.schemas.order import OrderCreate, OrderStatusUpdate, OrderUpdate
+
+
+_PRIORITY_RANK = {"low": 0, "normal": 1, "high": 2, "urgent": 3}
+
+
+def _sync_batch_priority(db: Session, order: Order) -> None:
+    """Recompute priority for all active/processing batches that contain this order."""
+    batch_ids = (
+        db.query(PickItem.picking_list_id)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id == order.id,
+            PickingList.status.in_([PickingListStatus.ACTIVE, PickingListStatus.PROCESSING]),
+        )
+        .distinct()
+        .all()
+    )
+    for (batch_id,) in batch_ids:
+        batch = db.query(PickingList).filter(PickingList.id == batch_id).first()
+        if not batch:
+            continue
+        # Get all orders in this batch
+        order_ids = [
+            r[0]
+            for r in db.query(PickItem.order_id)
+            .filter(PickItem.picking_list_id == batch_id)
+            .distinct()
+            .all()
+        ]
+        orders = db.query(Order).filter(Order.id.in_(order_ids)).all()
+        if orders:
+            best = max(orders, key=lambda o: _PRIORITY_RANK.get(
+                o.priority if isinstance(o.priority, str) else o.priority.value, 1
+            ))
+            batch.priority = best.priority if isinstance(best.priority, str) else best.priority.value
 
 
 def _generate_order_number() -> str:
@@ -364,6 +400,8 @@ def update_order(db: Session, order_id: str, data: OrderUpdate) -> Order | None:
         order.service = data.service
     if data.priority is not None:
         order.priority = OrderPriority(data.priority)
+        # Auto-update priority of active batches containing this order
+        _sync_batch_priority(db, order)
     if data.notes is not None:
         order.notes = data.notes
 

@@ -42,12 +42,14 @@ def _group_by_category(products: list[Product]) -> list[dict]:
     return list(cats.values())
 
 
-def order_summary(db: Session, start_date: datetime | None = None, end_date: datetime | None = None) -> dict:
+def order_summary(db: Session, start_date: datetime | None = None, end_date: datetime | None = None, customer_id: str | None = None) -> dict:
     q = db.query(Order)
     if start_date:
         q = q.filter(Order.created_at >= start_date)
     if end_date:
         q = q.filter(Order.created_at <= end_date)
+    if customer_id:
+        q = q.filter(Order.customer_id == customer_id)
 
     orders = q.all()
     total = len(orders)
@@ -55,6 +57,7 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
     total_revenue = 0.0
     total_shipping = 0.0
     total_processing = 0.0
+    total_items = 0
 
     for o in orders:
         status_val = o.status if isinstance(o.status, str) else o.status.value
@@ -62,13 +65,35 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
         total_revenue += o.total_price
         total_shipping += o.shipping_cost
         total_processing += o.processing_fee
+        total_items += sum(item.quantity for item in o.items)
+
+    # Orders grouped by date for chart
+    orders_by_date: dict[str, int] = {}
+    for o in orders:
+        d = o.created_at.strftime("%Y-%m-%d") if o.created_at else "Unknown"
+        orders_by_date[d] = orders_by_date.get(d, 0) + 1
+    sorted_dates = sorted(orders_by_date.keys())
+    orders_by_date_sorted = [{"date": d, "count": orders_by_date[d]} for d in sorted_dates]
+
+    # Invoice summary for filtered orders
+    invoice_ids = set()
+    for o in orders:
+        if o.invoice_id:
+            invoice_ids.add(o.invoice_id)
+
+    from app.models.invoice import Invoice
+    invoices = db.query(Invoice).filter(Invoice.id.in_(invoice_ids)).all() if invoice_ids else []
+    total_invoices = len(invoices)
 
     return {
         "total_orders": total,
+        "total_items": total_items,
         "orders_by_status": by_status,
         "total_revenue": round(total_revenue, 2),
         "total_shipping_cost": round(total_shipping, 2),
         "total_processing_fees": round(total_processing, 2),
+        "total_invoices": total_invoices,
+        "orders_by_date": orders_by_date_sorted,
         "date_range": {
             "start": start_date.isoformat() if start_date else None,
             "end": end_date.isoformat() if end_date else None,

@@ -18,9 +18,10 @@ def inventory_report(db: Session = Depends(get_db)):
 def orders_report(
     start_date: datetime | None = Query(None),
     end_date: datetime | None = Query(None),
+    customer_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    return report_service.order_summary(db, start_date=start_date, end_date=end_date)
+    return report_service.order_summary(db, start_date=start_date, end_date=end_date, customer_id=customer_id)
 
 
 @router.get("/top-products")

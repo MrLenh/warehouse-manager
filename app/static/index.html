@@ -96,7 +96,7 @@ tr:hover{background:#f8f9ff}
 .actions-cell{display:flex;gap:6px}
 .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px}
 .card h3{margin-bottom:12px;font-size:16px;color:#333}
-.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.report-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
 .report-card{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .report-card .number{font-size:28px;font-weight:700;color:#667eea}
 .report-card .label{font-size:13px;color:#888;margin-top:4px}
@@ -157,6 +157,7 @@ tr:hover{background:#f8f9ff}
 .scan-result-bar{padding:12px 18px;background:#f8f9fa;text-align:center;font-size:13px;color:#555;border-top:1px solid #eee}
 </style>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -347,7 +348,28 @@ tr:hover{background:#f8f9ff}
 
   <!-- REPORTS PANEL -->
   <div class="panel" id="panel-reports">
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:13px;font-weight:500;color:#555">From
+          <input type="date" id="report-date-from" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </label>
+        <label style="font-size:13px;font-weight:500;color:#555">To
+          <input type="date" id="report-date-to" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </label>
+        <label style="font-size:13px;font-weight:500;color:#555">Customer
+          <select id="report-customer" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+            <option value="">All Customers</option>
+          </select>
+        </label>
+        <button class="btn btn-primary btn-sm" onclick="loadReports()">Apply</button>
+        <button class="btn btn-outline btn-sm" onclick="clearReportFilters()">Clear</button>
+      </div>
+    </div>
     <div class="report-grid" id="report-cards"></div>
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="margin-bottom:12px">Orders by Date</h3>
+      <canvas id="orders-chart" height="260"></canvas>
+    </div>
     <div class="card">
       <h3>Top Selling Products</h3>
       <table>
@@ -2646,10 +2668,44 @@ async function cancelStockRequest(id) {
 }
 
 // REPORTS
+let ordersChart = null;
+
+async function loadReportCustomers() {
+  try {
+    const res = await fetch(API + '/customers?limit=500');
+    const data = await res.json();
+    const customers = Array.isArray(data) ? data : (data.customers || data.items || []);
+    const sel = document.getElementById('report-customer');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All Customers</option>' + customers.map(c => `<option value="${c.id}">${esc(c.name || c.company || c.id)}</option>`).join('');
+    if (cur) sel.value = cur;
+  } catch {}
+}
+
+function clearReportFilters() {
+  document.getElementById('report-date-from').value = '';
+  document.getElementById('report-date-to').value = '';
+  document.getElementById('report-customer').value = '';
+  loadReports();
+}
+
 async function loadReports() {
+  // Load customer dropdown on first call
+  if (document.getElementById('report-customer').options.length <= 1) loadReportCustomers();
+
+  const dateFrom = document.getElementById('report-date-from').value;
+  const dateTo = document.getElementById('report-date-to').value;
+  const customerId = document.getElementById('report-customer').value;
+
+  let ordParams = [];
+  if (dateFrom) ordParams.push('start_date=' + dateFrom);
+  if (dateTo) ordParams.push('end_date=' + dateTo + 'T23:59:59');
+  if (customerId) ordParams.push('customer_id=' + customerId);
+  const ordQs = ordParams.length ? '?' + ordParams.join('&') : '';
+
   const [invRes, ordRes, topRes, lowRes] = await Promise.all([
     fetch(API + '/reports/inventory'),
-    fetch(API + '/reports/orders'),
+    fetch(API + '/reports/orders' + ordQs),
     fetch(API + '/reports/top-products'),
     fetch(API + '/products/low-stock?threshold=10'),
   ]);
@@ -2658,14 +2714,45 @@ async function loadReports() {
   const top = await topRes.json();
   const low = await lowRes.json();
 
+  const totalRevenue = (ord.total_processing_fees ?? 0) + (ord.total_shipping_cost ?? 0);
+
   document.getElementById('report-cards').innerHTML = `
-    <div class="report-card"><div class="number">${inv.total_products ?? 0}</div><div class="label">Total Products</div></div>
-    <div class="report-card"><div class="number">${inv.total_quantity ?? 0}</div><div class="label">Total Stock</div></div>
-    <div class="report-card"><div class="number">$${(inv.total_value ?? 0).toFixed(2)}</div><div class="label">Inventory Value</div></div>
     <div class="report-card"><div class="number">${ord.total_orders ?? 0}</div><div class="label">Total Orders</div></div>
-    <div class="report-card"><div class="number">$${(ord.total_revenue ?? 0).toFixed(2)}</div><div class="label">Revenue</div></div>
-    <div class="report-card"><div class="number">${inv.low_stock_count ?? 0}</div><div class="label">Low Stock</div></div>
+    <div class="report-card"><div class="number">${ord.total_items ?? 0}</div><div class="label">Total Items</div></div>
+    <div class="report-card"><div class="number">${ord.total_invoices ?? 0}</div><div class="label">Total Invoices</div></div>
+    <div class="report-card"><div class="number">$${totalRevenue.toFixed(2)}</div><div class="label">Total Revenue</div><div style="font-size:11px;color:#aaa;margin-top:4px">Processing $${(ord.total_processing_fees ?? 0).toFixed(2)} + Shipping $${(ord.total_shipping_cost ?? 0).toFixed(2)}</div></div>
   `;
+
+  // Orders by date chart
+  const chartData = ord.orders_by_date || [];
+  const labels = chartData.map(d => d.date);
+  const counts = chartData.map(d => d.count);
+
+  if (ordersChart) ordersChart.destroy();
+  const ctx = document.getElementById('orders-chart').getContext('2d');
+  ordersChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Orders',
+        data: counts,
+        backgroundColor: 'rgba(102,126,234,0.6)',
+        borderColor: '#667eea',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
 
   const topList = Array.isArray(top) ? top : (top.products || []);
   document.getElementById('top-products-body').innerHTML = topList.length === 0
