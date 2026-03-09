@@ -15,12 +15,20 @@ class PickingListStatus(str, PyEnum):
     ARCHIVED = "archived"
 
 
+class PickingListPriority(str, PyEnum):
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
 class PickingList(Base):
     __tablename__ = "picking_lists"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     picking_number: Mapped[str] = mapped_column(String, unique=True, index=True)
     status: Mapped[str] = mapped_column(String, default=PickingListStatus.ACTIVE)
+    priority: Mapped[str] = mapped_column(String, default=PickingListPriority.NORMAL)
     assigned_to: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

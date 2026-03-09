@@ -24,6 +24,7 @@ def _to_picking_list_out(pl) -> dict:
         "id": pl.id,
         "picking_number": pl.picking_number,
         "status": pl.status,
+        "priority": pl.priority or "normal",
         "assigned_to": pl.assigned_to,
         "created_at": pl.created_at,
         "updated_at": pl.updated_at,
@@ -156,6 +157,22 @@ def remove_order_from_picking_list(picking_list_id: str, order_id: str, request:
         return result
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+@router.post("/items/{item_id}/pick", response_model=ScanResult)
+def manual_pick_item(item_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Manually pick an item by ID (alternative to scanning QR code when label is damaged)."""
+    from app.models.picking import PickItem
+    item = db.query(PickItem).filter(PickItem.id == item_id).first()
+    if not item:
+        raise HTTPException(404, "Pick item not found")
+    try:
+        result = picking_service.scan_pick_item(db, item.qr_code, username=user.username)
+    except Exception as e:
+        raise HTTPException(400, f"Pick error: {e}")
+    if result["success"]:
+        auth_service.log_activity(db, user.id, user.username, "manual_pick", detail=f"{item.qr_code} → {result.get('order_number','')} ({result.get('order_picked',0)}/{result.get('order_total',0)})", ip=request.client.host if request.client else "")
+    return result
 
 
 @router.get("/items/{item_id}/label")

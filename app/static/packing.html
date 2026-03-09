@@ -39,6 +39,10 @@ tr:hover{background:#f8f9ff}
 .badge-active{background:#cce5ff;color:#004085}
 .badge-processing{background:#e8daef;color:#6c3483}
 .badge-done{background:#28a745;color:#fff}
+.badge-low{background:#e9ecef;color:#6c757d}
+.badge-normal{background:#cce5ff;color:#004085}
+.badge-high{background:#fff3cd;color:#856404}
+.badge-urgent{background:#f8d7da;color:#dc3545}
 .toast{position:fixed;top:20px;right:20px;padding:14px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .toast-success{background:#28a745}
 .toast-error{background:#dc3545}
@@ -95,6 +99,13 @@ tr:hover{background:#f8f9ff}
 .order-card-toggle:hover{color:#333}
 .order-card.expanded .order-card-toggle{transform:rotate(90deg)}
 
+/* Collapsible pl-selector */
+#pl-selector.collapsed .pl-list,#pl-selector.collapsed #pl-empty,#pl-selector.collapsed .pl-filters{display:none!important}
+#pl-selector.collapsed{padding:12px 20px}
+#pl-selector .pl-toggle{background:none;border:none;cursor:pointer;font-size:16px;color:#888;padding:2px 6px;transition:.2s;line-height:1}
+#pl-selector .pl-toggle:hover{color:#333}
+#pl-selector.collapsed .pl-toggle{transform:rotate(-90deg)}
+
 .empty{text-align:center;padding:40px;color:#999;font-size:15px}
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
@@ -124,10 +135,26 @@ tr:hover{background:#f8f9ff}
   <!-- Picking List Selection -->
   <div id="pl-selector" class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0">Select Picking List</h3>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="pl-search" placeholder="Search batch..." oninput="filterPickingLists()" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:200px;outline:none">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="pl-toggle" onclick="togglePlSelector()" title="Expand/collapse">&#9654;</button>
+        <h3 style="margin:0">Select Picking List</h3>
         <span id="pl-count" style="font-size:12px;color:#888"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center" class="pl-filters">
+        <select id="pl-filter-status" onchange="filterPickingLists()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none">
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="processing">Processing</option>
+          <option value="done">Done</option>
+        </select>
+        <select id="pl-filter-priority" onchange="filterPickingLists()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none">
+          <option value="">All Priority</option>
+          <option value="urgent">Urgent</option>
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
+        </select>
+        <input type="text" id="pl-search" placeholder="Search batch..." oninput="filterPickingLists()" style="padding:6px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:200px;outline:none">
       </div>
     </div>
     <div class="pl-list" id="pl-list"></div>
@@ -280,6 +307,8 @@ function renderPickingLists() {
   const empty = document.getElementById('pl-empty');
   const countEl = document.getElementById('pl-count');
   const searchTerm = (document.getElementById('pl-search')?.value || '').toLowerCase().trim();
+  const filterStatus = document.getElementById('pl-filter-status')?.value || '';
+  const filterPriority = document.getElementById('pl-filter-priority')?.value || '';
 
   let lists = allPickingLists;
   if (searchTerm) {
@@ -289,20 +318,32 @@ function renderPickingLists() {
       pl.status.toLowerCase().includes(searchTerm)
     );
   }
+  if (filterStatus) {
+    lists = lists.filter(pl => pl.status === filterStatus);
+  }
+  if (filterPriority) {
+    lists = lists.filter(pl => (pl.priority || 'normal') === filterPriority);
+  }
+
+  const hasFilters = searchTerm || filterStatus || filterPriority;
 
   if (lists.length === 0) {
     container.innerHTML = '';
     empty.style.display = '';
-    empty.textContent = searchTerm ? 'No batches match your search.' : 'No picking lists available. Create one from the Orders tab.';
-    countEl.textContent = searchTerm ? `0 / ${allPickingLists.length}` : '';
+    empty.textContent = hasFilters ? 'No batches match your filters.' : 'No picking lists available. Create one from the Orders tab.';
+    countEl.textContent = hasFilters ? `0 / ${allPickingLists.length}` : '';
     return;
   }
   empty.style.display = 'none';
-  countEl.textContent = searchTerm ? `${lists.length} / ${allPickingLists.length}` : `${lists.length} batch${lists.length !== 1 ? 'es' : ''}`;
+  countEl.textContent = hasFilters ? `${lists.length} / ${allPickingLists.length}` : `${lists.length} batch${lists.length !== 1 ? 'es' : ''}`;
 
-  // Sort: processing first, then active, then done — within each group by newest first
+  // Sort: urgent/high first, then processing > active > done, then newest first
   const statusOrder = { processing: 0, active: 1, done: 2 };
+  const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
   lists = [...lists].sort((a, b) => {
+    const pa = priorityOrder[a.priority || 'normal'] ?? 2;
+    const pb = priorityOrder[b.priority || 'normal'] ?? 2;
+    if (pa !== pb) return pa - pb;
     const sa = statusOrder[a.status] ?? 3;
     const sb = statusOrder[b.status] ?? 3;
     if (sa !== sb) return sa - sb;
@@ -315,9 +356,11 @@ function renderPickingLists() {
     const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
     const canDelete = pl.status === 'active';
     const canArchive = isAdmin && (pl.status === 'done' || pl.order_count === 0);
+    const priority = pl.priority || 'normal';
+    const priorityBadge = priority !== 'normal' ? `<span class="badge badge-${priority}" style="font-size:10px">${priority}</span>` : '';
     return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" data-pl-id="${pl.id}" onclick="selectPickingList('${pl.id}')">
       <div style="display:flex;justify-content:space-between;align-items:start">
-        <h4>${esc(pl.picking_number)}</h4>
+        <h4>${esc(pl.picking_number)} ${priorityBadge}</h4>
         <div style="display:flex;gap:4px">
           ${canArchive ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();archiveBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Archive batch">Archive</button>` : ''}
           ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteBatch('${pl.id}','${esc(pl.picking_number)}')" style="padding:2px 8px;font-size:11px" title="Delete batch">&#10005;</button>` : ''}
@@ -332,6 +375,10 @@ function renderPickingLists() {
   }).join('');
 }
 
+function togglePlSelector() {
+  document.getElementById('pl-selector').classList.toggle('collapsed');
+}
+
 async function selectPickingList(plId) {
   const res = await fetch(API + '/picking-lists/' + plId);
   currentPL = await res.json();
@@ -343,6 +390,9 @@ async function selectPickingList(plId) {
 
   // Highlight selected card
   document.querySelectorAll('.pl-card').forEach(c => c.classList.toggle('active', c.dataset.plId === plId));
+
+  // Collapse batch selector to focus on packing
+  document.getElementById('pl-selector').classList.add('collapsed');
 
   await refreshProgress();
   startAutoRefresh();
@@ -392,9 +442,21 @@ function stopAutoRefresh() {
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
 }
 
+function getExpandedOrderIds() {
+  const ids = new Set();
+  document.querySelectorAll('.order-card.expanded').forEach(el => {
+    const oid = el.dataset.orderId;
+    if (oid) ids.add(oid);
+  });
+  return ids;
+}
+
 function renderOrderCards() {
   const container = document.getElementById('orders-progress');
   const filterNeeds = document.getElementById('filter-needs-packing').checked;
+
+  // Preserve expanded state before re-render
+  const expandedIds = getExpandedOrderIds();
 
   let filtered = progressData;
   if (filterNeeds) {
@@ -443,18 +505,22 @@ function renderOrderCards() {
 
     const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
       <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
-      <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><span style="display:none;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>` : '<span style="display:inline-block;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>'}</td>
+      <td>${i.image_url ? `<img src="${esc(i.image_url)}" loading="lazy" style="width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><span style="display:none;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>` : '<span style="display:inline-block;width:40px;height:40px;background:#f0f0f0;border-radius:6px"></span>'}</td>
       <td><strong>${esc(i.sku)}</strong></td>
       <td>${esc(i.product_name)}</td>
       <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
       <td>#${i.sequence}</td>
       <td style="font-size:11px;color:#888;font-family:monospace">${esc(i.qr_code)}</td>
       <td>${i.picked_at ? new Date(i.picked_at).toLocaleTimeString() : '-'}</td>
-      <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();printItemLabel('${i.id}')" title="Print item label" style="padding:2px 8px;font-size:11px">Label</button></td>
+      <td style="display:flex;gap:4px">
+        ${!i.picked ? `<button class="btn btn-success btn-sm" onclick="event.stopPropagation();manualPickItem('${i.id}')" title="Manual pick (when label is damaged)" style="padding:2px 8px;font-size:11px">Pick</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();printItemLabel('${i.id}')" title="Print item label" style="padding:2px 8px;font-size:11px">Label</button>
+      </td>
     </tr>`).join('');
 
     const isActive = o.order_id === activeOrderId;
-    const expandedClass = isActive ? ' expanded' : '';
+    const wasExpanded = expandedIds.has(o.order_id);
+    const expandedClass = (isActive || wasExpanded) ? ' expanded' : '';
 
     return `<div class="card order-card ${isComplete ? 'complete' : ''} ${isDroppedOff || isPending ? 'dimmed' : ''}${expandedClass}" data-order-id="${o.order_id}">
       <div class="order-card-header">
@@ -473,7 +539,7 @@ function renderOrderCards() {
       </div>
       <div class="order-card-body">
         <table style="margin-top:8px;box-shadow:none">
-          <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th><th style="width:50px">Label</th></tr></thead>
+          <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th>QR Code</th><th>Picked At</th><th style="width:80px">Actions</th></tr></thead>
           <tbody>${itemsHtml}</tbody>
         </table>
       </div>
@@ -654,12 +720,15 @@ function showActiveOrder() {
 
   const itemsHtml = o.items.map(i => `<tr style="${i.picked ? 'background:#f0fff0' : ''}">
     <td>${i.picked ? '<span style="color:#28a745;font-weight:700">&#10003;</span>' : '<span style="color:#ccc">&#9675;</span>'}</td>
-    <td>${i.image_url ? `<img src="${esc(i.image_url)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><span style="display:none;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>` : '<span style="display:inline-block;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>'}</td>
+    <td>${i.image_url ? `<img src="${esc(i.image_url)}" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><span style="display:none;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>` : '<span style="display:inline-block;width:44px;height:44px;background:#f0f0f0;border-radius:6px"></span>'}</td>
     <td><strong>${esc(i.sku)}</strong></td>
     <td>${esc(i.product_name)}</td>
     <td>${i.variant_label ? esc(i.variant_label) : '-'}</td>
     <td>#${i.sequence}</td>
-    <td><button class="btn btn-outline btn-sm" onclick="printItemLabel('${i.id}')" title="Print item label" style="padding:2px 8px;font-size:11px">Label</button></td>
+    <td style="display:flex;gap:4px">
+      ${!i.picked ? `<button class="btn btn-success btn-sm" onclick="manualPickItem('${i.id}')" title="Manual pick (when label is damaged)" style="padding:2px 8px;font-size:11px">Pick</button>` : ''}
+      <button class="btn btn-outline btn-sm" onclick="printItemLabel('${i.id}')" title="Print item label" style="padding:2px 8px;font-size:11px">Label</button>
+    </td>
   </tr>`).join('');
 
   let bottomHtml = '';
@@ -713,7 +782,7 @@ function showActiveOrder() {
       <div class="progress-fill" style="width:${pct}%;${isComplete ? 'background:#28a745' : ''}">${pct}%</div>
     </div>
     <table style="margin-top:12px;box-shadow:none;font-size:13px">
-      <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th style="width:50px">Label</th></tr></thead>
+      <thead><tr><th style="width:30px"></th><th style="width:50px">Img</th><th>SKU</th><th>Product</th><th>Variant</th><th>Unit</th><th style="width:80px">Actions</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
     ${bottomHtml}
@@ -728,6 +797,10 @@ function clearActiveOrder() {
   document.getElementById('scan-input').focus();
 }
 
+function expandPlSelector() {
+  document.getElementById('pl-selector').classList.remove('collapsed');
+}
+
 function printOrderLabel(orderId) {
   window.open(API + '/orders/' + orderId + '/qrcode', '_blank');
 }
@@ -737,6 +810,27 @@ function printItemLabel(itemId) {
   const w = window.open('', '_blank', 'width=700,height=400');
   w.document.write(`<html><head><title>Item Label</title><style>@media print{@page{size:2in 1in;margin:0}body{margin:0}img{width:100%;height:auto}}</style></head><body style="text-align:center;padding:20px"><img src="${url}" style="max-width:100%" onload=""><br><button onclick="window.print()" style="margin-top:12px;padding:8px 24px;font-size:14px;cursor:pointer">Print</button></body></html>`);
   w.document.close();
+}
+
+// Manual pick item (when label is damaged)
+async function manualPickItem(itemId) {
+  if (!confirm('Manually pick this item? Use this when the item label is damaged or missing.')) return;
+  try {
+    const res = await fetch(API + '/picking-lists/items/' + itemId + '/pick', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.detail || data.message || 'Error picking item', 'error');
+      return;
+    }
+    if (data.success) {
+      toast(data.message);
+      // Set active order
+      if (!activeOrderId) activeOrderId = data.order_id;
+      await refreshProgress();
+    } else {
+      toast(data.message, 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
 // Export QR codes
@@ -1035,6 +1129,7 @@ async function archiveBatch(plId, plNumber) {
         stopAutoRefresh();
         document.getElementById('packing-session').style.display = 'none';
         document.getElementById('header-info').textContent = '';
+        expandPlSelector();
       }
       await loadPickingLists();
     } else {
@@ -1056,6 +1151,7 @@ async function deleteBatch(plId, plNumber) {
         stopAutoRefresh();
         document.getElementById('packing-session').style.display = 'none';
         document.getElementById('header-info').textContent = '';
+        expandPlSelector();
       }
       await loadPickingLists();
     } else {
@@ -1078,6 +1174,7 @@ async function unpackBatch() {
       stopAutoRefresh();
       document.getElementById('packing-session').style.display = 'none';
       document.getElementById('header-info').textContent = '';
+      expandPlSelector();
       await loadPickingLists();
     } else {
       const e = await res.json().catch(() => ({}));
@@ -1101,6 +1198,7 @@ async function unpackOrder(orderId, orderNumber) {
         stopAutoRefresh();
         document.getElementById('packing-session').style.display = 'none';
         document.getElementById('header-info').textContent = '';
+        expandPlSelector();
         await loadPickingLists();
       } else {
         await refreshProgress();

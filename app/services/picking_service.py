@@ -3,10 +3,22 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models.order import Order, OrderItem, OrderStatus
-from app.models.picking import PickingList, PickingListStatus, PickItem
+from app.models.order import Order, OrderItem, OrderPriority, OrderStatus
+from app.models.picking import PickingList, PickingListPriority, PickingListStatus, PickItem
 from app.models.product import Product
 from app.services.order_service import _add_status_history
+
+
+_PRIORITY_RANK = {"low": 0, "normal": 1, "high": 2, "urgent": 3}
+
+
+def _compute_batch_priority(orders: list[Order]) -> str:
+    """Return the highest priority among orders (maps OrderPriority → PickingListPriority)."""
+    if not orders:
+        return PickingListPriority.NORMAL
+    best = max(orders, key=lambda o: _PRIORITY_RANK.get(o.priority if isinstance(o.priority, str) else o.priority.value, 1))
+    p = best.priority if isinstance(best.priority, str) else best.priority.value
+    return p
 
 
 def _generate_picking_number() -> str:
@@ -48,6 +60,7 @@ def create_picking_list(db: Session, order_ids: list[str]) -> PickingList:
 
     picking_list = PickingList(
         picking_number=_generate_picking_number(),
+        priority=_compute_batch_priority(orders),
     )
     db.add(picking_list)
     db.flush()  # get the id
@@ -373,6 +386,7 @@ def create_label_batch(db: Session, order_ids: list[str]) -> PickingList:
 
     picking_list = PickingList(
         picking_number=_generate_picking_number(),
+        priority=_compute_batch_priority(orders),
     )
     db.add(picking_list)
     db.flush()

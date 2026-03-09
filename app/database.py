@@ -120,6 +120,7 @@ def _migrate_add_columns():
         existing = {col["name"] for col in inspector.get_columns("picking_lists")}
         new_cols = {
             "assigned_to": "VARCHAR DEFAULT NULL",
+            "priority": "VARCHAR DEFAULT 'normal'",
         }
         with engine.begin() as conn:
             for col_name, col_type in new_cols.items():
