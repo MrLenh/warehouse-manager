@@ -367,7 +367,7 @@ function renderOrderView(data) {
       <div class="order-header" onclick="toggleOrder(this)">
         <div>
           <div class="order-title">${order.order_number}${order.order_name ? ' — ' + order.order_name : ''}</div>
-          <div class="order-name">${order.customer_name || ''}</div>
+          <div class="order-name">${order.customer_name || ''}${order.order_date ? ' · ' + new Date(order.order_date).toLocaleDateString('vi-VN') : ''}</div>
         </div>
         <div class="order-progress-mini">
           <span class="count">${picked}/${total}</span>

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.services.scheduler_service import get_jobs_status, pause_job, run_job_now, start_job
+from app.services.scheduler_service import get_jobs_status, pause_job, revert_last_job, run_job_now, start_job
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -39,6 +39,15 @@ def run_job_now_endpoint(job_id: str):
         return run_job_now(job_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+@router.post("/{job_id}/revert")
+def revert_job_endpoint(job_id: str):
+    """Revert the last run of a job, restoring orders to previous states."""
+    try:
+        return revert_last_job(job_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/tracking/check")

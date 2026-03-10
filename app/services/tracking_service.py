@@ -51,9 +51,20 @@ def check_tracking_updates(db: Session) -> dict:
     updated = 0
     errors = 0
     details = []
+    revert_snapshots = []  # Save previous states for revert
 
     for order in orders:
         try:
+            # Save snapshot before any changes
+            snapshot_before = {
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "old_order_status": order.status.value if hasattr(order.status, "value") else order.status,
+                "old_tracking_status": order.tracking_status or "",
+                "old_tracking_url": order.tracking_url or "",
+                "old_status_history": order.status_history,
+            }
+
             # Retrieve tracker from EasyPost by shipment
             if order.easypost_shipment_id:
                 shipment = client.shipment.retrieve(order.easypost_shipment_id)
@@ -109,6 +120,8 @@ def check_tracking_updates(db: Session) -> dict:
                     "new_status": tracking_status,
                     "order_status": order.status.value if hasattr(order.status, "value") else order.status,
                 })
+                # Only save revert snapshot for orders that were actually changed
+                revert_snapshots.append(snapshot_before)
 
                 # Fire outgoing webhook
                 try:
@@ -130,6 +143,50 @@ def check_tracking_updates(db: Session) -> dict:
     return {
         "checked": checked,
         "updated": updated,
+        "errors": errors,
+        "details": details,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "revert_snapshots": revert_snapshots,
+    }
+
+
+def revert_tracking_updates(db: Session, snapshots: list[dict]) -> dict:
+    """Revert orders to their previous states using saved snapshots."""
+    reverted = 0
+    errors = 0
+    details = []
+
+    for snap in snapshots:
+        try:
+            order = db.query(Order).filter(Order.id == snap["order_id"]).first()
+            if not order:
+                errors += 1
+                continue
+
+            old_status = order.status.value if hasattr(order.status, "value") else order.status
+            order.status = snap["old_order_status"]
+            order.tracking_status = snap["old_tracking_status"]
+            order.tracking_url = snap["old_tracking_url"]
+            order.status_history = snap["old_status_history"]
+
+            _add_status_history(
+                order, snap["old_order_status"],
+                f"Reverted by admin (was {old_status})",
+            )
+
+            reverted += 1
+            details.append({
+                "order_number": snap["order_number"],
+                "reverted_to": snap["old_order_status"],
+            })
+        except Exception as e:
+            logger.error("Revert failed for order %s: %s", snap.get("order_number"), e)
+            errors += 1
+
+    db.commit()
+    logger.info("Revert done: reverted=%d errors=%d", reverted, errors)
+    return {
+        "reverted": reverted,
         "errors": errors,
         "details": details,
         "timestamp": datetime.now(timezone.utc).isoformat(),

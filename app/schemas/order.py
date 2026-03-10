@@ -1,5 +1,6 @@
+import json
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -110,10 +111,21 @@ class OrderOut(BaseModel):
     picking_number: str = ""
     qr_code_path: Optional[str] = ""
     notes: str
+    status_history: Any = []
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("status_history", mode="before")
+    @classmethod
+    def parse_status_history(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return v or []
 
     @field_validator("qr_code_path", mode="before")
     @classmethod

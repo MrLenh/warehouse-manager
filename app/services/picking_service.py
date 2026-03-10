@@ -322,6 +322,7 @@ def get_picking_list_progress(db: Session, picking_list_id: str) -> list[dict]:
                 "order_status": order.status if order else "",
                 "label_url": order.label_url if order else "",
                 "tracking_number": order.tracking_number if order else "",
+                "order_date": order.created_at.isoformat() if order and order.created_at else None,
                 "total": 0,
                 "picked": 0,
                 "items": [],

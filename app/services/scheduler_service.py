@@ -59,13 +59,20 @@ def get_jobs_status() -> list[dict]:
     """Return status of all scheduled jobs."""
     jobs = []
     for job in scheduler.get_jobs():
+        last = _last_results.get(job.id)
+        # Build a lighter last_result for the list view (exclude full snapshot data)
+        last_light = None
+        if last:
+            last_light = {k: v for k, v in last.items() if k != "revert_snapshots"}
+            snapshots = last.get("revert_snapshots", [])
+            last_light["revert_snapshots"] = [{"order_number": s["order_number"]} for s in snapshots]
         jobs.append({
             "id": job.id,
             "name": job.name,
             "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
             "running": job.next_run_time is not None,
             "trigger": str(job.trigger),
-            "last_result": _last_results.get(job.id),
+            "last_result": last_light,
         })
     return jobs
 
@@ -105,3 +112,27 @@ def run_job_now(job_id: str) -> dict:
     # Run synchronously so we can return result
     job.func()
     return {"id": job_id, "status": "completed", "result": _last_results.get(job_id)}
+
+
+def revert_last_job(job_id: str) -> dict:
+    """Revert the last run of a job, restoring orders to previous states."""
+    last = _last_results.get(job_id)
+    if not last:
+        raise ValueError(f"No previous run found for job '{job_id}'")
+
+    snapshots = last.get("revert_snapshots")
+    if not snapshots:
+        raise ValueError("No changes to revert from the last run")
+
+    from app.database import SessionLocal
+    from app.services.tracking_service import revert_tracking_updates
+
+    db = SessionLocal()
+    try:
+        result = revert_tracking_updates(db, snapshots)
+        # Clear revert snapshots after successful revert
+        last["revert_snapshots"] = []
+        last["reverted"] = True
+        return {"id": job_id, "status": "reverted", "result": result}
+    finally:
+        db.close()
