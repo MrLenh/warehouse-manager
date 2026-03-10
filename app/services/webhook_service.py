@@ -171,33 +171,33 @@ def _build_payload(order: Order, event_type: str = EVENT_ORDER_UPDATED) -> dict:
     return _build_event_envelope(event_type, order, order_data)
 
 
-def _build_custom_payloads(order: Order, fields: list[str]) -> list[dict]:
-    """Build custom flat payload(s) with only the selected fields.
+def _build_custom_payloads(order: Order, fields: list[str], event_type: str = EVENT_ORDER_UPDATED) -> list[dict]:
+    """Build custom payload(s) with only the selected fields, wrapped in the default event envelope.
 
-    If any item-level field is selected, returns one payload per line item.
-    Otherwise returns a single payload for the order.
+    If any item-level field is selected, returns one envelope per line item.
+    Otherwise returns a single envelope for the order.
     """
     valid_fields = [f for f in fields if f in AVAILABLE_WEBHOOK_FIELDS]
     if not valid_fields:
-        return [_build_payload(order)]
+        return [_build_payload(order, event_type)]
 
     has_item_fields = any(f in ITEM_LEVEL_FIELDS for f in valid_fields)
 
     if has_item_fields and hasattr(order, "items") and order.items:
         payloads = []
         for item in order.items:
-            payload = {}
+            data = {}
             for field in valid_fields:
                 resolver = AVAILABLE_WEBHOOK_FIELDS[field][1]
-                payload[field] = resolver(order, item)
-            payloads.append(payload)
+                data[field] = resolver(order, item)
+            payloads.append(_build_event_envelope(event_type, order, data))
         return payloads
     else:
-        payload = {}
+        data = {}
         for field in valid_fields:
             resolver = AVAILABLE_WEBHOOK_FIELDS[field][1]
-            payload[field] = resolver(order, None)
-        return [payload]
+            data[field] = resolver(order, None)
+        return [_build_event_envelope(event_type, order, data)]
 
 
 def _resolve_customer_webhook(order: Order) -> tuple[str, list[str]]:
@@ -351,7 +351,7 @@ async def send_webhook(order: Order, event_type: str = EVENT_ORDER_UPDATED) -> l
         # Send to customer webhook URL (with custom payload if configured)
         if customer_url and customer_url not in general_urls:
             if customer_fields:
-                payloads = _build_custom_payloads(order, customer_fields)
+                payloads = _build_custom_payloads(order, customer_fields, event_type)
                 for payload in payloads:
                     result = await _deliver_async(client, customer_url, payload)
                     results.append(result)
@@ -382,7 +382,7 @@ def send_webhook_sync(order: Order, event_type: str = EVENT_ORDER_UPDATED) -> li
         # Send to customer webhook URL (with custom payload if configured)
         if customer_url and customer_url not in general_urls:
             if customer_fields:
-                payloads = _build_custom_payloads(order, customer_fields)
+                payloads = _build_custom_payloads(order, customer_fields, event_type)
                 for payload in payloads:
                     result = _deliver_sync(client, customer_url, payload)
                     results.append(result)
