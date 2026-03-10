@@ -354,8 +354,13 @@ tr:hover{background:#f8f9ff}
       </div>
 
       <div class="form-group" style="margin-top:12px">
-        <label>Payload Preview</label>
-        <pre id="wh-payload-preview" style="background:#1a1a2e;color:#a8e6cf;border-radius:8px;padding:14px;font-size:12px;line-height:1.5;overflow-x:auto;max-height:200px;overflow-y:auto;margin:0">{}</pre>
+        <label style="display:flex;align-items:center;gap:8px">
+          Payload Preview
+          <span style="font-size:11px;color:#888;font-weight:normal">(editable — chỉnh JSON trước khi test)</span>
+          <button class="btn btn-sm btn-outline" type="button" onclick="whResetPreview()" style="margin-left:auto;font-size:11px;padding:3px 8px">Reset</button>
+        </label>
+        <textarea id="wh-payload-preview" spellcheck="false" style="background:#1a1a2e;color:#a8e6cf;border:1px solid #333;border-radius:8px;padding:14px;font-size:12px;font-family:monospace;line-height:1.5;width:100%;min-height:180px;max-height:300px;resize:vertical;margin:0;outline:none" oninput="whValidateJson()"></textarea>
+        <div id="wh-json-error" style="font-size:11px;color:#dc3545;margin-top:4px;display:none"></div>
       </div>
 
       <div id="wh-test-result" style="margin-top:12px"></div>
@@ -768,27 +773,27 @@ const WH_AVAILABLE_FIELDS = {
 };
 
 const WH_SAMPLE_VALUES = {
-  id: 'item-001',
-  order_number: 'ORD-20260304-ABC123',
-  order_name: 'Don hang A',
+  id: 'ITEM-001',
+  order_number: '#FLWSP283971',
+  order_name: '#FLWSP283971',
   status: 'shipped',
-  customer_name: 'Nguyen Van A',
-  customer_email: 'a@email.com',
-  shop_name: 'Shop ABC',
+  customer_name: 'UOYMedia',
+  customer_email: 'calisestudios2@gmail.com',
+  shop_name: 'Flagwix',
   carrier_code: 'USPS',
   service: 'GroundAdvantage',
-  tracking_number: '9400111899223100001234',
-  tracking_url: 'https://track.example.com/...',
-  tracking_status: 'in_transit',
-  shipping_cost: 8.50,
-  base_cost: 1.75,
-  total_price: 10.25,
-  sku: 'SKU-001',
-  product_name: 'Sample Product',
-  variant_label: 'Red / M',
-  variant_sku: 'SKU-001-RED-M',
-  quantity: 2,
-  unit_price: 15.99,
+  tracking_number: '9400136208303466391466',
+  tracking_url: 'https://tools.usps.com/go/TrackConfirmAction?tLabels=9400136208303466391466',
+  tracking_status: 'PRE_TRANSIT',
+  shipping_cost: 5.45,
+  base_cost: 0,
+  total_price: 7.70,
+  sku: 'EMBGFUS250',
+  product_name: 'Grommet Flag MLN-1786-TTH',
+  variant_label: '5x8ft',
+  variant_sku: '',
+  quantity: 1,
+  unit_price: 0.00,
 };
 
 async function loadWebhooks() {
@@ -880,20 +885,50 @@ function whDeselectAllFields() {
 
 function whUpdatePreview() {
   const fields = whGetSelectedFields();
-  const pre = document.getElementById('wh-payload-preview');
+  const textarea = document.getElementById('wh-payload-preview');
   if (!fields.length) {
-    pre.textContent = '// Default full payload (tất cả thông tin order)';
+    textarea.value = JSON.stringify({
+      "id": "evt_test...",
+      "object": "event",
+      "type": "order.shipped",
+      "api_version": "2024-01-01",
+      "data": {"object": {"order_name": "#FLWSP283971", "status": "shipped", "...": "full payload"}}
+    }, null, 2);
     return;
   }
   const sample = {};
   for (const f of fields) {
     if (f in WH_SAMPLE_VALUES) sample[f] = WH_SAMPLE_VALUES[f];
   }
-  const hasItemField = fields.some(f => ['id','sku','product_name','variant_label','variant_sku','quantity','unit_price'].includes(f));
-  if (hasItemField) {
-    pre.textContent = '// Gửi 1 request cho mỗi line item:\n' + JSON.stringify(sample, null, 2);
-  } else {
-    pre.textContent = '// Gửi 1 request cho mỗi order:\n' + JSON.stringify(sample, null, 2);
+  textarea.value = JSON.stringify(sample, null, 2);
+  whValidateJson();
+}
+
+function whResetPreview() {
+  whUpdatePreview();
+  document.getElementById('wh-json-error').style.display = 'none';
+}
+
+function whValidateJson() {
+  const textarea = document.getElementById('wh-payload-preview');
+  const errDiv = document.getElementById('wh-json-error');
+  try {
+    JSON.parse(textarea.value);
+    errDiv.style.display = 'none';
+    textarea.style.borderColor = '#333';
+  } catch (e) {
+    errDiv.textContent = 'Invalid JSON: ' + e.message;
+    errDiv.style.display = 'block';
+    textarea.style.borderColor = '#dc3545';
+  }
+}
+
+function whGetEditedPayload() {
+  const textarea = document.getElementById('wh-payload-preview');
+  try {
+    return JSON.parse(textarea.value);
+  } catch {
+    return null;
   }
 }
 
@@ -945,6 +980,13 @@ async function testWebhook() {
 
   if (!url) { toast('Enter a webhook URL first', 'error'); return; }
 
+  // Validate edited JSON
+  const editedPayload = whGetEditedPayload();
+  if (!editedPayload) {
+    toast('Invalid JSON in payload editor. Please fix before testing.', 'error');
+    return;
+  }
+
   // Save first (including fields), then test
   try {
     await fetch(API + '/customers/' + id, {
@@ -960,7 +1002,11 @@ async function testWebhook() {
   resultDiv.innerHTML = '<div style="padding:12px;background:#f8f9fa;border-radius:8px;font-size:13px;color:#666">Sending test webhook...</div>';
 
   try {
-    const res = await fetch(API + '/customers/' + id + '/webhook/test', {method: 'POST'});
+    const res = await fetch(API + '/customers/' + id + '/webhook/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(editedPayload),
+    });
     const data = await res.json();
     let previewHtml = '';
     if (data.payload_preview) {
@@ -978,15 +1024,14 @@ async function testWebhook() {
 }
 
 async function quickTestWebhook(custId) {
-  try {
-    const res = await fetch(API + '/customers/' + custId + '/webhook/test', {method: 'POST'});
-    const data = await res.json();
-    if (data.success) {
-      toast('Webhook test successful (Status: ' + data.status_code + ')');
-    } else {
-      toast('Webhook test failed: ' + (data.error || 'Status ' + data.status_code), 'error');
-    }
-  } catch (e) { toast('Error: ' + e.message, 'error'); }
+  // Open modal so user can edit JSON before sending
+  openWhModal(custId);
+  // Auto-scroll to test section after modal opens
+  setTimeout(() => {
+    const preview = document.getElementById('wh-payload-preview');
+    if (preview) preview.focus();
+    toast('Edit JSON payload nếu cần, rồi nhấn Test Webhook', 'info');
+  }, 200);
 }
 
 async function removeWebhook(custId, name) {

@@ -2,7 +2,7 @@ import csv
 import io
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
@@ -385,8 +385,8 @@ def export_invoices_csv(
 
 
 @router.post("/{customer_id}/webhook/test")
-def test_customer_webhook(customer_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Send a test payload to the customer's webhook URL."""
+async def test_customer_webhook(customer_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Send a test payload to the customer's webhook URL. Accepts optional custom JSON body."""
     import json as _json
     from app.services.webhook_service import AVAILABLE_WEBHOOK_FIELDS
 
@@ -396,44 +396,17 @@ def test_customer_webhook(customer_id: str, user: User = Depends(get_current_use
     if not c.webhook_url:
         raise HTTPException(400, "No webhook URL configured for this customer")
 
-    # Build payload based on custom fields if configured
-    fields = []
-    if c.webhook_payload_fields:
-        try:
-            fields = _json.loads(c.webhook_payload_fields)
-        except (ValueError, TypeError):
-            fields = []
+    # Check if custom JSON payload was provided in request body
+    custom_payload = None
+    try:
+        body = await request.body()
+        if body and body.strip():
+            custom_payload = _json.loads(body)
+    except (ValueError, TypeError):
+        pass
 
-    if fields:
-        # Build sample custom payload with test data (based on real order #FLWSP283971)
-        payload = {}
-        for f in fields:
-            if f not in AVAILABLE_WEBHOOK_FIELDS:
-                continue
-            sample_values = {
-                "id": "ITEM-001",
-                "order_number": "#FLWSP283971",
-                "order_name": "#FLWSP283971",
-                "status": "shipped",
-                "customer_name": c.name,
-                "customer_email": c.email or "calisestudios2@gmail.com",
-                "shop_name": "Flagwix",
-                "carrier_code": "USPS",
-                "service": "GroundAdvantage",
-                "tracking_number": "9400136208303466391466",
-                "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400136208303466391466",
-                "tracking_status": "PRE_TRANSIT",
-                "shipping_cost": 5.45,
-                "base_cost": 0,
-                "total_price": 7.70,
-                "sku": "EMBGFUS250",
-                "product_name": "Grommet Flag MLN-1786-TTH",
-                "variant_label": "5x8ft",
-                "variant_sku": "",
-                "quantity": 1,
-                "unit_price": 0.00,
-            }
-            payload[f] = sample_values.get(f, "")
+    if custom_payload and isinstance(custom_payload, dict):
+        payload = custom_payload
     else:
         from app.services.webhook_service import _build_event_envelope
         # Default full payload test (based on real order #FLWSP283971)
