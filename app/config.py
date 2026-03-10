@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Webhook: list of customer callback URLs (comma-separated)
     WEBHOOK_URLS: str = ""
 
+    # Webhook signing secret (HMAC-SHA256) — set in production
+    WEBHOOK_SECRET: str = ""
+
     # File storage (persistent volumes — keep outside app dir for deploys)
     UPLOAD_DIR: str = "./uploads"
     QR_CODE_DIR: str = "./qrcodes"

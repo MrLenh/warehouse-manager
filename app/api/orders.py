@@ -15,7 +15,14 @@ from app.schemas.order import AddressUpdate, BuyLabelRequest, OrderCreate, Order
 from easypost.errors import EasyPostError
 
 from app.services import auth_service, order_service, shipping_service
-from app.services.webhook_service import send_webhook
+from app.services.webhook_service import (
+    EVENT_ORDER_CANCELLED,
+    EVENT_ORDER_CREATED,
+    EVENT_ORDER_LABEL_PURCHASED,
+    EVENT_ORDER_STATUS_CHANGED,
+    EVENT_ORDER_UPDATED,
+    send_webhook,
+)
 
 from app.models.picking import PickItem, PickingList, PickingListStatus
 
@@ -43,9 +50,9 @@ EXPORT_CSV_COLUMNS = [
 ]
 
 
-def _fire_webhook(order):
+def _fire_webhook(order, event_type=EVENT_ORDER_UPDATED):
     """Run async webhook in background."""
-    asyncio.run(send_webhook(order))
+    asyncio.run(send_webhook(order, event_type=event_type))
 
 
 def _enrich_order(order, db: Session) -> dict:
@@ -75,7 +82,7 @@ def create_order(data: OrderCreate, request: Request, background_tasks: Backgrou
     except ValueError as e:
         raise HTTPException(400, str(e))
     auth_service.log_activity(db, user.id, user.username, "create_order", detail=f"Order {order.order_number}", ip=request.client.host if request.client else "")
-    background_tasks.add_task(_fire_webhook, order)
+    background_tasks.add_task(_fire_webhook, order, EVENT_ORDER_CREATED)
     return order
 
 
@@ -583,7 +590,7 @@ def update_status(
         check_batch_done(db, order_id)
 
     auth_service.log_activity(db, user.id, user.username, "update_order_status", detail=f"{order.order_number} → {data.status}", ip=request.client.host if request.client else "")
-    background_tasks.add_task(_fire_webhook, order)
+    background_tasks.add_task(_fire_webhook, order, EVENT_ORDER_STATUS_CHANGED)
     return order
 
 
@@ -603,7 +610,7 @@ def reprocess_order(
     if not order:
         raise HTTPException(404, "Order not found")
     auth_service.log_activity(db, user.id, user.username, "reprocess_order", detail=f"{order.order_number} → {order.status}", ip=request.client.host if request.client else "")
-    background_tasks.add_task(_fire_webhook, order)
+    background_tasks.add_task(_fire_webhook, order, EVENT_ORDER_STATUS_CHANGED)
     return order
 
 
@@ -616,7 +623,7 @@ def cancel_order(order_id: str, request: Request, background_tasks: BackgroundTa
     if not order:
         raise HTTPException(404, "Order not found")
     auth_service.log_activity(db, user.id, user.username, "cancel_order", detail=order.order_number, ip=request.client.host if request.client else "")
-    background_tasks.add_task(_fire_webhook, order)
+    background_tasks.add_task(_fire_webhook, order, EVENT_ORDER_CANCELLED)
     return order
 
 
@@ -703,7 +710,7 @@ def buy_label(
     except EasyPostError as e:
         raise HTTPException(400, f"Shipping API error: {e}")
     auth_service.log_activity(db, user.id, user.username, "buy_label", detail=f"{order.order_number} {data.carrier} {data.service}", ip=request.client.host if request.client else "")
-    background_tasks.add_task(_fire_webhook, order)
+    background_tasks.add_task(_fire_webhook, order, EVENT_ORDER_LABEL_PURCHASED)
     return order
 
 
@@ -734,7 +741,7 @@ def rebuy_label(
     except EasyPostError as e:
         raise HTTPException(400, f"Shipping API error: {e}")
     auth_service.log_activity(db, user.id, user.username, "rebuy_label", detail=f"{order.order_number} {data.carrier} {data.service}", ip=request.client.host if request.client else "")
-    background_tasks.add_task(_fire_webhook, order)
+    background_tasks.add_task(_fire_webhook, order, EVENT_ORDER_LABEL_PURCHASED)
     return order
 
 

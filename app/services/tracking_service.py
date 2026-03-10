@@ -123,10 +123,23 @@ def check_tracking_updates(db: Session) -> dict:
                 # Only save revert snapshot for orders that were actually changed
                 revert_snapshots.append(snapshot_before)
 
-                # Fire outgoing webhook
+                # Fire outgoing webhook with proper event type
                 try:
-                    from app.services.webhook_service import send_webhook_sync
-                    send_webhook_sync(order)
+                    from app.services.webhook_service import (
+                        EVENT_ORDER_DELIVERED,
+                        EVENT_ORDER_IN_TRANSIT,
+                        EVENT_ORDER_SHIPPED,
+                        EVENT_TRACKING_UPDATED,
+                        send_webhook_sync,
+                    )
+                    evt = EVENT_TRACKING_UPDATED
+                    if new_status == OrderStatus.DELIVERED:
+                        evt = EVENT_ORDER_DELIVERED
+                    elif new_status == OrderStatus.IN_TRANSIT:
+                        evt = EVENT_ORDER_IN_TRANSIT
+                    elif order_updated and order.status == OrderStatus.SHIPPED:
+                        evt = EVENT_ORDER_SHIPPED
+                    send_webhook_sync(order, event_type=evt)
                 except Exception as e:
                     logger.error("Webhook failed for %s: %s", order.order_number, e)
 

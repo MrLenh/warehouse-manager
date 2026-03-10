@@ -1,5 +1,10 @@
+import hashlib
+import hmac
 import json
 import logging
+import time
+import uuid
+from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import func as sa_func
@@ -8,6 +13,19 @@ from app.config import settings
 from app.models.order import Order
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Event types (follows Stripe/Shopify convention: resource.action)
+# ---------------------------------------------------------------------------
+EVENT_ORDER_CREATED = "order.created"
+EVENT_ORDER_UPDATED = "order.updated"
+EVENT_ORDER_CANCELLED = "order.cancelled"
+EVENT_ORDER_STATUS_CHANGED = "order.status_changed"
+EVENT_ORDER_LABEL_PURCHASED = "order.label_purchased"
+EVENT_ORDER_SHIPPED = "order.shipped"
+EVENT_ORDER_IN_TRANSIT = "order.in_transit"
+EVENT_ORDER_DELIVERED = "order.delivered"
+EVENT_TRACKING_UPDATED = "tracking.updated"
 
 # Available fields for custom webhook payload.
 # Each key maps to a (label, resolver) where resolver takes (order, item) and returns the value.
@@ -39,40 +57,118 @@ AVAILABLE_WEBHOOK_FIELDS = {
 # Fields that require line-item iteration
 ITEM_LEVEL_FIELDS = {"id", "sku", "product_name", "variant_label", "variant_sku", "quantity", "unit_price"}
 
+# Retry config
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = [1, 2, 4]  # exponential backoff
 
-def _build_payload(order: Order) -> dict:
+
+# ---------------------------------------------------------------------------
+# HMAC-SHA256 Signature (follows Stripe/GitHub/Shopify standard)
+# ---------------------------------------------------------------------------
+def _compute_signature(payload_bytes: bytes, timestamp: str, secret: str) -> str:
+    """Compute HMAC-SHA256 signature over 'timestamp.payload'."""
+    signed_content = f"{timestamp}.".encode() + payload_bytes
+    return hmac.new(secret.encode(), signed_content, hashlib.sha256).hexdigest()
+
+
+def verify_webhook_signature(payload_bytes: bytes, signature_header: str, secret: str) -> bool:
+    """Verify incoming webhook signature. Header format: 't=<timestamp>,v1=<sig>'."""
+    if not signature_header or not secret:
+        return False
+    parts = {}
+    for part in signature_header.split(","):
+        key, _, value = part.partition("=")
+        parts[key.strip()] = value.strip()
+    timestamp = parts.get("t", "")
+    expected_sig = parts.get("v1", "")
+    if not timestamp or not expected_sig:
+        return False
+    computed = _compute_signature(payload_bytes, timestamp, secret)
+    return hmac.compare_digest(computed, expected_sig)
+
+
+# ---------------------------------------------------------------------------
+# Standard event envelope (follows Stripe event object pattern)
+# ---------------------------------------------------------------------------
+def _build_event_envelope(event_type: str, order: Order, data: dict) -> dict:
+    """Wrap payload in a standard event envelope with id, type, timestamp."""
     return {
-        "event": "order_update",
+        "id": f"evt_{uuid.uuid4().hex}",
+        "object": "event",
+        "type": event_type,
+        "api_version": "2024-01-01",
+        "created": int(datetime.now(timezone.utc).timestamp()),
+        "data": {
+            "object": data,
+        },
+    }
+
+
+def _build_order_data(order: Order) -> dict:
+    """Build the order data object for the webhook payload."""
+    items = []
+    if hasattr(order, "items") and order.items:
+        for item in order.items:
+            items.append({
+                "id": item.id,
+                "sku": item.sku,
+                "variant_sku": item.variant_sku or "",
+                "variant_label": item.variant_label or "",
+                "product_name": item.product_name or "",
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+            })
+
+    status_val = order.status if isinstance(order.status, str) else order.status.value
+
+    return {
+        "object": "order",
+        "id": order.id,
         "order_number": order.order_number,
         "order_name": order.order_name or "",
-        "status": order.status if isinstance(order.status, str) else order.status.value,
-        "customer_name": order.customer_name,
-        "customer_email": order.customer_email,
+        "status": status_val,
+        "customer": {
+            "name": order.customer_name,
+            "email": order.customer_email,
+            "phone": getattr(order, "customer_phone", "") or "",
+        },
         "shop_name": order.shop_name or "",
-        "pricing": {
-            "shipping_cost": order.shipping_cost,
-            "processing_fee": order.processing_fee,
-            "total_price": order.total_price,
-        },
-        "tracking": {
-            "tracking_number": order.tracking_number,
-            "tracking_status": order.tracking_status,
-            "tracking_url": order.tracking_url,
-            "carrier": order.carrier or "",
-            "service": order.service or "",
-            "carrier_label_url": order.label_url,
-        },
         "shipping_address": {
             "name": order.ship_to_name or "",
-            "street1": order.ship_to_street1 or "",
-            "street2": order.ship_to_street2 or "",
+            "line1": order.ship_to_street1 or "",
+            "line2": order.ship_to_street2 or "",
             "city": order.ship_to_city or "",
             "state": order.ship_to_state or "",
-            "zip": order.ship_to_zip or "",
+            "postal_code": order.ship_to_zip or "",
             "country": order.ship_to_country or "",
         },
-        "status_history": json.loads(order.status_history) if order.status_history else [],
+        "shipping": {
+            "carrier": order.carrier or "",
+            "service": order.service or "",
+            "tracking_number": order.tracking_number or "",
+            "tracking_status": order.tracking_status or "",
+            "tracking_url": order.tracking_url or "",
+            "label_url": order.label_url or "",
+        },
+        "amount": {
+            "shipping": order.shipping_cost,
+            "processing_fee": order.processing_fee,
+            "total": order.total_price,
+            "currency": "usd",
+        },
+        "items": items,
+        "metadata": {
+            "status_history": json.loads(order.status_history) if order.status_history else [],
+        },
+        "created_at": order.created_at.isoformat() + "Z" if order.created_at else None,
+        "updated_at": order.updated_at.isoformat() + "Z" if order.updated_at else None,
     }
+
+
+def _build_payload(order: Order, event_type: str = EVENT_ORDER_UPDATED) -> dict:
+    """Build standard webhook payload with event envelope."""
+    order_data = _build_order_data(order)
+    return _build_event_envelope(event_type, order, order_data)
 
 
 def _build_custom_payloads(order: Order, fields: list[str]) -> list[dict]:
@@ -155,7 +251,87 @@ def _collect_webhook_urls(order: Order) -> list[str]:
     return urls
 
 
-async def send_webhook(order: Order) -> list[dict]:
+# ---------------------------------------------------------------------------
+# HTTP delivery with signature headers and retry
+# ---------------------------------------------------------------------------
+def _build_headers(payload_bytes: bytes) -> dict[str, str]:
+    """Build standard webhook HTTP headers with HMAC signature."""
+    webhook_id = f"msg_{uuid.uuid4().hex}"
+    timestamp = str(int(time.time()))
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "WarehouseManager-Webhook/1.0",
+        "X-Webhook-Id": webhook_id,
+        "X-Webhook-Timestamp": timestamp,
+    }
+
+    if settings.WEBHOOK_SECRET:
+        signature = _compute_signature(payload_bytes, timestamp, settings.WEBHOOK_SECRET)
+        headers["X-Webhook-Signature"] = f"t={timestamp},v1={signature}"
+
+    return headers
+
+
+async def _deliver_async(client: httpx.AsyncClient, url: str, payload: dict) -> dict:
+    """Deliver a webhook with retry and exponential backoff."""
+    payload_bytes = json.dumps(payload, default=str).encode()
+    headers = _build_headers(payload_bytes)
+
+    last_error = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = await client.post(url, content=payload_bytes, headers=headers)
+            if resp.is_success:
+                return {"url": url, "status": resp.status_code, "success": True, "attempt": attempt + 1}
+            # 4xx = don't retry (client error), 5xx = retry
+            if 400 <= resp.status_code < 500:
+                return {"url": url, "status": resp.status_code, "success": False, "attempt": attempt + 1}
+            last_error = f"HTTP {resp.status_code}"
+        except Exception as e:
+            last_error = str(e)
+
+        # Backoff before retry
+        if attempt < MAX_RETRIES:
+            await _async_sleep(RETRY_BACKOFF_SECONDS[attempt])
+
+    logger.error(f"Webhook delivery failed after {MAX_RETRIES + 1} attempts for {url}: {last_error}")
+    return {"url": url, "status": 0, "success": False, "error": last_error, "attempt": MAX_RETRIES + 1}
+
+
+async def _async_sleep(seconds: float):
+    import asyncio
+    await asyncio.sleep(seconds)
+
+
+def _deliver_sync(client: httpx.Client, url: str, payload: dict) -> dict:
+    """Deliver a webhook synchronously with retry and exponential backoff."""
+    payload_bytes = json.dumps(payload, default=str).encode()
+    headers = _build_headers(payload_bytes)
+
+    last_error = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = client.post(url, content=payload_bytes, headers=headers)
+            if resp.is_success:
+                return {"url": url, "status": resp.status_code, "success": True, "attempt": attempt + 1}
+            if 400 <= resp.status_code < 500:
+                return {"url": url, "status": resp.status_code, "success": False, "attempt": attempt + 1}
+            last_error = f"HTTP {resp.status_code}"
+        except Exception as e:
+            last_error = str(e)
+
+        if attempt < MAX_RETRIES:
+            time.sleep(RETRY_BACKOFF_SECONDS[attempt])
+
+    logger.error(f"Webhook delivery failed after {MAX_RETRIES + 1} attempts for {url}: {last_error}")
+    return {"url": url, "status": 0, "success": False, "error": last_error, "attempt": MAX_RETRIES + 1}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+async def send_webhook(order: Order, event_type: str = EVENT_ORDER_UPDATED) -> list[dict]:
     """Send order update to all configured webhook URLs + order-specific URL + customer URL."""
     general_urls = _collect_webhook_urls(order)
     customer_url, customer_fields = _resolve_customer_webhook(order)
@@ -163,42 +339,30 @@ async def send_webhook(order: Order) -> list[dict]:
     if not general_urls and not customer_url:
         return []
 
-    default_payload = _build_payload(order)
+    default_payload = _build_payload(order, event_type)
     results = []
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         # Send default payload to global + per-order URLs
         for url in general_urls:
-            try:
-                resp = await client.post(url, json=default_payload)
-                results.append({"url": url, "status": resp.status_code, "success": resp.is_success})
-            except Exception as e:
-                logger.error(f"Webhook failed for {url}: {e}")
-                results.append({"url": url, "status": 0, "success": False, "error": str(e)})
+            result = await _deliver_async(client, url, default_payload)
+            results.append(result)
 
         # Send to customer webhook URL (with custom payload if configured)
         if customer_url and customer_url not in general_urls:
             if customer_fields:
                 payloads = _build_custom_payloads(order, customer_fields)
                 for payload in payloads:
-                    try:
-                        resp = await client.post(customer_url, json=payload)
-                        results.append({"url": customer_url, "status": resp.status_code, "success": resp.is_success})
-                    except Exception as e:
-                        logger.error(f"Webhook failed for {customer_url}: {e}")
-                        results.append({"url": customer_url, "status": 0, "success": False, "error": str(e)})
+                    result = await _deliver_async(client, customer_url, payload)
+                    results.append(result)
             else:
-                try:
-                    resp = await client.post(customer_url, json=default_payload)
-                    results.append({"url": customer_url, "status": resp.status_code, "success": resp.is_success})
-                except Exception as e:
-                    logger.error(f"Webhook failed for {customer_url}: {e}")
-                    results.append({"url": customer_url, "status": 0, "success": False, "error": str(e)})
+                result = await _deliver_async(client, customer_url, default_payload)
+                results.append(result)
 
     return results
 
 
-def send_webhook_sync(order: Order) -> list[dict]:
+def send_webhook_sync(order: Order, event_type: str = EVENT_ORDER_UPDATED) -> list[dict]:
     """Synchronous version of webhook sender."""
     general_urls = _collect_webhook_urls(order)
     customer_url, customer_fields = _resolve_customer_webhook(order)
@@ -206,36 +370,24 @@ def send_webhook_sync(order: Order) -> list[dict]:
     if not general_urls and not customer_url:
         return []
 
-    default_payload = _build_payload(order)
+    default_payload = _build_payload(order, event_type)
     results = []
 
     with httpx.Client(timeout=10.0) as client:
         # Send default payload to global + per-order URLs
         for url in general_urls:
-            try:
-                resp = client.post(url, json=default_payload)
-                results.append({"url": url, "status": resp.status_code, "success": resp.is_success})
-            except Exception as e:
-                logger.error(f"Webhook failed for {url}: {e}")
-                results.append({"url": url, "status": 0, "success": False, "error": str(e)})
+            result = _deliver_sync(client, url, default_payload)
+            results.append(result)
 
         # Send to customer webhook URL (with custom payload if configured)
         if customer_url and customer_url not in general_urls:
             if customer_fields:
                 payloads = _build_custom_payloads(order, customer_fields)
                 for payload in payloads:
-                    try:
-                        resp = client.post(customer_url, json=payload)
-                        results.append({"url": customer_url, "status": resp.status_code, "success": resp.is_success})
-                    except Exception as e:
-                        logger.error(f"Webhook failed for {customer_url}: {e}")
-                        results.append({"url": customer_url, "status": 0, "success": False, "error": str(e)})
+                    result = _deliver_sync(client, customer_url, payload)
+                    results.append(result)
             else:
-                try:
-                    resp = client.post(customer_url, json=default_payload)
-                    results.append({"url": customer_url, "status": resp.status_code, "success": resp.is_success})
-                except Exception as e:
-                    logger.error(f"Webhook failed for {customer_url}: {e}")
-                    results.append({"url": customer_url, "status": 0, "success": False, "error": str(e)})
+                result = _deliver_sync(client, customer_url, default_payload)
+                results.append(result)
 
     return results

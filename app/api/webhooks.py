@@ -7,7 +7,13 @@ from app.database import get_db
 from app.models.order import Order, OrderStatus
 from app.services import order_service
 from app.services.order_service import _add_status_history
-from app.services.webhook_service import send_webhook_sync
+from app.services.webhook_service import (
+    EVENT_ORDER_DELIVERED,
+    EVENT_ORDER_IN_TRANSIT,
+    EVENT_ORDER_SHIPPED,
+    EVENT_TRACKING_UPDATED,
+    send_webhook_sync,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +25,13 @@ _TRACKING_TO_ORDER_STATUS = {
     "in_transit": OrderStatus.IN_TRANSIT,
     "out_for_delivery": OrderStatus.IN_TRANSIT,
     "delivered": OrderStatus.DELIVERED,
+}
+
+# Map order status to webhook event type
+_STATUS_TO_EVENT = {
+    OrderStatus.SHIPPED: EVENT_ORDER_SHIPPED,
+    OrderStatus.IN_TRANSIT: EVENT_ORDER_IN_TRANSIT,
+    OrderStatus.DELIVERED: EVENT_ORDER_DELIVERED,
 }
 
 # Statuses that haven't been "shipped" yet — need SHIPPED step first
@@ -83,6 +96,7 @@ async def easypost_webhook(request: Request, db: Session = Depends(get_db)):
     # Auto-update order status based on tracking status
     current = order.status if isinstance(order.status, str) else order.status.value
     order_status_updated = False
+    webhook_event = EVENT_TRACKING_UPDATED
 
     # If order hasn't been marked as shipped yet, first transition to SHIPPED
     if order.status in _PRE_SHIPPED or current in _PRE_SHIPPED:
@@ -90,6 +104,7 @@ async def easypost_webhook(request: Request, db: Session = Depends(get_db)):
         _add_status_history(order, OrderStatus.SHIPPED, f"First carrier scan from EasyPost: {tracking_status} ({status_detail})")
         order_status_updated = True
         current = OrderStatus.SHIPPED.value
+        webhook_event = EVENT_ORDER_SHIPPED
 
     # Then apply the target status (in_transit, delivered, etc.)
     new_order_status = _TRACKING_TO_ORDER_STATUS.get(tracking_status)
@@ -97,6 +112,7 @@ async def easypost_webhook(request: Request, db: Session = Depends(get_db)):
         order.status = new_order_status
         _add_status_history(order, new_order_status, f"EasyPost tracking: {tracking_status} ({status_detail})")
         order_status_updated = True
+        webhook_event = _STATUS_TO_EVENT.get(new_order_status, EVENT_TRACKING_UPDATED)
 
     db.commit()
     db.refresh(order)
@@ -104,7 +120,7 @@ async def easypost_webhook(request: Request, db: Session = Depends(get_db)):
     # Fire outgoing webhook to customer
     if order_status_updated or old_tracking_status != tracking_status:
         try:
-            send_webhook_sync(order)
+            send_webhook_sync(order, event_type=webhook_event)
         except Exception as e:
             logger.error("Failed to send outgoing webhook for order %s: %s", order.order_number, e)
 

@@ -145,31 +145,97 @@ tr:hover{background:#f8f9ff}
         <div>
           <h4 style="font-size:13px;color:#667eea;margin-bottom:8px">Default Payload (Full)</h4>
           <pre style="background:#f8f9fa;border:1px solid #e8e8e8;border-radius:8px;padding:14px;font-size:11px;overflow-x:auto;line-height:1.5">{
-  "event": "order_update",
-  "order_number": "ORD-20260304-ABC123",
-  "order_name": "Don hang A",
-  "status": "shipped",
-  "customer_name": "Nguyen Van A",
-  "customer_email": "a@email.com",
-  "shop_name": "Shop ABC",
-  "pricing": { "shipping_cost": 8.50, ... },
-  "tracking": { "tracking_number": "...", ... },
-  "shipping_address": { "name": "...", ... },
-  "status_history": [...]
+  "id": "evt_a1b2c3d4e5f6...",
+  "object": "event",
+  "type": "order.shipped",
+  "api_version": "2024-01-01",
+  "created": 1741276048,
+  "data": {
+    "object": {
+      "object": "order",
+      "id": "ORD-20260306083523-AA3001",
+      "order_number": "FLWSP283971",
+      "order_name": "#FLWSP283971",
+      "status": "shipped",
+      "customer": {
+        "name": "UOYMedia",
+        "email": "calisestudios2@gmail.com",
+        "phone": "(954) 401-6498"
+      },
+      "shop_name": "Flagwix",
+      "shipping_address": {
+        "name": "Robert Calise",
+        "line1": "522 NW 162nd Ave",
+        "line2": "",
+        "city": "Pembroke Pines",
+        "state": "FL",
+        "postal_code": "33028",
+        "country": "US"
+      },
+      "shipping": {
+        "carrier": "USPS",
+        "service": "GroundAdvantage",
+        "tracking_number": "9400136208303466391466",
+        "tracking_status": "PRE_TRANSIT",
+        "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400136208303466391466",
+        "label_url": ""
+      },
+      "amount": {
+        "shipping": 5.45,
+        "processing_fee": 0,
+        "total": 7.70,
+        "currency": "usd"
+      },
+      "items": [
+        {
+          "id": "ITEM-001",
+          "sku": "EMBGFUS250",
+          "variant_sku": "",
+          "variant_label": "5x8ft",
+          "product_name": "Grommet Flag MLN-1786-TTH",
+          "quantity": 1,
+          "unit_price": 0.00
+        },
+        {
+          "id": "ITEM-002",
+          "sku": "EMBGFWTP",
+          "variant_sku": "",
+          "variant_label": "5x8ft",
+          "product_name": "Grommet Flag MLN6217TTH",
+          "quantity": 1,
+          "unit_price": 0.00
+        }
+      ],
+      "metadata": {
+        "status_history": [
+          {"status": "processing", "at": "2026-03-06T08:35:23Z"},
+          {"status": "shipped", "at": "2026-03-06T15:07:28Z"}
+        ]
+      },
+      "created_at": "2026-03-06T08:35:23Z",
+      "updated_at": "2026-03-06T15:07:28Z"
+    }
+  }
 }</pre>
         </div>
         <div>
           <h4 style="font-size:13px;color:#667eea;margin-bottom:8px">Custom Payload (Ví dụ)</h4>
           <pre style="background:#f8f9fa;border:1px solid #e8e8e8;border-radius:8px;padding:14px;font-size:11px;overflow-x:auto;line-height:1.5">// Chọn fields trong Edit Webhook
 // Nếu chọn item-level fields → gửi per line item
+// Ví dụ: order #FLWSP283971, item 1/2
 {
-  "id": "item-uuid-001",
-  "order_number": "ORD-20260304-ABC123",
+  "id": "ITEM-001",
+  "order_number": "#FLWSP283971",
+  "sku": "EMBGFUS250",
+  "product_name": "Grommet Flag MLN-1786-TTH",
+  "variant_label": "5x8ft",
+  "quantity": 1,
   "carrier_code": "USPS",
-  "tracking_number": "1212xxx2123",
-  "tracking_url": "https://track.example.com/...",
-  "base_cost": 1.75,
-  "shipping_cost": 8.50
+  "tracking_number": "9400136208303466391466",
+  "tracking_url": "https://tools.usps.com/go/Track...91466",
+  "tracking_status": "PRE_TRANSIT",
+  "base_cost": 0,
+  "shipping_cost": 5.45
 }</pre>
         </div>
       </div>

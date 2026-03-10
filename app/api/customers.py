@@ -405,46 +405,111 @@ def test_customer_webhook(customer_id: str, user: User = Depends(get_current_use
             fields = []
 
     if fields:
-        # Build sample custom payload with test data
+        # Build sample custom payload with test data (based on real order #FLWSP283971)
         payload = {}
         for f in fields:
             if f not in AVAILABLE_WEBHOOK_FIELDS:
                 continue
             sample_values = {
-                "id": "item-test-001",
-                "order_number": "ORD-TEST-001",
-                "order_name": "Test Order",
+                "id": "ITEM-001",
+                "order_number": "#FLWSP283971",
+                "order_name": "#FLWSP283971",
                 "status": "shipped",
                 "customer_name": c.name,
-                "customer_email": c.email,
-                "shop_name": "Test Shop",
+                "customer_email": c.email or "calisestudios2@gmail.com",
+                "shop_name": "Flagwix",
                 "carrier_code": "USPS",
                 "service": "GroundAdvantage",
-                "tracking_number": "9400111899223100001234",
-                "tracking_url": "https://track.example.com/9400111899223100001234",
-                "tracking_status": "in_transit",
-                "shipping_cost": 8.50,
-                "base_cost": 1.75,
-                "total_price": 10.25,
-                "sku": "SKU-TEST-001",
-                "product_name": "Test Product",
-                "variant_label": "Red / M",
-                "quantity": 2,
-                "unit_price": 15.99,
+                "tracking_number": "9400136208303466391466",
+                "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400136208303466391466",
+                "tracking_status": "PRE_TRANSIT",
+                "shipping_cost": 5.45,
+                "base_cost": 0,
+                "total_price": 7.70,
+                "sku": "EMBGFUS250",
+                "product_name": "Grommet Flag MLN-1786-TTH",
+                "variant_label": "5x8ft",
+                "variant_sku": "",
+                "quantity": 1,
+                "unit_price": 0.00,
             }
             payload[f] = sample_values.get(f, "")
     else:
-        payload = {
-            "event": "test",
-            "customer_name": c.name,
-            "customer_email": c.email,
+        from app.services.webhook_service import _build_event_envelope
+        # Default full payload test (based on real order #FLWSP283971)
+        payload = _build_event_envelope("order.shipped", None, {
+            "object": "order",
+            "id": "ORD-20260306083523-AA3001",
+            "order_number": "FLWSP283971",
+            "order_name": "#FLWSP283971",
+            "status": "shipped",
+            "customer": {
+                "name": c.name,
+                "email": c.email or "calisestudios2@gmail.com",
+                "phone": "(954) 401-6498",
+            },
+            "shop_name": "Flagwix",
+            "shipping_address": {
+                "name": "Robert Calise",
+                "line1": "522 NW 162nd Ave",
+                "line2": "",
+                "city": "Pembroke Pines",
+                "state": "FL",
+                "postal_code": "33028",
+                "country": "US",
+            },
+            "shipping": {
+                "carrier": "USPS",
+                "service": "GroundAdvantage",
+                "tracking_number": "9400136208303466391466",
+                "tracking_status": "PRE_TRANSIT",
+                "tracking_url": "https://tools.usps.com/go/TrackConfirmAction?tLabels=9400136208303466391466",
+                "label_url": "",
+            },
+            "amount": {
+                "shipping": 5.45,
+                "processing_fee": 0,
+                "total": 7.70,
+                "currency": "usd",
+            },
+            "items": [
+                {
+                    "id": "ITEM-001",
+                    "sku": "EMBGFUS250",
+                    "variant_sku": "",
+                    "variant_label": "5x8ft",
+                    "product_name": "Grommet Flag MLN-1786-TTH",
+                    "quantity": 1,
+                    "unit_price": 0.00,
+                },
+                {
+                    "id": "ITEM-002",
+                    "sku": "EMBGFWTP",
+                    "variant_sku": "",
+                    "variant_label": "5x8ft",
+                    "product_name": "Grommet Flag MLN6217TTH",
+                    "quantity": 1,
+                    "unit_price": 0.00,
+                },
+            ],
+            "metadata": {
+                "status_history": [
+                    {"status": "processing", "at": "2026-03-06T08:35:23Z"},
+                    {"status": "shipped", "at": "2026-03-06T15:07:28Z"},
+                ],
+            },
+            "created_at": "2026-03-06T08:35:23Z",
+            "updated_at": "2026-03-06T15:07:28Z",
             "message": "This is a test webhook from Warehouse Manager.",
-            "timestamp": datetime.utcnow().isoformat(),
-        }
+        })
 
     try:
+        import json as _json2
+        from app.services.webhook_service import _build_headers
+        payload_bytes = _json2.dumps(payload, default=str).encode()
+        headers = _build_headers(payload_bytes)
         with httpx.Client(timeout=10.0) as client:
-            resp = client.post(c.webhook_url.strip(), json=payload)
+            resp = client.post(c.webhook_url.strip(), content=payload_bytes, headers=headers)
             return {
                 "success": resp.is_success,
                 "status_code": resp.status_code,

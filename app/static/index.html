@@ -377,7 +377,9 @@ tr:hover{background:#f8f9ff}
     <div class="report-grid" id="report-cards"></div>
     <div class="card" style="margin-bottom:16px">
       <h3 style="margin-bottom:12px">Orders by Date</h3>
-      <canvas id="orders-chart" height="260"></canvas>
+      <div style="position:relative;width:100%;max-height:1000px;height:400px">
+        <canvas id="orders-chart"></canvas>
+      </div>
     </div>
     <div class="card">
       <h3>Top Selling Products</h3>
@@ -2782,7 +2784,7 @@ async function loadReports() {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
-        x: { grid: { display: false } },
+        x: { grid: { display: false }, ticks: { maxRotation: 45, autoSkip: true } },
         y: { beginAtZero: true, ticks: { precision: 0 } }
       },
       plugins: { legend: { display: false } }
