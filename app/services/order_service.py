@@ -665,6 +665,44 @@ def reprocess_order(db: Session, order_id: str) -> Order | None:
     return order
 
 
+def open_order(db: Session, order_id: str) -> Order | None:
+    """Open a pending order.
+    - If order is in a batch: set to processing.
+    - If order has tracking: set to label_purchased.
+    - Otherwise: set to confirmed.
+    """
+    order = get_order(db, order_id)
+    if not order:
+        return None
+    if order.status != OrderStatus.PENDING:
+        raise ValueError(f"Only pending orders can be opened (current: {order.status})")
+
+    # Check if order is in a batch
+    pick_items = (
+        db.query(PickItem)
+        .join(PickingList)
+        .filter(
+            PickItem.order_id == order.id,
+            PickingList.status.in_([PickingListStatus.ACTIVE, PickingListStatus.PROCESSING, PickingListStatus.DONE]),
+        )
+        .all()
+    )
+
+    if pick_items:
+        order.status = OrderStatus.PROCESSING
+        _add_status_history(order, OrderStatus.PROCESSING, "Opened: order is in a batch")
+    elif order.tracking_number:
+        order.status = OrderStatus.LABEL_PURCHASED
+        _add_status_history(order, OrderStatus.LABEL_PURCHASED, "Opened: has tracking number")
+    else:
+        order.status = OrderStatus.CONFIRMED
+        _add_status_history(order, OrderStatus.CONFIRMED, "Opened: returned to confirmed")
+
+    db.commit()
+    db.refresh(order)
+    return order
+
+
 def cancel_order(db: Session, order_id: str) -> Order | None:
     order = get_order(db, order_id)
     if not order:

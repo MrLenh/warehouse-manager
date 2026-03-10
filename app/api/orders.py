@@ -614,6 +614,26 @@ def reprocess_order(
     return order
 
 
+@router.post("/{order_id}/open", response_model=OrderOut)
+def open_order(
+    order_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Open a pending order. In-batch → processing, has tracking → label_purchased, otherwise → confirmed."""
+    try:
+        order = order_service.open_order(db, order_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not order:
+        raise HTTPException(404, "Order not found")
+    auth_service.log_activity(db, user.id, user.username, "open_order", detail=f"{order.order_number} → {order.status}", ip=request.client.host if request.client else "")
+    background_tasks.add_task(_fire_webhook, order, EVENT_ORDER_STATUS_CHANGED)
+    return order
+
+
 @router.post("/{order_id}/cancel", response_model=OrderOut)
 def cancel_order(order_id: str, request: Request, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
