@@ -172,32 +172,40 @@ def _build_payload(order: Order, event_type: str = EVENT_ORDER_UPDATED) -> dict:
 
 
 def _build_custom_payloads(order: Order, fields: list[str], event_type: str = EVENT_ORDER_UPDATED) -> list[dict]:
-    """Build custom payload(s) with only the selected fields, wrapped in the default event envelope.
+    """Build a single custom payload with only the selected fields, wrapped in the default event envelope.
 
-    If any item-level field is selected, returns one envelope per line item.
-    Otherwise returns a single envelope for the order.
+    If any item-level field is selected, all line items are included in an 'items' array
+    within the single payload. Order-level fields remain at the top level.
     """
     valid_fields = [f for f in fields if f in AVAILABLE_WEBHOOK_FIELDS]
     if not valid_fields:
         return [_build_payload(order, event_type)]
 
     has_item_fields = any(f in ITEM_LEVEL_FIELDS for f in valid_fields)
+    order_level_fields = [f for f in valid_fields if f not in ITEM_LEVEL_FIELDS]
+    item_level_fields = [f for f in valid_fields if f in ITEM_LEVEL_FIELDS]
 
+    # Build order-level data
+    data = {}
+    for field in order_level_fields:
+        resolver = AVAILABLE_WEBHOOK_FIELDS[field][1]
+        data[field] = resolver(order, None)
+
+    # Build items array if item-level fields are selected
     if has_item_fields and hasattr(order, "items") and order.items:
-        payloads = []
+        items_list = []
         for item in order.items:
-            data = {}
-            for field in valid_fields:
+            item_data = {}
+            for field in item_level_fields:
                 resolver = AVAILABLE_WEBHOOK_FIELDS[field][1]
-                data[field] = resolver(order, item)
-            payloads.append(_build_event_envelope(event_type, order, data))
-        return payloads
-    else:
-        data = {}
-        for field in valid_fields:
-            resolver = AVAILABLE_WEBHOOK_FIELDS[field][1]
-            data[field] = resolver(order, None)
-        return [_build_event_envelope(event_type, order, data)]
+                item_data[field] = resolver(order, item)
+            items_list.append(item_data)
+        data["items"] = items_list
+    elif has_item_fields:
+        # No items on order, include empty array
+        data["items"] = []
+
+    return [_build_event_envelope(event_type, order, data)]
 
 
 def _resolve_customer_webhook(order: Order) -> tuple[str, list[str]]:
