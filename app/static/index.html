@@ -2182,10 +2182,16 @@ async function viewOrder(id) {
     if (o.status === 'drop_off') {
       footerHtml += `<button class="btn" style="background:#6f42c1;color:#fff" onclick="reprocessOrder('${o.id}','${esc(o.order_number)}')">Re-process</button>`;
     }
+    if (o.status === 'pending') {
+      footerHtml += `<button class="btn" style="background:#28a745;color:#fff" onclick="openOrder('${o.id}')">Open Order</button>`;
+    }
     if (o.status !== 'pending') {
       footerHtml += `<button class="btn btn-warning" onclick="updateOrderStatus('${o.id}','pending')">Pending</button>`;
     }
     footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}', ${!!o.label_url})">Cancel Order</button>`;
+  }
+  if (o.status === 'cancelled') {
+    footerHtml += `<button class="btn" style="background:#28a745;color:#fff" onclick="openOrder('${o.id}')">Open Order</button>`;
   }
   if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin')) {
     footerHtml += `<button class="btn btn-danger" style="background:#721c24" onclick="deleteOrder('${o.id}','${esc(o.order_number)}')">Delete Order</button>`;
@@ -2203,6 +2209,13 @@ async function updateOrderStatus(id, status) {
 async function updateOrderPriority(id, priority) {
   const res = await fetch(API + '/orders/' + id, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({priority}) });
   if (res.ok) { toast('Priority updated'); loadOrders(); }
+  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function openOrder(id) {
+  if (!confirm('Open this order?')) return;
+  const res = await fetch(API + '/orders/' + id + '/open', { method: 'POST' });
+  if (res.ok) { toast('Order opened'); closeModal('order-detail-modal'); loadOrders(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 

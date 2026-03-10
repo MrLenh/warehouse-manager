@@ -622,7 +622,7 @@ def open_order(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Open a pending order. In-batch → processing, has tracking → label_purchased, otherwise → confirmed."""
+    """Open a pending/cancelled order. In-batch → processing, has tracking → label_purchased, otherwise → confirmed."""
     try:
         order = order_service.open_order(db, order_id)
     except ValueError as e:

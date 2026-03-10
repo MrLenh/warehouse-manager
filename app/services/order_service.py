@@ -666,7 +666,7 @@ def reprocess_order(db: Session, order_id: str) -> Order | None:
 
 
 def open_order(db: Session, order_id: str) -> Order | None:
-    """Open a pending order.
+    """Open a pending or cancelled order.
     - If order is in a batch: set to processing.
     - If order has tracking: set to label_purchased.
     - Otherwise: set to confirmed.
@@ -674,8 +674,8 @@ def open_order(db: Session, order_id: str) -> Order | None:
     order = get_order(db, order_id)
     if not order:
         return None
-    if order.status != OrderStatus.PENDING:
-        raise ValueError(f"Only pending orders can be opened (current: {order.status})")
+    if order.status not in (OrderStatus.PENDING, OrderStatus.CANCELLED):
+        raise ValueError(f"Only pending or cancelled orders can be opened (current: {order.status})")
 
     # Check if order is in a batch
     pick_items = (
