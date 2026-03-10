@@ -132,7 +132,9 @@ def delete_picking_list(picking_list_id: str, request: Request, user: User = Dep
 
 @router.post("/{picking_list_id}/archive")
 def archive_picking_list(picking_list_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Archive a picking list. Only empty or done batches can be archived."""
+    """Archive a picking list. Only empty or done batches can be archived. Super admin only."""
+    if user.role != "super_admin":
+        raise HTTPException(403, "Super admin only")
     from app.models.picking import PickingListStatus
     pl = picking_service.get_picking_list(db, picking_list_id)
     if not pl:

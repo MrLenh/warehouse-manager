@@ -95,7 +95,7 @@ def me(user: User = Depends(get_current_user)):
 
 @router.get("/users")
 def list_users(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin only")
     users = auth_service.list_users(db)
     return [_user_out(u) for u in users]
@@ -103,7 +103,7 @@ def list_users(user: User = Depends(get_current_user), db: Session = Depends(get
 
 @router.post("/users", status_code=201)
 def create_user(data: CreateUserRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin only")
     if data.role == "customer" and not data.customer_id:
         raise HTTPException(400, "customer_id is required for customer role")
@@ -131,7 +131,7 @@ class ChangePasswordRequest(BaseModel):
 
 @router.patch("/users/{user_id}")
 def update_user(user_id: str, data: UpdateUserRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin only")
     target = auth_service.get_user_by_id(db, user_id)
     if not target:
@@ -150,7 +150,7 @@ def update_user(user_id: str, data: UpdateUserRequest, user: User = Depends(get_
 
 @router.patch("/users/{user_id}/active")
 def toggle_user_active(user_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin only")
     target = auth_service.get_user_by_id(db, user_id)
     if not target:
@@ -167,7 +167,7 @@ def toggle_user_active(user_id: str, user: User = Depends(get_current_user), db:
 
 @router.post("/users/{user_id}/reset-password")
 def reset_password(user_id: str, data: ChangePasswordRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin only")
     target = auth_service.get_user_by_id(db, user_id)
     if not target:

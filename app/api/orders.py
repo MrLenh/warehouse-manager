@@ -623,7 +623,7 @@ def cancel_order(order_id: str, request: Request, background_tasks: BackgroundTa
 @router.delete("/{order_id}", status_code=204)
 def delete_order(order_id: str, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Permanently delete an order. Admin only."""
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin only")
     order = order_service.get_order(db, order_id)
     if not order:
@@ -717,7 +717,7 @@ def rebuy_label(
     db: Session = Depends(get_db),
 ):
     """Re-buy label: refund existing label and purchase a new one. Admin only."""
-    if user.role != "admin":
+    if user.role not in ("admin", "super_admin"):
         raise HTTPException(403, "Admin only")
     parcel_override = None
     if data.weight_oz > 0:

@@ -290,7 +290,7 @@ tr:hover{background:#f8f9ff}
     </div>
     <div id="orders-overview" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"></div>
     <table>
-      <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Priority</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
+      <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Priority</th><th>Status</th><th>Tracking</th><th>Created</th><th>Last Update</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
     <div id="orders-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap"></div>
@@ -501,6 +501,11 @@ tr:hover{background:#f8f9ff}
             <svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <span>Admin</span>
             <small>Full access: users, settings, reports</small>
+          </label>
+          <label class="role-option" id="role-opt-super_admin" onclick="selectRole('super_admin')">
+            <svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+            <span>Super Admin</span>
+            <small>Full access + archive batches</small>
           </label>
           <label class="role-option" id="role-opt-customer" onclick="selectRole('customer')">
             <svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
@@ -1630,7 +1635,7 @@ function renderOrders(list) {
     return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:#fff;background:${colors[p]||colors.normal}">${(p||'normal')}</span>`;
   };
   document.getElementById('orders-body').innerHTML = pageItems.length === 0
-    ? '<tr><td colspan="12" class="empty">No orders found</td></tr>'
+    ? '<tr><td colspan="13" class="empty">No orders found</td></tr>'
     : pageItems.map(o => `<tr>
         <td><input type="checkbox" class="order-check" value="${o.id}" onchange="updateSelectedCount()"></td>
         <td><strong>${esc(o.order_number)}</strong></td>
@@ -1643,9 +1648,10 @@ function renderOrders(list) {
         <td><span class="badge badge-${o.status}">${o.status}</span></td>
         <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? '<br><span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px;margin-top:2px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
         <td>${new Date(o.created_at).toLocaleDateString('en-US')}</td>
+        <td>${o.updated_at ? new Date(o.updated_at).toLocaleDateString('en-US') + ' ' + new Date(o.updated_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) : '-'}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
-          ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
+          ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
         </td>
       </tr>`).join('');
 
@@ -2074,7 +2080,7 @@ async function viewOrder(id) {
       <tbody>${o.items.map(i => `<tr><td style="width:64px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;transition:transform .15s" onclick="openImageZoom(this.src)" onmouseenter="this.style.transform=\'scale(1.1)\'" onmouseleave="this.style.transform=\'scale(1)\'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\'"><span style="display:none;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>' : '<span style="display:inline-block;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table>
     ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">View Shipping Label</a></div>' : ''}
-    ${o.label_url && currentUser && currentUser.role === 'admin' && o.status !== 'cancelled' && o.status !== 'delivered' ? `
+    ${o.label_url && currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') && o.status !== 'cancelled' && o.status !== 'delivered' ? `
     <div id="rebuy-label-section" style="margin-top:12px;padding:12px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">
       <h4 style="margin:0 0 8px;font-size:14px;color:#856404">Re-buy Label (Admin)</h4>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding:8px 12px;background:#f8f9fa;border-radius:8px;font-size:13px">
@@ -2156,7 +2162,7 @@ async function viewOrder(id) {
       }).catch(()=>{});
     }
     // Load parcel info for rebuy section
-    if (o.label_url && currentUser && currentUser.role === 'admin') {
+    if (o.label_url && currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin')) {
       fetch(API + '/orders/' + o.id + '/parcel-info').then(r=>r.json()).then(p=>{
         const wEl = document.getElementById('rbl-weight');
         const lEl = document.getElementById('rbl-length');
@@ -2179,7 +2185,7 @@ async function viewOrder(id) {
     }
     footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}', ${!!o.label_url})">Cancel Order</button>`;
   }
-  if (currentUser && currentUser.role === 'admin') {
+  if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin')) {
     footerHtml += `<button class="btn btn-danger" style="background:#721c24" onclick="deleteOrder('${o.id}','${esc(o.order_number)}')">Delete Order</button>`;
   }
   document.getElementById('order-detail-footer').innerHTML = footerHtml;
@@ -2803,7 +2809,7 @@ async function loadCurrentUser() {
     if (res.ok) {
       currentUser = await res.json();
       document.getElementById('current-user').textContent = currentUser.display_name || currentUser.username;
-      if (currentUser.role === 'admin') {
+      if ((currentUser.role === 'admin' || currentUser.role === 'super_admin')) {
         document.getElementById('tab-users').style.display = '';
         document.getElementById('tab-jobs').style.display = '';
       }
@@ -2896,7 +2902,7 @@ function renderUserCards() {
         </div>
       </div>
       <div class="uc-meta">
-        <span class="badge badge-${u.role === 'admin' ? 'processing' : u.role === 'customer' ? 'label_purchased' : 'pending'}">${u.role}</span>
+        <span class="badge badge-${u.role === 'super_admin' ? 'drop_off' : u.role === 'admin' ? 'processing' : u.role === 'customer' ? 'label_purchased' : 'pending'}">${u.role}</span>
         <span class="badge badge-${u.active ? 'delivered' : 'cancelled'}">${u.active ? 'Active' : 'Disabled'}</span>
         <span style="font-size:11px;color:#aaa">${u.created_at ? 'Joined ' + new Date(u.created_at).toLocaleDateString() : ''}</span>
       </div>
@@ -2923,6 +2929,7 @@ function selectRole(role) {
   document.getElementById('u-role').value = role;
   document.getElementById('role-opt-staff').classList.toggle('selected', role === 'staff');
   document.getElementById('role-opt-admin').classList.toggle('selected', role === 'admin');
+  document.getElementById('role-opt-super_admin').classList.toggle('selected', role === 'super_admin');
   document.getElementById('role-opt-customer').classList.toggle('selected', role === 'customer');
   document.getElementById('u-customer-group').style.display = role === 'customer' ? '' : 'none';
   if (role === 'customer') loadCustomerOptions();

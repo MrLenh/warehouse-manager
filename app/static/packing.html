@@ -350,12 +350,13 @@ function renderPickingLists() {
     return new Date(b.created_at) - new Date(a.created_at);
   });
 
-  const isAdmin = currentUserRole === 'admin';
+  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'super_admin';
+  const isSuperAdmin = currentUserRole === 'super_admin';
 
   container.innerHTML = lists.map(pl => {
     const pct = pl.total_items > 0 ? Math.round(pl.picked_items / pl.total_items * 100) : 0;
     const canDelete = pl.status === 'active';
-    const canArchive = isAdmin && (pl.status === 'done' || pl.order_count === 0);
+    const canArchive = isSuperAdmin && (pl.status === 'done' || pl.order_count === 0);
     const priority = pl.priority || 'normal';
     const priorityBadge = priority !== 'normal' ? `<span class="badge badge-${priority}" style="font-size:10px">${priority}</span>` : '';
     return `<div class="pl-card ${currentPL && currentPL.id === pl.id ? 'active' : ''}" data-pl-id="${pl.id}" onclick="selectPickingList('${pl.id}')">

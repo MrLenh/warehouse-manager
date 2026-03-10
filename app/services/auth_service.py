@@ -67,7 +67,7 @@ def ensure_default_admin(db: Session) -> None:
     """Create default admin user if no users exist."""
     count = db.query(User).count()
     if count == 0:
-        create_user(db, username="admin", password="admin", display_name="Admin", role="admin")
+        create_user(db, username="admin", password="admin", display_name="Admin", role="super_admin")
 
 
 # Activity logging
