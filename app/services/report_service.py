@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -249,6 +249,10 @@ def batch_report(db: Session, date: str | None = None, assigned_to: str | None =
     target_start = datetime.combine(target_date, datetime.min.time())
     target_end = datetime.combine(target_date, datetime.max.time())
 
+    def _naive(dt: datetime) -> datetime:
+        """Strip timezone info so comparisons with naive target_start/target_end work."""
+        return dt.replace(tzinfo=None) if dt and dt.tzinfo else dt
+
     # Categorize batches
     done_today = []
     new_today = []
@@ -298,14 +302,14 @@ def batch_report(db: Session, date: str | None = None, assigned_to: str | None =
 
         # Done today: status=done AND has picks on target date
         if status_val == "done":
-            if picked_times and any(target_start <= t <= target_end for t in picked_times):
+            if picked_times and any(target_start <= _naive(t) <= target_end for t in picked_times):
                 done_today.append(batch_info)
             elif not date:
                 # Include all done batches if no date filter
                 done_today.append(batch_info)
 
         # New today: created on target date
-        if batch.created_at and target_start <= batch.created_at <= target_end:
+        if batch.created_at and target_start <= _naive(batch.created_at) <= target_end:
             new_today.append(batch_info)
 
         # In progress (processing)
@@ -328,7 +332,7 @@ def batch_report(db: Session, date: str | None = None, assigned_to: str | None =
         picked_times = [i.picked_at for i in items if i.picked and i.picked_at]
 
         # Only count batches that had activity on target date
-        day_picks = [t for t in picked_times if target_start <= t <= target_end]
+        day_picks = [t for t in picked_times if target_start <= _naive(t) <= target_end]
         if not day_picks:
             continue
 

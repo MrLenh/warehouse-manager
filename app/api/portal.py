@@ -192,7 +192,11 @@ def import_orders(
             errors.append({"row": row_num, "error": "SKU is required"})
             continue
 
-        quantity = int(row.get("quantity") or 1)
+        try:
+            quantity = int(row.get("quantity") or 1)
+        except (ValueError, TypeError):
+            errors.append({"row": row_num, "error": f"Invalid quantity '{row.get('quantity')}'"})
+            continue
         if quantity < 1:
             quantity = 1
 
