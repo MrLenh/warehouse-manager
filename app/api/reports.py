@@ -41,3 +41,12 @@ def inventory_movement_report(
     db: Session = Depends(get_db),
 ):
     return report_service.inventory_movement(db, product_id=product_id, limit=limit)
+
+
+@router.get("/batches")
+def batch_report(
+    date: str | None = Query(None, description="Date in YYYY-MM-DD format"),
+    assigned_to: str | None = Query(None, description="Filter by staff username"),
+    db: Session = Depends(get_db),
+):
+    return report_service.batch_report(db, date=date, assigned_to=assigned_to)

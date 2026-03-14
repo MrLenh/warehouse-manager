@@ -232,6 +232,166 @@ def inventory_overview(db: Session) -> list[dict]:
     return result
 
 
+def batch_report(db: Session, date: str | None = None, assigned_to: str | None = None) -> dict:
+    """Batch performance report: completed today, new today, in-progress, pending.
+    Includes productivity metrics: orders/hour, items/hour, working time per staff."""
+    from app.models.picking import PickingList, PickingListStatus, PickItem
+
+    q = db.query(PickingList).filter(PickingList.status != PickingListStatus.ARCHIVED)
+    all_batches = q.all()
+
+    # Determine the target date for filtering
+    if date:
+        target_date = datetime.fromisoformat(date).date()
+    else:
+        target_date = datetime.utcnow().date()
+
+    target_start = datetime.combine(target_date, datetime.min.time())
+    target_end = datetime.combine(target_date, datetime.max.time())
+
+    # Categorize batches
+    done_today = []
+    new_today = []
+    in_progress = []
+    pending = []
+
+    for batch in all_batches:
+        items = batch.items
+        total_items = len(items)
+        picked_items = sum(1 for i in items if i.picked)
+        order_ids = set(i.order_id for i in items)
+
+        # Calculate working time: first picked_at to last picked_at
+        picked_times = [i.picked_at for i in items if i.picked and i.picked_at]
+        first_pick = min(picked_times) if picked_times else None
+        last_pick = max(picked_times) if picked_times else None
+        working_seconds = (last_pick - first_pick).total_seconds() if first_pick and last_pick and first_pick != last_pick else 0
+        working_hours = working_seconds / 3600 if working_seconds > 0 else 0
+
+        # Productivity
+        orders_per_hour = len(order_ids) / working_hours if working_hours > 0 else 0
+        items_per_hour = picked_items / working_hours if working_hours > 0 else 0
+
+        batch_info = {
+            "id": batch.id,
+            "picking_number": batch.picking_number,
+            "status": batch.status if isinstance(batch.status, str) else batch.status.value,
+            "priority": batch.priority or "normal",
+            "assigned_to": batch.assigned_to or "",
+            "created_at": batch.created_at.isoformat() if batch.created_at else None,
+            "order_count": len(order_ids),
+            "total_items": total_items,
+            "picked_items": picked_items,
+            "first_pick_at": first_pick.isoformat() if first_pick else None,
+            "last_pick_at": last_pick.isoformat() if last_pick else None,
+            "working_seconds": round(working_seconds),
+            "working_time": _format_duration(working_seconds),
+            "orders_per_hour": round(orders_per_hour, 1),
+            "items_per_hour": round(items_per_hour, 1),
+        }
+
+        # Filter by assigned_to if specified
+        if assigned_to and batch.assigned_to != assigned_to:
+            continue
+
+        status_val = batch.status if isinstance(batch.status, str) else batch.status.value
+
+        # Done today: status=done AND has picks on target date
+        if status_val == "done":
+            if picked_times and any(target_start <= t <= target_end for t in picked_times):
+                done_today.append(batch_info)
+            elif not date:
+                # Include all done batches if no date filter
+                done_today.append(batch_info)
+
+        # New today: created on target date
+        if batch.created_at and target_start <= batch.created_at <= target_end:
+            new_today.append(batch_info)
+
+        # In progress (processing)
+        if status_val == "processing":
+            in_progress.append(batch_info)
+
+        # Pending (active = not started yet)
+        if status_val == "active":
+            pending.append(batch_info)
+
+    # Staff summary
+    staff_map: dict[str, dict] = {}
+    for batch in all_batches:
+        if not batch.assigned_to:
+            continue
+        if assigned_to and batch.assigned_to != assigned_to:
+            continue
+
+        items = batch.items
+        picked_times = [i.picked_at for i in items if i.picked and i.picked_at]
+
+        # Only count batches that had activity on target date
+        day_picks = [t for t in picked_times if target_start <= t <= target_end]
+        if not day_picks:
+            continue
+
+        user = batch.assigned_to
+        if user not in staff_map:
+            staff_map[user] = {
+                "username": user,
+                "batches_done": 0,
+                "total_orders": 0,
+                "total_items_picked": 0,
+                "total_working_seconds": 0,
+            }
+
+        status_val = batch.status if isinstance(batch.status, str) else batch.status.value
+        if status_val == "done":
+            staff_map[user]["batches_done"] += 1
+
+        order_ids = set(i.order_id for i in items)
+        staff_map[user]["total_orders"] += len(order_ids)
+        staff_map[user]["total_items_picked"] += len(day_picks)
+
+        first_day = min(day_picks)
+        last_day = max(day_picks)
+        if first_day != last_day:
+            staff_map[user]["total_working_seconds"] += (last_day - first_day).total_seconds()
+
+    staff_summary = []
+    for s in staff_map.values():
+        hrs = s["total_working_seconds"] / 3600 if s["total_working_seconds"] > 0 else 0
+        s["working_time"] = _format_duration(s["total_working_seconds"])
+        s["orders_per_hour"] = round(s["total_orders"] / hrs, 1) if hrs > 0 else 0
+        s["items_per_hour"] = round(s["total_items_picked"] / hrs, 1) if hrs > 0 else 0
+        staff_summary.append(s)
+
+    staff_summary.sort(key=lambda x: x["total_items_picked"], reverse=True)
+
+    return {
+        "date": target_date.isoformat(),
+        "done_today": done_today,
+        "new_today": new_today,
+        "in_progress": in_progress,
+        "pending": pending,
+        "summary": {
+            "done_count": len(done_today),
+            "new_count": len(new_today),
+            "in_progress_count": len(in_progress),
+            "pending_count": len(pending),
+        },
+        "staff_summary": staff_summary,
+    }
+
+
+def _format_duration(seconds: float) -> str:
+    """Format seconds into human readable duration like '2h 15m'."""
+    if seconds <= 0:
+        return "—"
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    if hours > 0:
+        return f"{hours}h {minutes:02d}m"
+    return f"{minutes}m"
+
+
 def inventory_movement(db: Session, product_id: str | None = None, limit: int = 50) -> list[dict]:
     q = db.query(InventoryLog)
     if product_id:

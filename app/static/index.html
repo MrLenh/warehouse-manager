@@ -117,6 +117,7 @@ tr:hover{background:#f8f9ff}
 .user-stat-card .stat-info .stat-num{font-size:24px;font-weight:700;line-height:1.2}
 .user-stat-card .stat-info .stat-label{font-size:12px;color:#888;margin-top:2px}
 .um-tab.active{color:#667eea!important;border-bottom-color:#667eea!important}
+.rpt-tab.active{color:#667eea!important;border-bottom-color:#667eea!important}
 .um-panel{min-height:200px}
 #user-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
 .user-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);transition:.2s;position:relative;border-left:4px solid #667eea}
@@ -357,43 +358,118 @@ tr:hover{background:#f8f9ff}
 
   <!-- REPORTS PANEL -->
   <div class="panel" id="panel-reports">
-    <div class="card" style="margin-bottom:16px">
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <label style="font-size:13px;font-weight:500;color:#555">From
-          <input type="date" id="report-date-from" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
-        </label>
-        <label style="font-size:13px;font-weight:500;color:#555">To
-          <input type="date" id="report-date-to" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
-        </label>
-        <label style="font-size:13px;font-weight:500;color:#555">Customer
-          <select id="report-customer" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
-            <option value="">All Customers</option>
-          </select>
-        </label>
-        <button class="btn btn-primary btn-sm" onclick="loadReports()">Apply</button>
-        <button class="btn btn-outline btn-sm" onclick="clearReportFilters()">Clear</button>
+    <!-- Report sub-tabs -->
+    <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e8e8e8">
+      <div class="rpt-tab active" data-rpt="orders-report" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchRptTab('orders-report')">Orders</div>
+      <div class="rpt-tab" data-rpt="batch-report" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchRptTab('batch-report')">Batches</div>
+    </div>
+
+    <!-- Orders Report sub-panel -->
+    <div id="rpt-orders-report" class="rpt-panel">
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:13px;font-weight:500;color:#555">From
+            <input type="date" id="report-date-from" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <label style="font-size:13px;font-weight:500;color:#555">To
+            <input type="date" id="report-date-to" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <label style="font-size:13px;font-weight:500;color:#555">Customer
+            <select id="report-customer" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+              <option value="">All Customers</option>
+            </select>
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="loadReports()">Apply</button>
+          <button class="btn btn-outline btn-sm" onclick="clearReportFilters()">Clear</button>
+        </div>
+      </div>
+      <div class="report-grid" id="report-cards"></div>
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:12px">Orders by Date</h3>
+        <div style="position:relative;width:100%;max-height:1000px;height:400px">
+          <canvas id="orders-chart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Top Selling Products</h3>
+        <table>
+          <thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Sold</th><th>Revenue</th></tr></thead>
+          <tbody id="top-products-body"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Low Stock Products</h3>
+        <table>
+          <thead><tr><th>SKU</th><th>Name</th><th>Stock</th><th>Location</th></tr></thead>
+          <tbody id="low-stock-body"></tbody>
+        </table>
       </div>
     </div>
-    <div class="report-grid" id="report-cards"></div>
-    <div class="card" style="margin-bottom:16px">
-      <h3 style="margin-bottom:12px">Orders by Date</h3>
-      <div style="position:relative;width:100%;max-height:1000px;height:400px">
-        <canvas id="orders-chart"></canvas>
+
+    <!-- Batch Report sub-panel -->
+    <div id="rpt-batch-report" class="rpt-panel" style="display:none">
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:13px;font-weight:500;color:#555">Date
+            <input type="date" id="batch-report-date" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <label style="font-size:13px;font-weight:500;color:#555">Staff
+            <select id="batch-report-staff" style="margin-left:4px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+              <option value="">All Staff</option>
+            </select>
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="loadBatchReport()">Apply</button>
+          <button class="btn btn-outline btn-sm" onclick="clearBatchReportFilters()">Clear</button>
+        </div>
       </div>
-    </div>
-    <div class="card">
-      <h3>Top Selling Products</h3>
-      <table>
-        <thead><tr><th>#</th><th>SKU</th><th>Name</th><th>Sold</th><th>Revenue</th></tr></thead>
-        <tbody id="top-products-body"></tbody>
-      </table>
-    </div>
-    <div class="card">
-      <h3>Low Stock Products</h3>
-      <table>
-        <thead><tr><th>SKU</th><th>Name</th><th>Stock</th><th>Location</th></tr></thead>
-        <tbody id="low-stock-body"></tbody>
-      </table>
+
+      <!-- Summary cards -->
+      <div class="report-grid" id="batch-report-cards" style="grid-template-columns:repeat(4,1fr)"></div>
+
+      <!-- Staff Performance -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:12px">Staff Performance</h3>
+        <table>
+          <thead><tr><th>Staff</th><th>Batches Done</th><th>Orders</th><th>Items Picked</th><th>Working Time</th><th>Orders/hr</th><th>Items/hr</th></tr></thead>
+          <tbody id="batch-staff-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Done Today -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:12px">Completed Batches</h3>
+        <table>
+          <thead><tr><th>Batch #</th><th>Staff</th><th>Orders</th><th>Items</th><th>Working Time</th><th>Orders/hr</th><th>Items/hr</th><th>Created</th></tr></thead>
+          <tbody id="batch-done-body"></tbody>
+        </table>
+      </div>
+
+      <!-- In Progress -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:12px">In Progress</h3>
+        <table>
+          <thead><tr><th>Batch #</th><th>Staff</th><th>Orders</th><th>Progress</th><th>Working Time</th><th>Items/hr</th><th>Created</th></tr></thead>
+          <tbody id="batch-progress-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Pending -->
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:12px">Pending (Not Started)</h3>
+        <table>
+          <thead><tr><th>Batch #</th><th>Orders</th><th>Items</th><th>Priority</th><th>Created</th></tr></thead>
+          <tbody id="batch-pending-body"></tbody>
+        </table>
+      </div>
+
+      <!-- New Today -->
+      <div class="card">
+        <h3 style="margin-bottom:12px">New Batches (Created Today)</h3>
+        <table>
+          <thead><tr><th>Batch #</th><th>Status</th><th>Staff</th><th>Orders</th><th>Items</th><th>Created</th></tr></thead>
+          <tbody id="batch-new-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -2815,6 +2891,139 @@ async function loadReports() {
 }
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+// Report sub-tabs
+function switchRptTab(name) {
+  document.querySelectorAll('.rpt-tab').forEach(t => { t.classList.toggle('active', t.dataset.rpt === name); });
+  document.querySelectorAll('.rpt-panel').forEach(p => { p.style.display = p.id === 'rpt-' + name ? '' : 'none'; });
+  if (name === 'batch-report') loadBatchReport();
+  if (name === 'orders-report') loadReports();
+}
+
+// Batch Report
+async function loadBatchReportStaff() {
+  try {
+    const res = await fetch(API + '/auth/users');
+    if (!res.ok) return;
+    const users = await res.json();
+    const sel = document.getElementById('batch-report-staff');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All Staff</option>' + users.filter(u => u.role !== 'customer').map(u => `<option value="${esc(u.username)}">${esc(u.display_name || u.username)}</option>`).join('');
+    if (cur) sel.value = cur;
+  } catch {}
+}
+
+function clearBatchReportFilters() {
+  document.getElementById('batch-report-date').value = '';
+  document.getElementById('batch-report-staff').value = '';
+  loadBatchReport();
+}
+
+async function loadBatchReport() {
+  if (document.getElementById('batch-report-staff').options.length <= 1) loadBatchReportStaff();
+
+  const date = document.getElementById('batch-report-date').value;
+  const staff = document.getElementById('batch-report-staff').value;
+
+  let params = [];
+  if (date) params.push('date=' + date);
+  if (staff) params.push('assigned_to=' + encodeURIComponent(staff));
+  const qs = params.length ? '?' + params.join('&') : '';
+
+  try {
+    const res = await fetch(API + '/reports/batches' + qs);
+    const data = await res.json();
+
+    const s = data.summary || {};
+    document.getElementById('batch-report-cards').innerHTML = `
+      <div class="report-card"><div class="number">${s.done_count || 0}</div><div class="label">Completed</div></div>
+      <div class="report-card"><div class="number">${s.new_count || 0}</div><div class="label">New Today</div></div>
+      <div class="report-card"><div class="number" style="color:#e67e22">${s.in_progress_count || 0}</div><div class="label">In Progress</div></div>
+      <div class="report-card"><div class="number" style="color:#999">${s.pending_count || 0}</div><div class="label">Pending</div></div>
+    `;
+
+    // Staff performance
+    const staffRows = data.staff_summary || [];
+    document.getElementById('batch-staff-body').innerHTML = staffRows.length === 0
+      ? '<tr><td colspan="7" class="empty">No staff data</td></tr>'
+      : staffRows.map(s => `<tr>
+          <td><strong>${esc(s.username)}</strong></td>
+          <td style="text-align:center">${s.batches_done}</td>
+          <td style="text-align:center">${s.total_orders}</td>
+          <td style="text-align:center">${s.total_items_picked}</td>
+          <td style="text-align:center">${esc(s.working_time)}</td>
+          <td style="text-align:center;font-weight:600;color:#667eea">${s.orders_per_hour}</td>
+          <td style="text-align:center;font-weight:600;color:#667eea">${s.items_per_hour}</td>
+        </tr>`).join('');
+
+    // Done today
+    const doneRows = data.done_today || [];
+    document.getElementById('batch-done-body').innerHTML = doneRows.length === 0
+      ? '<tr><td colspan="8" class="empty">No completed batches</td></tr>'
+      : doneRows.map(b => `<tr>
+          <td><strong>${esc(b.picking_number)}</strong></td>
+          <td>${esc(b.assigned_to || '—')}</td>
+          <td style="text-align:center">${b.order_count}</td>
+          <td style="text-align:center">${b.picked_items}/${b.total_items}</td>
+          <td style="text-align:center">${esc(b.working_time)}</td>
+          <td style="text-align:center;font-weight:600;color:#667eea">${b.orders_per_hour}</td>
+          <td style="text-align:center;font-weight:600;color:#667eea">${b.items_per_hour}</td>
+          <td>${b.created_at ? new Date(b.created_at).toLocaleString() : '—'}</td>
+        </tr>`).join('');
+
+    // In progress
+    const progRows = data.in_progress || [];
+    document.getElementById('batch-progress-body').innerHTML = progRows.length === 0
+      ? '<tr><td colspan="7" class="empty">No batches in progress</td></tr>'
+      : progRows.map(b => {
+          const pct = b.total_items > 0 ? Math.round(b.picked_items / b.total_items * 100) : 0;
+          return `<tr>
+            <td><strong>${esc(b.picking_number)}</strong></td>
+            <td>${esc(b.assigned_to || '—')}</td>
+            <td style="text-align:center">${b.order_count}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;background:#e8e8e8;border-radius:4px;height:8px;overflow:hidden">
+                  <div style="width:${pct}%;background:#667eea;height:100%;border-radius:4px"></div>
+                </div>
+                <span style="font-size:12px;color:#666">${b.picked_items}/${b.total_items} (${pct}%)</span>
+              </div>
+            </td>
+            <td style="text-align:center">${esc(b.working_time)}</td>
+            <td style="text-align:center;font-weight:600;color:#667eea">${b.items_per_hour}</td>
+            <td>${b.created_at ? new Date(b.created_at).toLocaleString() : '—'}</td>
+          </tr>`;
+        }).join('');
+
+    // Pending
+    const pendRows = data.pending || [];
+    document.getElementById('batch-pending-body').innerHTML = pendRows.length === 0
+      ? '<tr><td colspan="5" class="empty">No pending batches</td></tr>'
+      : pendRows.map(b => `<tr>
+          <td><strong>${esc(b.picking_number)}</strong></td>
+          <td style="text-align:center">${b.order_count}</td>
+          <td style="text-align:center">${b.total_items}</td>
+          <td><span class="badge badge-${b.priority === 'urgent' ? 'cancelled' : b.priority === 'high' ? 'processing' : 'pending'}">${esc(b.priority)}</span></td>
+          <td>${b.created_at ? new Date(b.created_at).toLocaleString() : '—'}</td>
+        </tr>`).join('');
+
+    // New today
+    const newRows = data.new_today || [];
+    document.getElementById('batch-new-body').innerHTML = newRows.length === 0
+      ? '<tr><td colspan="6" class="empty">No new batches</td></tr>'
+      : newRows.map(b => `<tr>
+          <td><strong>${esc(b.picking_number)}</strong></td>
+          <td><span class="badge badge-${b.status}">${esc(b.status)}</span></td>
+          <td>${esc(b.assigned_to || '—')}</td>
+          <td style="text-align:center">${b.order_count}</td>
+          <td style="text-align:center">${b.total_items}</td>
+          <td>${b.created_at ? new Date(b.created_at).toLocaleString() : '—'}</td>
+        </tr>`).join('');
+
+  } catch (e) {
+    console.error('Failed to load batch report:', e);
+  }
+}
 
 // Auth
 let currentUser = null;
