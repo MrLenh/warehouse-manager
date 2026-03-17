@@ -537,6 +537,77 @@ def inventory_breakdown(db: Session) -> dict:
     }
 
 
+def inventory_daily_report(
+    db: Session,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict:
+    """Daily inventory report: quantity changes grouped by product, date, and reason."""
+    q = db.query(InventoryLog)
+
+    if start_date:
+        q = q.filter(InventoryLog.created_at >= datetime.fromisoformat(start_date))
+    if end_date:
+        end_dt = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59)
+        q = q.filter(InventoryLog.created_at <= end_dt)
+
+    logs = q.order_by(InventoryLog.created_at.desc()).all()
+
+    # Pre-fetch product info
+    product_ids = list({log.product_id for log in logs})
+    products_map = {}
+    if product_ids:
+        products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+        products_map = {p.id: p for p in products}
+
+    # Group by date -> product -> reason
+    daily: dict[str, dict[str, dict]] = {}
+    for log in logs:
+        date_key = log.created_at.strftime("%Y-%m-%d") if log.created_at else "Unknown"
+        p = products_map.get(log.product_id)
+        product_key = log.product_id
+
+        if date_key not in daily:
+            daily[date_key] = {}
+        if product_key not in daily[date_key]:
+            daily[date_key][product_key] = {
+                "product_id": log.product_id,
+                "sku": p.sku if p else "",
+                "product_name": p.name if p else "",
+                "inbound": 0,
+                "order": 0,
+                "adjustment": 0,
+                "net_change": 0,
+                "entries": 0,
+            }
+
+        entry = daily[date_key][product_key]
+        reason = log.reason or "other"
+        if reason in ("inbound", "order", "adjustment"):
+            entry[reason] += log.change
+        entry["net_change"] += log.change
+        entry["entries"] += 1
+
+    # Build response
+    result = []
+    for date_key in sorted(daily.keys(), reverse=True):
+        items = sorted(daily[date_key].values(), key=lambda x: abs(x["net_change"]), reverse=True)
+        day_totals = {"inbound": 0, "order": 0, "adjustment": 0, "net_change": 0, "entries": 0}
+        for item in items:
+            day_totals["inbound"] += item["inbound"]
+            day_totals["order"] += item["order"]
+            day_totals["adjustment"] += item["adjustment"]
+            day_totals["net_change"] += item["net_change"]
+            day_totals["entries"] += item["entries"]
+        result.append({
+            "date": date_key,
+            "totals": day_totals,
+            "items": items,
+        })
+
+    return {"days": result}
+
+
 def inventory_movement(
     db: Session,
     product_id: str | None = None,

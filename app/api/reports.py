@@ -45,6 +45,15 @@ def inventory_breakdown_report(db: Session = Depends(get_db)):
     return report_service.inventory_breakdown(db)
 
 
+@router.get("/inventory-daily")
+def inventory_daily_report(
+    start_date: str | None = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: str | None = Query(None, description="End date YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+):
+    return report_service.inventory_daily_report(db, start_date=start_date, end_date=end_date)
+
+
 @router.get("/inventory-movement")
 def inventory_movement_report(
     product_id: str | None = None,

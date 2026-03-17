@@ -303,6 +303,7 @@ tr:hover{background:#f8f9ff}
     <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e8e8e8">
       <div class="inv-tab active" data-inv="overview" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('overview')">Overview</div>
       <div class="inv-tab" data-inv="log" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('log')">Inventory Log</div>
+      <div class="inv-tab" data-inv="daily-report" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('daily-report')">Daily Report</div>
       <div class="inv-tab" data-inv="stock-requests" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('stock-requests')">Stock Requests</div>
     </div>
 
@@ -384,6 +385,21 @@ tr:hover{background:#f8f9ff}
         <tbody id="inv-log-body"></tbody>
       </table>
       <div id="inv-log-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px"></div>
+    </div>
+
+    <!-- Daily Report -->
+    <div id="inv-daily-report" class="inv-panel" style="display:none">
+      <div class="toolbar" style="flex-wrap:wrap;gap:8px">
+        <label style="font-size:13px;color:#666">From:</label>
+        <input type="date" id="inv-daily-start" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        <label style="font-size:13px;color:#666">To:</label>
+        <input type="date" id="inv-daily-end" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        <button class="btn btn-primary btn-sm" onclick="loadInventoryDaily()">Load</button>
+        <button class="btn btn-outline btn-sm" onclick="setDailyRange('today')">Today</button>
+        <button class="btn btn-outline btn-sm" onclick="setDailyRange('7d')">7 Days</button>
+        <button class="btn btn-outline btn-sm" onclick="setDailyRange('30d')">30 Days</button>
+      </div>
+      <div id="inv-daily-content"></div>
     </div>
 
     <!-- Stock Requests -->
@@ -2563,10 +2579,11 @@ function switchInvTab(tab) {
   document.querySelectorAll('.inv-panel').forEach(p => p.style.display = 'none');
   const el = document.querySelector(`.inv-tab[data-inv="${tab}"]`);
   if (el) { el.classList.add('active'); el.style.borderBottomColor = '#667eea'; el.style.color = '#667eea'; }
-  const panelMap = { overview: 'inv-overview', log: 'inv-log', 'stock-requests': 'inv-stock-requests' };
+  const panelMap = { overview: 'inv-overview', log: 'inv-log', 'daily-report': 'inv-daily-report', 'stock-requests': 'inv-stock-requests' };
   const panel = document.getElementById(panelMap[tab]);
   if (panel) panel.style.display = '';
   if (tab === 'log' && invLogData.length === 0) loadInventoryLog();
+  if (tab === 'daily-report' && !invDailyLoaded) { setDailyRange('7d'); loadInventoryDaily(); }
 }
 // init first tab style
 document.querySelector('.inv-tab.active').style.borderBottomColor = '#667eea';
@@ -2632,6 +2649,71 @@ function renderInventoryOverview(data) {
 }
 
 document.getElementById('search-inventory').addEventListener('input', () => renderInventoryOverview(invOverviewData));
+
+// --- Inventory Daily Report ---
+let invDailyLoaded = false;
+
+function setDailyRange(range) {
+  const end = new Date();
+  const start = new Date();
+  if (range === 'today') { /* same day */ }
+  else if (range === '7d') start.setDate(start.getDate() - 6);
+  else if (range === '30d') start.setDate(start.getDate() - 29);
+  document.getElementById('inv-daily-start').value = start.toISOString().slice(0, 10);
+  document.getElementById('inv-daily-end').value = end.toISOString().slice(0, 10);
+}
+
+async function loadInventoryDaily() {
+  const startDate = document.getElementById('inv-daily-start').value;
+  const endDate = document.getElementById('inv-daily-end').value;
+  let url = API + '/reports/inventory-daily';
+  const params = [];
+  if (startDate) params.push('start_date=' + startDate);
+  if (endDate) params.push('end_date=' + endDate);
+  if (params.length) url += '?' + params.join('&');
+  const res = await fetch(url);
+  const data = await res.json();
+  invDailyLoaded = true;
+  renderInventoryDaily(data);
+}
+
+function renderInventoryDaily(data) {
+  const days = data.days || [];
+  if (days.length === 0) {
+    document.getElementById('inv-daily-content').innerHTML = '<div class="empty" style="padding:40px;text-align:center;color:#999">No inventory changes in selected period</div>';
+    return;
+  }
+  let html = '';
+  for (const day of days) {
+    const t = day.totals;
+    html += `<div style="margin-bottom:24px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;padding:10px 16px;background:#f8f9fa;border-radius:8px;border-left:4px solid #667eea">
+        <strong style="font-size:15px">${day.date}</strong>
+        <span style="color:#28a745;font-size:13px;font-weight:600">Inbound: +${t.inbound}</span>
+        <span style="color:#dc3545;font-size:13px;font-weight:600">Order: ${t.order}</span>
+        <span style="color:#856404;font-size:13px;font-weight:600">Adjust: ${t.adjustment > 0 ? '+' : ''}${t.adjustment}</span>
+        <span style="font-size:13px;font-weight:700;color:${t.net_change >= 0 ? '#28a745' : '#dc3545'}">Net: ${t.net_change >= 0 ? '+' : ''}${t.net_change}</span>
+        <span style="font-size:12px;color:#999;margin-left:auto">${t.entries} entries</span>
+      </div>
+      <table>
+        <thead><tr><th>SKU</th><th>Product</th><th style="color:#28a745">Inbound</th><th style="color:#dc3545">Order</th><th style="color:#856404">Adjustment</th><th>Net Change</th><th>Entries</th></tr></thead>
+        <tbody>${day.items.map(r => {
+          const netColor = r.net_change > 0 ? '#28a745' : r.net_change < 0 ? '#dc3545' : '#666';
+          return `<tr>
+            <td><strong>${esc(r.sku)}</strong></td>
+            <td>${esc(r.product_name)}</td>
+            <td style="color:#28a745;font-weight:${r.inbound ? '600' : '400'}">${r.inbound ? '+' + r.inbound : '-'}</td>
+            <td style="color:#dc3545;font-weight:${r.order ? '600' : '400'}">${r.order || '-'}</td>
+            <td style="color:#856404;font-weight:${r.adjustment ? '600' : '400'}">${r.adjustment ? (r.adjustment > 0 ? '+' : '') + r.adjustment : '-'}</td>
+            <td style="color:${netColor};font-weight:700">${r.net_change > 0 ? '+' : ''}${r.net_change}</td>
+            <td style="color:#999">${r.entries}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+  }
+  document.getElementById('inv-daily-content').innerHTML = html;
+}
 
 // --- Inventory Log ---
 let invLogData = [];
