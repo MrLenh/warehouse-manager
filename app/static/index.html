@@ -349,7 +349,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
       </div>
       <table>
-        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Location</th></tr></thead>
+        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Location</th><th></th></tr></thead>
         <tbody id="inv-overview-body"></tbody>
       </table>
     </div>
@@ -856,6 +856,8 @@ tr:hover{background:#f8f9ff}
     </div>
     <div class="modal-body">
       <input type="hidden" id="inv-product-id">
+      <input type="hidden" id="inv-variant-id">
+      <div id="inv-modal-label" style="font-size:13px;color:#888;margin-bottom:12px"></div>
       <div class="form-group"><label>Quantity (+ to add / - to remove)</label><input type="number" id="inv-qty" placeholder="e.g. 10 or -5"></div>
       <div class="form-group"><label>Reason</label><input type="text" id="inv-reason" placeholder="e.g. restock"></div>
       <div class="form-group"><label>Note</label><input type="text" id="inv-note" placeholder="Details"></div>
@@ -1689,23 +1691,29 @@ function printQrPage() {
 }
 
 // INVENTORY
-function openInventoryModal(productId) {
+function openInventoryModal(productId, variantId, label) {
   document.getElementById('inv-product-id').value = productId;
+  document.getElementById('inv-variant-id').value = variantId || '';
   document.getElementById('inv-qty').value = '';
   document.getElementById('inv-reason').value = '';
   document.getElementById('inv-note').value = '';
+  document.getElementById('inv-modal-label').textContent = label || '';
   document.getElementById('inventory-modal').classList.add('show');
 }
 
 async function saveInventory() {
-  const id = document.getElementById('inv-product-id').value;
+  const productId = document.getElementById('inv-product-id').value;
+  const variantId = document.getElementById('inv-variant-id').value;
   const body = {
     quantity: parseInt(document.getElementById('inv-qty').value) || 0,
     reason: document.getElementById('inv-reason').value || 'adjustment',
     note: document.getElementById('inv-note').value,
   };
-  const res = await fetch(API + '/products/' + id + '/inventory', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if (res.ok) { toast('Inventory updated'); closeModal('inventory-modal'); loadProducts(); }
+  const url = variantId
+    ? API + '/products/variants/' + variantId + '/inventory'
+    : API + '/products/' + productId + '/inventory';
+  const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (res.ok) { toast('Inventory updated'); closeModal('inventory-modal'); loadProducts(); loadInventoryOverview(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
@@ -2606,8 +2614,9 @@ function renderInventoryOverview(data) {
   document.getElementById('bd-shipped').textContent = totShipped;
 
   document.getElementById('inv-overview-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="8" class="empty">No data available</td></tr>'
+    ? '<tr><td colspan="9" class="empty">No data available</td></tr>'
     : filtered.map(r => {
+      const label = r.variant_sku ? (r.variant_sku + ' - ' + r.name + (r.variant_label ? ' (' + r.variant_label + ')' : '')) : (r.sku + ' - ' + r.name);
       return `<tr>
         <td><strong>${esc(r.variant_sku || r.sku)}</strong></td>
         <td>${esc(r.name)}</td>
@@ -2617,6 +2626,7 @@ function renderInventoryOverview(data) {
         <td style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
         <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
         <td>${esc(r.location)}</td>
+        <td><button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button></td>
       </tr>`;
     }).join('');
 }
