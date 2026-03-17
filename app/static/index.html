@@ -155,7 +155,7 @@ tr:hover{background:#f8f9ff}
 .img-zoom-overlay img{max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
 .scan-cam-btn{background:none;border:none;cursor:pointer;padding:4px;display:none;align-items:center;justify-content:center;border-radius:50%;transition:.2s}
 .scan-cam-btn:hover{background:rgba(255,255,255,.2)}
-@media(max-width:768px){.scan-cam-btn{display:inline-flex}}
+@media(max-width:768px){.scan-cam-btn{display:inline-flex}#inv-breakdown-cards{grid-template-columns:repeat(2,1fr)!important}}
 .scan-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
 .scan-modal-overlay.show{display:flex}
 .scan-modal-box{background:#fff;border-radius:16px;width:95vw;max-width:420px;overflow:hidden}
@@ -302,7 +302,32 @@ tr:hover{background:#f8f9ff}
     <!-- Sub-tabs -->
     <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e8e8e8">
       <div class="inv-tab active" data-inv="overview" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('overview')">Overview</div>
+      <div class="inv-tab" data-inv="log" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('log')">Inventory Log</div>
       <div class="inv-tab" data-inv="stock-requests" style="padding:10px 20px;cursor:pointer;font-weight:500;font-size:14px;color:#666;border-bottom:3px solid transparent" onclick="switchInvTab('stock-requests')">Stock Requests</div>
+    </div>
+
+    <!-- Breakdown Summary Cards -->
+    <div id="inv-breakdown-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #ffc107">
+        <div style="font-size:13px;color:#856404;font-weight:600;text-transform:uppercase;letter-spacing:.5px">On Hold</div>
+        <div style="font-size:11px;color:#999;margin-bottom:4px">confirmed / processing / label purchased</div>
+        <div id="bd-on-hold" style="font-size:28px;font-weight:700;color:#856404">0</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #28a745">
+        <div style="font-size:13px;color:#155724;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Available</div>
+        <div style="font-size:11px;color:#999;margin-bottom:4px">current stock</div>
+        <div id="bd-available" style="font-size:28px;font-weight:700;color:#28a745">0</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #6c3483">
+        <div style="font-size:13px;color:#6c3483;font-weight:600;text-transform:uppercase;letter-spacing:.5px">In Production</div>
+        <div style="font-size:11px;color:#999;margin-bottom:4px">packing / packed</div>
+        <div id="bd-in-production" style="font-size:28px;font-weight:700;color:#6c3483">0</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #0c5460">
+        <div style="font-size:13px;color:#0c5460;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Shipped</div>
+        <div style="font-size:11px;color:#999;margin-bottom:4px">drop off / shipped / in transit / delivered</div>
+        <div id="bd-shipped" style="font-size:28px;font-weight:700;color:#0c5460">0</div>
+      </div>
     </div>
 
     <!-- Inventory Overview -->
@@ -324,9 +349,41 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
       </div>
       <table>
-        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Sold</th><th>Adjusted</th><th>Stock</th><th>Location</th></tr></thead>
+        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Location</th></tr></thead>
         <tbody id="inv-overview-body"></tbody>
       </table>
+    </div>
+
+    <!-- Inventory Log -->
+    <div id="inv-log" class="inv-panel" style="display:none">
+      <div class="toolbar" style="flex-wrap:wrap;gap:8px">
+        <input type="text" class="search" id="search-inv-log" placeholder="Search by SKU, name, note..." oninput="renderInventoryLog()">
+        <select id="inv-log-reason" onchange="loadInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          <option value="">All reasons</option>
+          <option value="inbound">Inbound</option>
+          <option value="order">Order</option>
+          <option value="adjustment">Adjustment</option>
+        </select>
+        <input type="number" id="inv-log-limit" value="50" min="10" max="500" step="10" onchange="loadInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:80px" title="Rows per page">
+        <button class="btn btn-outline btn-sm" onclick="loadInventoryLog()">Refresh</button>
+        <span id="inv-log-count" style="font-size:13px;color:#888;margin-left:auto"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="cursor:pointer" onclick="sortInvLog('created_at')">Time <span id="inv-log-sort-created_at"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('sku')">SKU <span id="inv-log-sort-sku"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('product_name')">Product <span id="inv-log-sort-product_name"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('change')">Change <span id="inv-log-sort-change"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('balance_after')">Balance <span id="inv-log-sort-balance_after"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('reason')">Reason <span id="inv-log-sort-reason"></span></th>
+            <th>Reference</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody id="inv-log-body"></tbody>
+      </table>
+      <div id="inv-log-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px"></div>
     </div>
 
     <!-- Stock Requests -->
@@ -2498,7 +2555,10 @@ function switchInvTab(tab) {
   document.querySelectorAll('.inv-panel').forEach(p => p.style.display = 'none');
   const el = document.querySelector(`.inv-tab[data-inv="${tab}"]`);
   if (el) { el.classList.add('active'); el.style.borderBottomColor = '#667eea'; el.style.color = '#667eea'; }
-  document.getElementById(tab === 'overview' ? 'inv-overview' : 'inv-stock-requests').style.display = '';
+  const panelMap = { overview: 'inv-overview', log: 'inv-log', 'stock-requests': 'inv-stock-requests' };
+  const panel = document.getElementById(panelMap[tab]);
+  if (panel) panel.style.display = '';
+  if (tab === 'log' && invLogData.length === 0) loadInventoryLog();
 }
 // init first tab style
 document.querySelector('.inv-tab.active').style.borderBottomColor = '#667eea';
@@ -2536,26 +2596,124 @@ function renderInventoryOverview(data) {
     if (fStock === 'in' && r.current_stock <= 0) return false;
     return true;
   });
+
+  // Update breakdown cards from filtered data
+  let totOnHold = 0, totAvailable = 0, totInProd = 0, totShipped = 0;
+  filtered.forEach(r => { totOnHold += r.on_hold || 0; totAvailable += r.available || r.current_stock || 0; totInProd += r.in_production || 0; totShipped += r.shipped || 0; });
+  document.getElementById('bd-on-hold').textContent = totOnHold;
+  document.getElementById('bd-available').textContent = totAvailable;
+  document.getElementById('bd-in-production').textContent = totInProd;
+  document.getElementById('bd-shipped').textContent = totShipped;
+
   document.getElementById('inv-overview-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="9" class="empty">No data available</td></tr>'
+    ? '<tr><td colspan="8" class="empty">No data available</td></tr>'
     : filtered.map(r => {
-      const diff = r.requested - r.received;
-      const diffClass = diff > 0 ? 'stock-low' : '';
       return `<tr>
         <td><strong>${esc(r.variant_sku || r.sku)}</strong></td>
         <td>${esc(r.name)}</td>
         <td>${r.variant_label ? esc(r.variant_label) : '-'}</td>
-        <td>${r.requested}</td>
-        <td>${r.received}${diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : ''}</td>
-        <td>${r.sold}</td>
-        <td>${r.adjusted}</td>
-        <td class="${r.current_stock <= 5 ? 'stock-low' : 'stock-ok'}">${r.current_stock}</td>
+        <td style="color:#856404;font-weight:${r.on_hold ? '600' : '400'}">${r.on_hold || 0}</td>
+        <td class="${r.available <= 5 ? 'stock-low' : 'stock-ok'}">${r.available != null ? r.available : r.current_stock}</td>
+        <td style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
+        <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
         <td>${esc(r.location)}</td>
       </tr>`;
     }).join('');
 }
 
 document.getElementById('search-inventory').addEventListener('input', () => renderInventoryOverview(invOverviewData));
+
+// --- Inventory Log ---
+let invLogData = [];
+let invLogTotal = 0;
+let invLogPage = 0;
+let invLogSortField = 'created_at';
+let invLogSortDir = 'desc';
+
+async function loadInventoryLog() {
+  const reason = document.getElementById('inv-log-reason').value;
+  const limit = parseInt(document.getElementById('inv-log-limit').value) || 50;
+  const offset = invLogPage * limit;
+  let url = API + '/reports/inventory-movement?limit=' + limit + '&offset=' + offset;
+  if (reason) url += '&reason=' + encodeURIComponent(reason);
+  const res = await fetch(url);
+  const data = await res.json();
+  invLogData = data.items || data;
+  invLogTotal = data.total || invLogData.length;
+  renderInventoryLog();
+}
+
+function sortInvLog(field) {
+  if (invLogSortField === field) {
+    invLogSortDir = invLogSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    invLogSortField = field;
+    invLogSortDir = field === 'created_at' ? 'desc' : 'asc';
+  }
+  renderInventoryLog();
+}
+
+function renderInventoryLog() {
+  const q = (document.getElementById('search-inv-log').value || '').toLowerCase();
+  let filtered = invLogData.filter(r => {
+    if (!q) return true;
+    return (r.sku || '').toLowerCase().includes(q) ||
+           (r.product_name || '').toLowerCase().includes(q) ||
+           (r.note || '').toLowerCase().includes(q) ||
+           (r.reason || '').toLowerCase().includes(q) ||
+           (r.reference_id || '').toLowerCase().includes(q);
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    let va = a[invLogSortField], vb = b[invLogSortField];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va < vb) return invLogSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return invLogSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Update sort indicators
+  document.querySelectorAll('[id^="inv-log-sort-"]').forEach(el => el.textContent = '');
+  const sortEl = document.getElementById('inv-log-sort-' + invLogSortField);
+  if (sortEl) sortEl.textContent = invLogSortDir === 'asc' ? ' ▲' : ' ▼';
+
+  const limit = parseInt(document.getElementById('inv-log-limit').value) || 50;
+  document.getElementById('inv-log-count').textContent = `Showing ${filtered.length} of ${invLogTotal} entries`;
+
+  document.getElementById('inv-log-body').innerHTML = filtered.length === 0
+    ? '<tr><td colspan="8" class="empty">No log entries</td></tr>'
+    : filtered.map(r => {
+      const changeColor = r.change > 0 ? '#28a745' : r.change < 0 ? '#dc3545' : '#666';
+      const changePrefix = r.change > 0 ? '+' : '';
+      const reasonBadge = `<span class="badge badge-${r.reason === 'order' ? 'processing' : r.reason === 'inbound' ? 'packed' : 'pending'}">${esc(r.reason)}</span>`;
+      const dt = r.created_at ? new Date(r.created_at) : null;
+      const timeStr = dt ? dt.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '-';
+      return `<tr>
+        <td style="font-size:13px;color:#666;white-space:nowrap">${timeStr}</td>
+        <td><strong>${esc(r.sku || '')}</strong></td>
+        <td>${esc(r.product_name || '')}</td>
+        <td style="color:${changeColor};font-weight:700;font-size:15px">${changePrefix}${r.change}</td>
+        <td style="font-weight:500">${r.balance_after}</td>
+        <td>${reasonBadge}</td>
+        <td style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
+        <td style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>
+      </tr>`;
+    }).join('');
+
+  // Pagination
+  const totalPages = Math.ceil(invLogTotal / limit);
+  let pagHtml = '';
+  if (totalPages > 1) {
+    pagHtml += `<button class="btn btn-sm btn-outline" ${invLogPage <= 0 ? 'disabled' : ''} onclick="invLogPage=0;loadInventoryLog()">First</button>`;
+    pagHtml += `<button class="btn btn-sm btn-outline" ${invLogPage <= 0 ? 'disabled' : ''} onclick="invLogPage--;loadInventoryLog()">Prev</button>`;
+    pagHtml += `<span style="font-size:13px;color:#666">Page ${invLogPage + 1} / ${totalPages}</span>`;
+    pagHtml += `<button class="btn btn-sm btn-outline" ${invLogPage >= totalPages - 1 ? 'disabled' : ''} onclick="invLogPage++;loadInventoryLog()">Next</button>`;
+    pagHtml += `<button class="btn btn-sm btn-outline" ${invLogPage >= totalPages - 1 ? 'disabled' : ''} onclick="invLogPage=${totalPages - 1};loadInventoryLog()">Last</button>`;
+  }
+  document.getElementById('inv-log-pagination').innerHTML = pagHtml;
+}
 
 // --- Stock Requests ---
 let allStockRequests = [];
@@ -2891,6 +3049,7 @@ async function loadReports() {
 }
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function escAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;'); }
 
 // Report sub-tabs
 function switchRptTab(name) {

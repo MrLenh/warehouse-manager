@@ -48,10 +48,12 @@ def inventory_breakdown_report(db: Session = Depends(get_db)):
 @router.get("/inventory-movement")
 def inventory_movement_report(
     product_id: str | None = None,
+    reason: str | None = None,
     limit: int = 50,
+    offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    return report_service.inventory_movement(db, product_id=product_id, limit=limit)
+    return report_service.inventory_movement(db, product_id=product_id, reason=reason, limit=limit, offset=offset)
 
 
 @router.get("/batches")

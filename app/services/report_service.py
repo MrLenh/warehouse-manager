@@ -537,22 +537,43 @@ def inventory_breakdown(db: Session) -> dict:
     }
 
 
-def inventory_movement(db: Session, product_id: str | None = None, limit: int = 50) -> list[dict]:
+def inventory_movement(
+    db: Session,
+    product_id: str | None = None,
+    reason: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
     q = db.query(InventoryLog)
     if product_id:
         q = q.filter(InventoryLog.product_id == product_id)
-    logs = q.order_by(InventoryLog.created_at.desc()).limit(limit).all()
+    if reason:
+        q = q.filter(InventoryLog.reason == reason)
 
-    return [
-        {
+    total = q.count()
+    logs = q.order_by(InventoryLog.created_at.desc()).offset(offset).limit(limit).all()
+
+    # Pre-fetch product names/SKUs
+    product_ids = list({log.product_id for log in logs})
+    products_map = {}
+    if product_ids:
+        products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+        products_map = {p.id: p for p in products}
+
+    items = []
+    for log in logs:
+        p = products_map.get(log.product_id)
+        items.append({
             "id": log.id,
             "product_id": log.product_id,
+            "sku": p.sku if p else "",
+            "product_name": p.name if p else "",
             "change": log.change,
             "reason": log.reason,
             "reference_id": log.reference_id,
             "balance_after": log.balance_after,
             "note": log.note,
             "created_at": log.created_at.isoformat() if log.created_at else None,
-        }
-        for log in logs
-    ]
+        })
+
+    return {"total": total, "items": items}
