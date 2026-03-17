@@ -18,5 +18,6 @@ class InventoryLog(Base):
     reason: Mapped[str] = mapped_column(String, nullable=False)  # inbound, order, adjustment
     reference_id: Mapped[str] = mapped_column(String, default="")  # order_id or note
     balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    gap: Mapped[int] = mapped_column(Integer, default=0)  # in-warehouse change delta on adjustment
     note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

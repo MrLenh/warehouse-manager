@@ -109,11 +109,14 @@ def adjust_inventory(db: Session, product_id: str, data: InventoryAdjust) -> Pro
     if new_qty < 0:
         raise ValueError(f"Insufficient stock. Current: {product.quantity}, requested change: {data.quantity}")
     product.quantity = new_qty
+    # gap = in-warehouse change delta (same as quantity change for adjustments)
+    gap = data.quantity if data.reason == "adjustment" else 0
     log = InventoryLog(
         product_id=product.id,
         change=data.quantity,
         reason=data.reason,
         balance_after=new_qty,
+        gap=gap,
         note=data.note,
     )
     db.add(log)
@@ -201,11 +204,13 @@ def adjust_variant_inventory(db: Session, variant_id: str, data: VariantInventor
     if new_qty < 0:
         raise ValueError(f"Insufficient stock. Current: {variant.quantity}, requested change: {data.quantity}")
     variant.quantity = new_qty
+    gap = data.quantity if data.reason == "adjustment" else 0
     log = InventoryLog(
         product_id=variant.product_id,
         change=data.quantity,
         reason=data.reason,
         balance_after=new_qty,
+        gap=gap,
         note=f"[Variant {variant.variant_sku}] {data.note}",
     )
     db.add(log)

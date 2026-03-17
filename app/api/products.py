@@ -312,6 +312,7 @@ def inventory_logs(product_id: str, db: Session = Depends(get_db)):
             "reason": log.reason,
             "reference_id": log.reference_id,
             "balance_after": log.balance_after,
+            "gap": getattr(log, "gap", 0) or 0,
             "note": log.note,
             "created_at": log.created_at,
         }

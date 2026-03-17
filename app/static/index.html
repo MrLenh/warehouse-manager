@@ -156,6 +156,7 @@ tr:hover{background:#f8f9ff}
 .scan-cam-btn{background:none;border:none;cursor:pointer;padding:4px;display:none;align-items:center;justify-content:center;border-radius:50%;transition:.2s}
 .scan-cam-btn:hover{background:rgba(255,255,255,.2)}
 @media(max-width:768px){.scan-cam-btn{display:inline-flex}#inv-breakdown-cards{grid-template-columns:repeat(2,1fr)!important}}
+@media(max-width:1200px){#inv-breakdown-cards{grid-template-columns:repeat(3,1fr)!important}}
 .scan-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
 .scan-modal-overlay.show{display:flex}
 .scan-modal-box{background:#fff;border-radius:16px;width:95vw;max-width:420px;overflow:hidden}
@@ -308,26 +309,36 @@ tr:hover{background:#f8f9ff}
     </div>
 
     <!-- Breakdown Summary Cards -->
-    <div id="inv-breakdown-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
-      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #ffc107">
-        <div style="font-size:13px;color:#856404;font-weight:600;text-transform:uppercase;letter-spacing:.5px">On Hold</div>
-        <div style="font-size:11px;color:#999;margin-bottom:4px">confirmed / processing / label purchased</div>
-        <div id="bd-on-hold" style="font-size:28px;font-weight:700;color:#856404">0</div>
+    <div id="inv-breakdown-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #2196F3">
+        <div style="font-size:12px;color:#1565C0;font-weight:600;text-transform:uppercase;letter-spacing:.5px">In Warehouse</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">available + on hold</div>
+        <div id="bd-in-warehouse" style="font-size:26px;font-weight:700;color:#1565C0">0</div>
       </div>
-      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #28a745">
-        <div style="font-size:13px;color:#155724;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Available</div>
-        <div style="font-size:11px;color:#999;margin-bottom:4px">current stock</div>
-        <div id="bd-available" style="font-size:28px;font-weight:700;color:#28a745">0</div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #ffc107">
+        <div style="font-size:12px;color:#856404;font-weight:600;text-transform:uppercase;letter-spacing:.5px">On Hold</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">confirmed / processing / label</div>
+        <div id="bd-on-hold" style="font-size:26px;font-weight:700;color:#856404">0</div>
       </div>
-      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #6c3483">
-        <div style="font-size:13px;color:#6c3483;font-weight:600;text-transform:uppercase;letter-spacing:.5px">In Production</div>
-        <div style="font-size:11px;color:#999;margin-bottom:4px">packing / packed</div>
-        <div id="bd-in-production" style="font-size:28px;font-weight:700;color:#6c3483">0</div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #28a745">
+        <div style="font-size:12px;color:#155724;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Available</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">ready for new orders</div>
+        <div id="bd-available" style="font-size:26px;font-weight:700;color:#28a745">0</div>
       </div>
-      <div style="background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #0c5460">
-        <div style="font-size:13px;color:#0c5460;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Shipped</div>
-        <div style="font-size:11px;color:#999;margin-bottom:4px">drop off / shipped / in transit / delivered</div>
-        <div id="bd-shipped" style="font-size:28px;font-weight:700;color:#0c5460">0</div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #6c3483">
+        <div style="font-size:12px;color:#6c3483;font-weight:600;text-transform:uppercase;letter-spacing:.5px">In Production</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">packing / packed</div>
+        <div id="bd-in-production" style="font-size:26px;font-weight:700;color:#6c3483">0</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #0c5460">
+        <div style="font-size:12px;color:#0c5460;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Shipped</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">drop off / shipped / in transit</div>
+        <div id="bd-shipped" style="font-size:26px;font-weight:700;color:#0c5460">0</div>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #e91e63">
+        <div style="font-size:12px;color:#e91e63;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Gap</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">adjustment variance</div>
+        <div id="bd-gap" style="font-size:26px;font-weight:700;color:#e91e63">0</div>
       </div>
     </div>
 
@@ -350,7 +361,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
       </div>
       <table>
-        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Location</th><th></th></tr></thead>
+        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>In Warehouse</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Location</th><th></th></tr></thead>
         <tbody id="inv-overview-body"></tbody>
       </table>
     </div>
@@ -377,6 +388,7 @@ tr:hover{background:#f8f9ff}
             <th style="cursor:pointer" onclick="sortInvLog('product_name')">Product <span id="inv-log-sort-product_name"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('change')">Change <span id="inv-log-sort-change"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('balance_after')">Balance <span id="inv-log-sort-balance_after"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('gap')">Gap <span id="inv-log-sort-gap"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('reason')">Reason <span id="inv-log-sort-reason"></span></th>
             <th>Reference</th>
             <th>Note</th>
@@ -389,7 +401,7 @@ tr:hover{background:#f8f9ff}
 
     <!-- Daily Report -->
     <div id="inv-daily-report" class="inv-panel" style="display:none">
-      <div class="toolbar" style="flex-wrap:wrap;gap:8px">
+      <div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">
         <label style="font-size:13px;color:#666">From:</label>
         <input type="date" id="inv-daily-start" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
         <label style="font-size:13px;color:#666">To:</label>
@@ -398,6 +410,23 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="setDailyRange('today')">Today</button>
         <button class="btn btn-outline btn-sm" onclick="setDailyRange('7d')">7 Days</button>
         <button class="btn btn-outline btn-sm" onclick="setDailyRange('30d')">30 Days</button>
+        <div style="margin-left:auto;position:relative">
+          <button class="btn btn-outline btn-sm" onclick="toggleMetricDropdown()" id="metric-dropdown-btn" style="min-width:140px">Metrics &#9662;</button>
+          <div id="metric-dropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:8px;z-index:100;min-width:180px">
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="in_warehouse" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#2196F3;display:inline-block"></span> In Warehouse</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="available" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#28a745;display:inline-block"></span> Available</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="on_hold" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#ffc107;display:inline-block"></span> On Hold</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="in_production" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#6c3483;display:inline-block"></span> In Production</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="shipped" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#0c5460;display:inline-block"></span> Shipped</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="gap" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#e91e63;display:inline-block"></span> Gap (line)</label>
+          </div>
+        </div>
+      </div>
+      <!-- Chart -->
+      <div class="card" style="margin-bottom:16px;padding:12px">
+        <div style="position:relative;width:100%;height:320px">
+          <canvas id="inv-daily-chart"></canvas>
+        </div>
       </div>
       <div id="inv-daily-content"></div>
     </div>
@@ -2623,21 +2652,32 @@ function renderInventoryOverview(data) {
   });
 
   // Update breakdown cards from filtered data
-  let totOnHold = 0, totAvailable = 0, totInProd = 0, totShipped = 0;
-  filtered.forEach(r => { totOnHold += r.on_hold || 0; totAvailable += r.available || r.current_stock || 0; totInProd += r.in_production || 0; totShipped += r.shipped || 0; });
+  let totOnHold = 0, totAvailable = 0, totInProd = 0, totShipped = 0, totInWarehouse = 0, totGap = 0;
+  filtered.forEach(r => {
+    totOnHold += r.on_hold || 0;
+    totAvailable += r.available || r.current_stock || 0;
+    totInProd += r.in_production || 0;
+    totShipped += r.shipped || 0;
+    totInWarehouse += r.in_warehouse || ((r.available || r.current_stock || 0) + (r.on_hold || 0));
+    totGap += r.gap || 0;
+  });
+  document.getElementById('bd-in-warehouse').textContent = totInWarehouse;
   document.getElementById('bd-on-hold').textContent = totOnHold;
   document.getElementById('bd-available').textContent = totAvailable;
   document.getElementById('bd-in-production').textContent = totInProd;
   document.getElementById('bd-shipped').textContent = totShipped;
+  document.getElementById('bd-gap').textContent = totGap;
 
   document.getElementById('inv-overview-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="9" class="empty">No data available</td></tr>'
+    ? '<tr><td colspan="10" class="empty">No data available</td></tr>'
     : filtered.map(r => {
       const label = r.variant_sku ? (r.variant_sku + ' - ' + r.name + (r.variant_label ? ' (' + r.variant_label + ')' : '')) : (r.sku + ' - ' + r.name);
+      const inWh = r.in_warehouse || ((r.available || r.current_stock || 0) + (r.on_hold || 0));
       return `<tr>
         <td><strong>${esc(r.variant_sku || r.sku)}</strong></td>
         <td>${esc(r.name)}</td>
         <td>${r.variant_label ? esc(r.variant_label) : '-'}</td>
+        <td style="color:#1565C0;font-weight:600">${inWh}</td>
         <td style="color:#856404;font-weight:${r.on_hold ? '600' : '400'}">${r.on_hold || 0}</td>
         <td class="${r.available <= 5 ? 'stock-low' : 'stock-ok'}">${r.available != null ? r.available : r.current_stock}</td>
         <td style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
@@ -2652,6 +2692,8 @@ document.getElementById('search-inventory').addEventListener('input', () => rend
 
 // --- Inventory Daily Report ---
 let invDailyLoaded = false;
+let invDailyChart = null;
+let invDailyChartData = [];
 
 function setDailyRange(range) {
   const end = new Date();
@@ -2663,18 +2705,109 @@ function setDailyRange(range) {
   document.getElementById('inv-daily-end').value = end.toISOString().slice(0, 10);
 }
 
+function toggleMetricDropdown() {
+  const dd = document.getElementById('metric-dropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('metric-dropdown');
+  const btn = document.getElementById('metric-dropdown-btn');
+  if (dd && btn && !dd.contains(e.target) && !btn.contains(e.target)) dd.style.display = 'none';
+});
+
+function getSelectedMetrics() {
+  const checks = document.querySelectorAll('#metric-dropdown input[type=checkbox]');
+  return Array.from(checks).filter(c => c.checked).map(c => c.value);
+}
+
 async function loadInventoryDaily() {
   const startDate = document.getElementById('inv-daily-start').value;
   const endDate = document.getElementById('inv-daily-end').value;
-  let url = API + '/reports/inventory-daily';
   const params = [];
   if (startDate) params.push('start_date=' + startDate);
   if (endDate) params.push('end_date=' + endDate);
-  if (params.length) url += '?' + params.join('&');
-  const res = await fetch(url);
-  const data = await res.json();
+  const qs = params.length ? '?' + params.join('&') : '';
+
+  // Load both daily report and chart data in parallel
+  const [res1, res2] = await Promise.all([
+    fetch(API + '/reports/inventory-daily' + qs),
+    fetch(API + '/reports/inventory-daily-chart' + qs),
+  ]);
+  const data = await res1.json();
+  const chartResp = await res2.json();
   invDailyLoaded = true;
+  invDailyChartData = chartResp.chart || [];
   renderInventoryDaily(data);
+  renderDailyChart();
+}
+
+function renderDailyChart() {
+  const metrics = getSelectedMetrics();
+  const labels = invDailyChartData.map(d => d.date);
+
+  const metricConfig = {
+    in_warehouse: { label: 'In Warehouse', color: '#2196F3', type: 'bar' },
+    available:    { label: 'Available',     color: '#28a745', type: 'bar' },
+    on_hold:      { label: 'On Hold',       color: '#ffc107', type: 'bar' },
+    in_production:{ label: 'In Production', color: '#6c3483', type: 'bar' },
+    shipped:      { label: 'Shipped',       color: '#0c5460', type: 'bar' },
+    gap:          { label: 'Gap',           color: '#e91e63', type: 'line' },
+  };
+
+  const datasets = [];
+  for (const m of metrics) {
+    const cfg = metricConfig[m];
+    if (!cfg) continue;
+    const ds = {
+      label: cfg.label,
+      data: invDailyChartData.map(d => d[m] || 0),
+      backgroundColor: cfg.color + (cfg.type === 'bar' ? 'CC' : '22'),
+      borderColor: cfg.color,
+      borderWidth: cfg.type === 'line' ? 2.5 : 1,
+      type: cfg.type,
+      order: cfg.type === 'line' ? 0 : 1,
+      yAxisID: cfg.type === 'line' ? 'y1' : 'y',
+    };
+    if (cfg.type === 'line') {
+      ds.fill = false;
+      ds.tension = 0.3;
+      ds.pointRadius = 4;
+      ds.pointBackgroundColor = cfg.color;
+    }
+    datasets.push(ds);
+  }
+
+  const hasGap = metrics.includes('gap');
+  if (invDailyChart) invDailyChart.destroy();
+  const ctx = document.getElementById('inv-daily-chart').getContext('2d');
+  invDailyChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 14, padding: 12, font: { size: 12 } } },
+        tooltip: { mode: 'index', intersect: false },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+        y: { position: 'left', beginAtZero: true, title: { display: true, text: 'Quantity', font: { size: 12 } }, grid: { color: '#f0f0f0' } },
+        y1: {
+          position: 'right',
+          beginAtZero: true,
+          display: hasGap,
+          title: { display: hasGap, text: 'Gap', font: { size: 12 } },
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
+  });
+}
+
+function updateDailyChart() {
+  if (invDailyChartData.length > 0) renderDailyChart();
 }
 
 function renderInventoryDaily(data) {
@@ -2687,16 +2820,17 @@ function renderInventoryDaily(data) {
   for (const day of days) {
     const t = day.totals;
     html += `<div style="margin-bottom:24px">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;padding:10px 16px;background:#f8f9fa;border-radius:8px;border-left:4px solid #667eea">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:10px 16px;background:#f8f9fa;border-radius:8px;border-left:4px solid #667eea;flex-wrap:wrap">
         <strong style="font-size:15px">${day.date}</strong>
         <span style="color:#28a745;font-size:13px;font-weight:600">Inbound: +${t.inbound}</span>
         <span style="color:#dc3545;font-size:13px;font-weight:600">Order: ${t.order}</span>
         <span style="color:#856404;font-size:13px;font-weight:600">Adjust: ${t.adjustment > 0 ? '+' : ''}${t.adjustment}</span>
+        <span style="color:#e91e63;font-size:13px;font-weight:600">Gap: ${t.gap > 0 ? '+' : ''}${t.gap}</span>
         <span style="font-size:13px;font-weight:700;color:${t.net_change >= 0 ? '#28a745' : '#dc3545'}">Net: ${t.net_change >= 0 ? '+' : ''}${t.net_change}</span>
         <span style="font-size:12px;color:#999;margin-left:auto">${t.entries} entries</span>
       </div>
       <table>
-        <thead><tr><th>SKU</th><th>Product</th><th style="color:#28a745">Inbound</th><th style="color:#dc3545">Order</th><th style="color:#856404">Adjustment</th><th>Net Change</th><th>Entries</th></tr></thead>
+        <thead><tr><th>SKU</th><th>Product</th><th style="color:#28a745">Inbound</th><th style="color:#dc3545">Order</th><th style="color:#856404">Adjustment</th><th style="color:#e91e63">Gap</th><th>Net Change</th><th>Entries</th></tr></thead>
         <tbody>${day.items.map(r => {
           const netColor = r.net_change > 0 ? '#28a745' : r.net_change < 0 ? '#dc3545' : '#666';
           return `<tr>
@@ -2705,6 +2839,7 @@ function renderInventoryDaily(data) {
             <td style="color:#28a745;font-weight:${r.inbound ? '600' : '400'}">${r.inbound ? '+' + r.inbound : '-'}</td>
             <td style="color:#dc3545;font-weight:${r.order ? '600' : '400'}">${r.order || '-'}</td>
             <td style="color:#856404;font-weight:${r.adjustment ? '600' : '400'}">${r.adjustment ? (r.adjustment > 0 ? '+' : '') + r.adjustment : '-'}</td>
+            <td style="color:#e91e63;font-weight:${r.gap ? '600' : '400'}">${r.gap ? (r.gap > 0 ? '+' : '') + r.gap : '-'}</td>
             <td style="color:${netColor};font-weight:700">${r.net_change > 0 ? '+' : ''}${r.net_change}</td>
             <td style="color:#999">${r.entries}</td>
           </tr>`;
@@ -2775,10 +2910,12 @@ function renderInventoryLog() {
   document.getElementById('inv-log-count').textContent = `Showing ${filtered.length} of ${invLogTotal} entries`;
 
   document.getElementById('inv-log-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="8" class="empty">No log entries</td></tr>'
+    ? '<tr><td colspan="9" class="empty">No log entries</td></tr>'
     : filtered.map(r => {
       const changeColor = r.change > 0 ? '#28a745' : r.change < 0 ? '#dc3545' : '#666';
       const changePrefix = r.change > 0 ? '+' : '';
+      const gapVal = r.gap || 0;
+      const gapColor = gapVal > 0 ? '#e91e63' : gapVal < 0 ? '#e91e63' : '#ccc';
       const reasonBadge = `<span class="badge badge-${r.reason === 'order' ? 'processing' : r.reason === 'inbound' ? 'packed' : 'pending'}">${esc(r.reason)}</span>`;
       const dt = r.created_at ? new Date(r.created_at) : null;
       const timeStr = dt ? dt.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '-';
@@ -2788,6 +2925,7 @@ function renderInventoryLog() {
         <td>${esc(r.product_name || '')}</td>
         <td style="color:${changeColor};font-weight:700;font-size:15px">${changePrefix}${r.change}</td>
         <td style="font-weight:500">${r.balance_after}</td>
+        <td style="color:${gapColor};font-weight:${gapVal ? '600' : '400'}">${gapVal ? (gapVal > 0 ? '+' : '') + gapVal : '-'}</td>
         <td>${reasonBadge}</td>
         <td style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
         <td style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>

@@ -178,6 +178,13 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE stock_requests ADD COLUMN {col_name} {col_type}"))
 
+    # Inventory logs: gap column
+    if "inventory_logs" in tables:
+        existing = {col["name"] for col in inspector.get_columns("inventory_logs")}
+        if "gap" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN gap INTEGER DEFAULT 0"))
+
     # Stock request items: box_count
     if "stock_request_items" in tables:
         existing = {col["name"] for col in inspector.get_columns("stock_request_items")}

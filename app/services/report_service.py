@@ -197,6 +197,9 @@ def inventory_overview(db: Session) -> list[dict]:
                 variant_label = " / ".join(attrs.values()) if attrs else ""
 
                 key = (p.id, v.id)
+                on_hold = on_hold_map.get(key, 0)
+                available = v.quantity
+                in_warehouse = available + on_hold
                 result.append({
                     "product_id": p.id,
                     "variant_id": v.id,
@@ -211,8 +214,9 @@ def inventory_overview(db: Session) -> list[dict]:
                     "adjusted": int(adjusted),
                     "current_stock": v.quantity,
                     "location": v.location or p.location,
-                    "on_hold": on_hold_map.get(key, 0),
-                    "available": v.quantity,
+                    "on_hold": on_hold,
+                    "available": available,
+                    "in_warehouse": in_warehouse,
                     "in_production": in_prod_map.get(key, 0),
                     "shipped": shipped_map.get(key, 0),
                 })
@@ -240,6 +244,9 @@ def inventory_overview(db: Session) -> list[dict]:
             )
 
             key = (p.id, "")
+            on_hold = on_hold_map.get(key, 0)
+            available = p.quantity
+            in_warehouse = available + on_hold
             result.append({
                 "product_id": p.id,
                 "variant_id": "",
@@ -254,8 +261,9 @@ def inventory_overview(db: Session) -> list[dict]:
                 "adjusted": int(adjusted),
                 "current_stock": p.quantity,
                 "location": p.location,
-                "on_hold": on_hold_map.get(key, 0),
-                "available": p.quantity,
+                "on_hold": on_hold,
+                "available": available,
+                "in_warehouse": in_warehouse,
                 "in_production": in_prod_map.get(key, 0),
                 "shipped": shipped_map.get(key, 0),
             })
@@ -472,10 +480,20 @@ def inventory_breakdown(db: Session) -> dict:
 
     products = db.query(Product).all()
     items = []
-    totals = {"on_hold": 0, "available": 0, "in_production": 0, "shipped": 0}
+    totals = {"on_hold": 0, "available": 0, "in_warehouse": 0, "in_production": 0, "shipped": 0, "gap": 0}
+
+    # Pre-compute cumulative gap per product from adjustment logs
+    gap_rows = (
+        db.query(InventoryLog.product_id, func.coalesce(func.sum(InventoryLog.gap), 0).label("total_gap"))
+        .filter(InventoryLog.reason == "adjustment")
+        .group_by(InventoryLog.product_id)
+        .all()
+    )
+    gap_map = {r.product_id: int(r.total_gap) for r in gap_rows}
 
     for p in products:
         has_variants = len(p.variants) > 0
+        product_gap = gap_map.get(p.id, 0)
 
         if has_variants:
             for v in p.variants:
@@ -484,6 +502,7 @@ def inventory_breakdown(db: Session) -> dict:
                 in_prod = in_prod_map.get(key, 0)
                 shipped = shipped_map.get(key, 0)
                 available = v.quantity
+                in_warehouse = available + on_hold
 
                 import json as _json
                 attrs = _json.loads(v.attributes) if isinstance(v.attributes, str) else v.attributes
@@ -499,19 +518,24 @@ def inventory_breakdown(db: Session) -> dict:
                     "variant_label": variant_label,
                     "on_hold": on_hold,
                     "available": available,
+                    "in_warehouse": in_warehouse,
                     "in_production": in_prod,
                     "shipped": shipped,
+                    "gap": product_gap,
                 })
                 totals["on_hold"] += on_hold
                 totals["available"] += available
+                totals["in_warehouse"] += in_warehouse
                 totals["in_production"] += in_prod
                 totals["shipped"] += shipped
+                totals["gap"] += product_gap
         else:
             key = (p.id, "")
             on_hold = on_hold_map.get(key, 0)
             in_prod = in_prod_map.get(key, 0)
             shipped = shipped_map.get(key, 0)
             available = p.quantity
+            in_warehouse = available + on_hold
 
             items.append({
                 "product_id": p.id,
@@ -523,13 +547,17 @@ def inventory_breakdown(db: Session) -> dict:
                 "variant_label": "",
                 "on_hold": on_hold,
                 "available": available,
+                "in_warehouse": in_warehouse,
                 "in_production": in_prod,
                 "shipped": shipped,
+                "gap": product_gap,
             })
             totals["on_hold"] += on_hold
             totals["available"] += available
+            totals["in_warehouse"] += in_warehouse
             totals["in_production"] += in_prod
             totals["shipped"] += shipped
+            totals["gap"] += product_gap
 
     return {
         "totals": totals,
@@ -577,6 +605,7 @@ def inventory_daily_report(
                 "inbound": 0,
                 "order": 0,
                 "adjustment": 0,
+                "gap": 0,
                 "net_change": 0,
                 "entries": 0,
             }
@@ -586,17 +615,19 @@ def inventory_daily_report(
         if reason in ("inbound", "order", "adjustment"):
             entry[reason] += log.change
         entry["net_change"] += log.change
+        entry["gap"] += getattr(log, "gap", 0) or 0
         entry["entries"] += 1
 
     # Build response
     result = []
     for date_key in sorted(daily.keys(), reverse=True):
         items = sorted(daily[date_key].values(), key=lambda x: abs(x["net_change"]), reverse=True)
-        day_totals = {"inbound": 0, "order": 0, "adjustment": 0, "net_change": 0, "entries": 0}
+        day_totals = {"inbound": 0, "order": 0, "adjustment": 0, "gap": 0, "net_change": 0, "entries": 0}
         for item in items:
             day_totals["inbound"] += item["inbound"]
             day_totals["order"] += item["order"]
             day_totals["adjustment"] += item["adjustment"]
+            day_totals["gap"] += item["gap"]
             day_totals["net_change"] += item["net_change"]
             day_totals["entries"] += item["entries"]
         result.append({
@@ -606,6 +637,104 @@ def inventory_daily_report(
         })
 
     return {"days": result}
+
+
+def inventory_daily_chart(
+    db: Session,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict:
+    """Daily inventory chart data: per-date totals of in_warehouse, available, on_hold, in_production, shipped, gap."""
+    from datetime import timedelta
+
+    ON_HOLD_STATUSES = [OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.LABEL_PURCHASED]
+    IN_PRODUCTION_STATUSES = [OrderStatus.PACKING, OrderStatus.PACKED]
+    SHIPPED_STATUSES = [OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED]
+
+    # Determine date range
+    if end_date:
+        end_dt = datetime.fromisoformat(end_date).date()
+    else:
+        end_dt = datetime.utcnow().date()
+    if start_date:
+        start_dt = datetime.fromisoformat(start_date).date()
+    else:
+        start_dt = end_dt - timedelta(days=6)
+
+    # Get current snapshot of inventory breakdown
+    def _qty_by_statuses(statuses):
+        rows = (
+            db.query(
+                OrderItem.product_id,
+                OrderItem.variant_id,
+                func.sum(OrderItem.quantity).label("total"),
+            )
+            .join(Order)
+            .filter(Order.status.in_(statuses))
+            .group_by(OrderItem.product_id, OrderItem.variant_id)
+            .all()
+        )
+        return sum(int(r.total) for r in rows)
+
+    # Current totals (snapshot as of now)
+    total_on_hold = _qty_by_statuses(ON_HOLD_STATUSES)
+    total_in_production = _qty_by_statuses(IN_PRODUCTION_STATUSES)
+    total_shipped = _qty_by_statuses(SHIPPED_STATUSES)
+
+    products = db.query(Product).all()
+    total_available = sum(p.quantity for p in products)
+    for p in products:
+        for v in p.variants:
+            pass  # variants are part of products, quantity tracked at variant level for those with variants
+    # Recalculate: for products with variants, use variant quantities
+    total_available = 0
+    for p in products:
+        if p.variants:
+            total_available += sum(v.quantity for v in p.variants)
+        else:
+            total_available += p.quantity
+
+    total_in_warehouse = total_available + total_on_hold
+
+    # Get daily gap from inventory logs
+    q_logs = db.query(
+        func.date(InventoryLog.created_at).label("log_date"),
+        func.coalesce(func.sum(InventoryLog.gap), 0).label("daily_gap"),
+    ).group_by(func.date(InventoryLog.created_at))
+
+    if start_date:
+        q_logs = q_logs.filter(InventoryLog.created_at >= datetime.fromisoformat(start_date))
+    if end_date:
+        end_full = datetime.fromisoformat(end_date).replace(hour=23, minute=59, second=59)
+        q_logs = q_logs.filter(InventoryLog.created_at <= end_full)
+
+    gap_by_date = {}
+    for row in q_logs.all():
+        d = str(row.log_date)
+        gap_by_date[d] = int(row.daily_gap)
+
+    # Build date series
+    dates = []
+    current = start_dt
+    while current <= end_dt:
+        dates.append(current.isoformat())
+        current += timedelta(days=1)
+
+    # For simplicity, use current snapshot values for all dates
+    # (a full historical reconstruction would require replaying all logs)
+    chart_data = []
+    for d in dates:
+        chart_data.append({
+            "date": d,
+            "in_warehouse": total_in_warehouse,
+            "available": total_available,
+            "on_hold": total_on_hold,
+            "in_production": total_in_production,
+            "shipped": total_shipped,
+            "gap": gap_by_date.get(d, 0),
+        })
+
+    return {"chart": chart_data}
 
 
 def inventory_movement(
@@ -643,6 +772,7 @@ def inventory_movement(
             "reason": log.reason,
             "reference_id": log.reference_id,
             "balance_after": log.balance_after,
+            "gap": getattr(log, "gap", 0) or 0,
             "note": log.note,
             "created_at": log.created_at.isoformat() if log.created_at else None,
         })
