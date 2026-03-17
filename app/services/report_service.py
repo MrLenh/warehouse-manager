@@ -129,7 +129,28 @@ def top_products(db: Session, limit: int = 10) -> list[dict]:
 
 
 def inventory_overview(db: Session) -> list[dict]:
-    """Per-product/variant breakdown: requested, received, sold, adjustments, current stock."""
+    """Per-product/variant breakdown: requested, received, sold, adjustments, current stock,
+    plus inventory breakdown (on_hold, available, in_production, shipped)."""
+
+    # Pre-compute order-item quantities grouped by status category
+    ON_HOLD_STATUSES = [OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.LABEL_PURCHASED]
+    IN_PRODUCTION_STATUSES = [OrderStatus.PACKING, OrderStatus.PACKED]
+    SHIPPED_STATUSES = [OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED]
+
+    def _qty_map(statuses):
+        rows = (
+            db.query(OrderItem.product_id, OrderItem.variant_id, func.sum(OrderItem.quantity).label("total"))
+            .join(Order)
+            .filter(Order.status.in_(statuses))
+            .group_by(OrderItem.product_id, OrderItem.variant_id)
+            .all()
+        )
+        return {(r.product_id, r.variant_id or ""): int(r.total) for r in rows}
+
+    on_hold_map = _qty_map(ON_HOLD_STATUSES)
+    in_prod_map = _qty_map(IN_PRODUCTION_STATUSES)
+    shipped_map = _qty_map(SHIPPED_STATUSES)
+
     products = db.query(Product).all()
     result = []
 
@@ -175,6 +196,7 @@ def inventory_overview(db: Session) -> list[dict]:
                 attrs = json.loads(v.attributes) if isinstance(v.attributes, str) else v.attributes
                 variant_label = " / ".join(attrs.values()) if attrs else ""
 
+                key = (p.id, v.id)
                 result.append({
                     "product_id": p.id,
                     "variant_id": v.id,
@@ -189,6 +211,10 @@ def inventory_overview(db: Session) -> list[dict]:
                     "adjusted": int(adjusted),
                     "current_stock": v.quantity,
                     "location": v.location or p.location,
+                    "on_hold": on_hold_map.get(key, 0),
+                    "available": v.quantity,
+                    "in_production": in_prod_map.get(key, 0),
+                    "shipped": shipped_map.get(key, 0),
                 })
         else:
             # Product without variants
@@ -213,6 +239,7 @@ def inventory_overview(db: Session) -> list[dict]:
                 .scalar()
             )
 
+            key = (p.id, "")
             result.append({
                 "product_id": p.id,
                 "variant_id": "",
@@ -227,6 +254,10 @@ def inventory_overview(db: Session) -> list[dict]:
                 "adjusted": int(adjusted),
                 "current_stock": p.quantity,
                 "location": p.location,
+                "on_hold": on_hold_map.get(key, 0),
+                "available": p.quantity,
+                "in_production": in_prod_map.get(key, 0),
+                "shipped": shipped_map.get(key, 0),
             })
 
     return result
@@ -394,6 +425,116 @@ def _format_duration(seconds: float) -> str:
     if hours > 0:
         return f"{hours}h {minutes:02d}m"
     return f"{minutes}m"
+
+
+def inventory_breakdown(db: Session) -> dict:
+    """Break down inventory into categories based on order status.
+
+    - on_hold: items in orders with status confirmed, processing, label_purchased
+    - available: current stock (product/variant quantity) — ready for new orders
+    - in_production: items in orders with status packing, packed
+    - shipped: items in orders with status drop_off, shipped, in_transit, delivered
+    """
+    ON_HOLD_STATUSES = [
+        OrderStatus.CONFIRMED,
+        OrderStatus.PROCESSING,
+        OrderStatus.LABEL_PURCHASED,
+    ]
+    IN_PRODUCTION_STATUSES = [
+        OrderStatus.PACKING,
+        OrderStatus.PACKED,
+    ]
+    SHIPPED_STATUSES = [
+        OrderStatus.DROP_OFF,
+        OrderStatus.SHIPPED,
+        OrderStatus.IN_TRANSIT,
+        OrderStatus.DELIVERED,
+    ]
+
+    def _qty_by_statuses(statuses: list[OrderStatus]) -> dict[tuple[str, str], int]:
+        """Return {(product_id, variant_id): total_qty} for order items in given statuses."""
+        rows = (
+            db.query(
+                OrderItem.product_id,
+                OrderItem.variant_id,
+                func.sum(OrderItem.quantity).label("total"),
+            )
+            .join(Order)
+            .filter(Order.status.in_(statuses))
+            .group_by(OrderItem.product_id, OrderItem.variant_id)
+            .all()
+        )
+        return {(r.product_id, r.variant_id or ""): int(r.total) for r in rows}
+
+    on_hold_map = _qty_by_statuses(ON_HOLD_STATUSES)
+    in_prod_map = _qty_by_statuses(IN_PRODUCTION_STATUSES)
+    shipped_map = _qty_by_statuses(SHIPPED_STATUSES)
+
+    products = db.query(Product).all()
+    items = []
+    totals = {"on_hold": 0, "available": 0, "in_production": 0, "shipped": 0}
+
+    for p in products:
+        has_variants = len(p.variants) > 0
+
+        if has_variants:
+            for v in p.variants:
+                key = (p.id, v.id)
+                on_hold = on_hold_map.get(key, 0)
+                in_prod = in_prod_map.get(key, 0)
+                shipped = shipped_map.get(key, 0)
+                available = v.quantity
+
+                import json as _json
+                attrs = _json.loads(v.attributes) if isinstance(v.attributes, str) else v.attributes
+                variant_label = " / ".join(attrs.values()) if attrs else ""
+
+                items.append({
+                    "product_id": p.id,
+                    "variant_id": v.id,
+                    "sku": p.sku,
+                    "variant_sku": v.variant_sku,
+                    "name": p.name,
+                    "category": p.category,
+                    "variant_label": variant_label,
+                    "on_hold": on_hold,
+                    "available": available,
+                    "in_production": in_prod,
+                    "shipped": shipped,
+                })
+                totals["on_hold"] += on_hold
+                totals["available"] += available
+                totals["in_production"] += in_prod
+                totals["shipped"] += shipped
+        else:
+            key = (p.id, "")
+            on_hold = on_hold_map.get(key, 0)
+            in_prod = in_prod_map.get(key, 0)
+            shipped = shipped_map.get(key, 0)
+            available = p.quantity
+
+            items.append({
+                "product_id": p.id,
+                "variant_id": "",
+                "sku": p.sku,
+                "variant_sku": "",
+                "name": p.name,
+                "category": p.category,
+                "variant_label": "",
+                "on_hold": on_hold,
+                "available": available,
+                "in_production": in_prod,
+                "shipped": shipped,
+            })
+            totals["on_hold"] += on_hold
+            totals["available"] += available
+            totals["in_production"] += in_prod
+            totals["shipped"] += shipped
+
+    return {
+        "totals": totals,
+        "items": items,
+    }
 
 
 def inventory_movement(db: Session, product_id: str | None = None, limit: int = 50) -> list[dict]:
