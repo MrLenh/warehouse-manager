@@ -309,7 +309,7 @@ tr:hover{background:#f8f9ff}
     </div>
 
     <!-- Breakdown Summary Cards -->
-    <div id="inv-breakdown-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+    <div id="inv-breakdown-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
       <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #2196F3">
         <div style="font-size:12px;color:#1565C0;font-weight:600;text-transform:uppercase;letter-spacing:.5px">In Warehouse</div>
         <div style="font-size:10px;color:#999;margin-bottom:2px">available + on hold</div>
@@ -340,6 +340,11 @@ tr:hover{background:#f8f9ff}
         <div style="font-size:10px;color:#999;margin-bottom:2px">inventory adjustments</div>
         <div id="bd-gap" style="font-size:26px;font-weight:700;color:#e91e63">0</div>
       </div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #ff5722">
+        <div style="font-size:12px;color:#ff5722;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Pending</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">awaiting from stock requests</div>
+        <div id="bd-pending" style="font-size:26px;font-weight:700;color:#ff5722">0</div>
+      </div>
     </div>
 
     <!-- Inventory Overview -->
@@ -361,7 +366,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
       </div>
       <table>
-        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>In Warehouse</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Location</th><th></th></tr></thead>
+        <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>In Warehouse</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Pending</th><th>Location</th><th></th></tr></thead>
         <tbody id="inv-overview-body"></tbody>
       </table>
     </div>
@@ -419,6 +424,7 @@ tr:hover{background:#f8f9ff}
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="in_production" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#6c3483;display:inline-block"></span> In Production</label>
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="shipped" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#0c5460;display:inline-block"></span> Shipped</label>
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="gap" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#e91e63;display:inline-block"></span> Adjustment (line)</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="pending" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#ff5722;display:inline-block"></span> Pending (line)</label>
           </div>
         </div>
       </div>
@@ -2652,7 +2658,7 @@ function renderInventoryOverview(data) {
   });
 
   // Update breakdown cards from filtered data
-  let totOnHold = 0, totAvailable = 0, totInProd = 0, totShipped = 0, totInWarehouse = 0, totGap = 0;
+  let totOnHold = 0, totAvailable = 0, totInProd = 0, totShipped = 0, totInWarehouse = 0, totGap = 0, totPending = 0;
   filtered.forEach(r => {
     totOnHold += r.on_hold || 0;
     totAvailable += r.available || r.current_stock || 0;
@@ -2660,6 +2666,7 @@ function renderInventoryOverview(data) {
     totShipped += r.shipped || 0;
     totInWarehouse += r.in_warehouse || ((r.available || r.current_stock || 0) + (r.on_hold || 0));
     totGap += r.gap || 0;
+    totPending += r.pending || 0;
   });
   document.getElementById('bd-in-warehouse').textContent = totInWarehouse;
   document.getElementById('bd-on-hold').textContent = totOnHold;
@@ -2667,9 +2674,10 @@ function renderInventoryOverview(data) {
   document.getElementById('bd-in-production').textContent = totInProd;
   document.getElementById('bd-shipped').textContent = totShipped;
   document.getElementById('bd-gap').textContent = totGap;
+  document.getElementById('bd-pending').textContent = totPending;
 
   document.getElementById('inv-overview-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="10" class="empty">No data available</td></tr>'
+    ? '<tr><td colspan="11" class="empty">No data available</td></tr>'
     : filtered.map(r => {
       const label = r.variant_sku ? (r.variant_sku + ' - ' + r.name + (r.variant_label ? ' (' + r.variant_label + ')' : '')) : (r.sku + ' - ' + r.name);
       const inWh = r.in_warehouse || ((r.available || r.current_stock || 0) + (r.on_hold || 0));
@@ -2682,6 +2690,7 @@ function renderInventoryOverview(data) {
         <td class="${r.available <= 5 ? 'stock-low' : 'stock-ok'}">${r.available != null ? r.available : r.current_stock}</td>
         <td style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
         <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
+        <td style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
         <td>${esc(r.location)}</td>
         <td><button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button></td>
       </tr>`;
@@ -2752,6 +2761,7 @@ function renderDailyChart() {
     in_production:{ label: 'In Production', color: '#6c3483', type: 'bar' },
     shipped:      { label: 'Shipped',       color: '#0c5460', type: 'bar' },
     gap:          { label: 'Adjustment',    color: '#e91e63', type: 'line' },
+    pending:      { label: 'Pending',       color: '#ff5722', type: 'line' },
   };
 
   const datasets = [];
@@ -2777,7 +2787,7 @@ function renderDailyChart() {
     datasets.push(ds);
   }
 
-  const hasGap = metrics.includes('gap');
+  const hasLineMetric = metrics.includes('gap') || metrics.includes('pending');
   if (invDailyChart) invDailyChart.destroy();
   const ctx = document.getElementById('inv-daily-chart').getContext('2d');
   invDailyChart = new Chart(ctx, {
@@ -2797,8 +2807,8 @@ function renderDailyChart() {
         y1: {
           position: 'right',
           beginAtZero: true,
-          display: hasGap,
-          title: { display: hasGap, text: 'Adjustment', font: { size: 12 } },
+          display: hasLineMetric,
+          title: { display: hasLineMetric, text: 'Adjustment / Pending', font: { size: 12 } },
           grid: { drawOnChartArea: false },
         },
       },

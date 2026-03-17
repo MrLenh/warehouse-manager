@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.inventory_log import InventoryLog
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product, Variant
-from app.models.stock_request import StockRequestItem
+from app.models.stock_request import StockRequest, StockRequestItem, StockRequestStatus
 
 
 def inventory_summary(db: Session) -> dict:
@@ -160,6 +160,21 @@ def inventory_overview(db: Session) -> list[dict]:
     )
     gap_map = {r.product_id: int(r.total_gap) for r in gap_rows}
 
+    # Pre-compute pending quantities from active stock requests
+    ACTIVE_SR_STATUSES = [StockRequestStatus.PENDING, StockRequestStatus.APPROVED, StockRequestStatus.RECEIVING]
+    pending_rows = (
+        db.query(
+            StockRequestItem.product_id,
+            StockRequestItem.variant_id,
+            func.sum(StockRequestItem.quantity_requested - StockRequestItem.quantity_received).label("pending"),
+        )
+        .join(StockRequest)
+        .filter(StockRequest.status.in_(ACTIVE_SR_STATUSES))
+        .group_by(StockRequestItem.product_id, StockRequestItem.variant_id)
+        .all()
+    )
+    pending_map = {(r.product_id, r.variant_id or ""): max(int(r.pending), 0) for r in pending_rows}
+
     products = db.query(Product).all()
     result = []
 
@@ -209,6 +224,7 @@ def inventory_overview(db: Session) -> list[dict]:
                 on_hold = on_hold_map.get(key, 0)
                 available = v.quantity
                 in_warehouse = available + on_hold
+                pending = pending_map.get(key, 0)
                 result.append({
                     "product_id": p.id,
                     "variant_id": v.id,
@@ -229,6 +245,7 @@ def inventory_overview(db: Session) -> list[dict]:
                     "in_production": in_prod_map.get(key, 0),
                     "shipped": shipped_map.get(key, 0),
                     "gap": gap_map.get(p.id, 0),
+                    "pending": pending,
                 })
         else:
             # Product without variants
@@ -257,6 +274,7 @@ def inventory_overview(db: Session) -> list[dict]:
             on_hold = on_hold_map.get(key, 0)
             available = p.quantity
             in_warehouse = available + on_hold
+            pending = pending_map.get(key, 0)
             result.append({
                 "product_id": p.id,
                 "variant_id": "",
@@ -277,6 +295,7 @@ def inventory_overview(db: Session) -> list[dict]:
                 "in_production": in_prod_map.get(key, 0),
                 "shipped": shipped_map.get(key, 0),
                 "gap": gap_map.get(p.id, 0),
+                "pending": pending,
             })
 
     return result
@@ -491,7 +510,22 @@ def inventory_breakdown(db: Session) -> dict:
 
     products = db.query(Product).all()
     items = []
-    totals = {"on_hold": 0, "available": 0, "in_warehouse": 0, "in_production": 0, "shipped": 0, "gap": 0}
+    totals = {"on_hold": 0, "available": 0, "in_warehouse": 0, "in_production": 0, "shipped": 0, "gap": 0, "pending": 0}
+
+    # Pre-compute pending quantities from active stock requests
+    ACTIVE_SR_STATUSES = [StockRequestStatus.PENDING, StockRequestStatus.APPROVED, StockRequestStatus.RECEIVING]
+    pending_rows = (
+        db.query(
+            StockRequestItem.product_id,
+            StockRequestItem.variant_id,
+            func.sum(StockRequestItem.quantity_requested - StockRequestItem.quantity_received).label("pending"),
+        )
+        .join(StockRequest)
+        .filter(StockRequest.status.in_(ACTIVE_SR_STATUSES))
+        .group_by(StockRequestItem.product_id, StockRequestItem.variant_id)
+        .all()
+    )
+    pending_map = {(r.product_id, r.variant_id or ""): max(int(r.pending), 0) for r in pending_rows}
 
     # Pre-compute cumulative gap per product from adjustment logs
     gap_rows = (
@@ -514,6 +548,7 @@ def inventory_breakdown(db: Session) -> dict:
                 shipped = shipped_map.get(key, 0)
                 available = v.quantity
                 in_warehouse = available + on_hold
+                pending = pending_map.get(key, 0)
 
                 import json as _json
                 attrs = _json.loads(v.attributes) if isinstance(v.attributes, str) else v.attributes
@@ -533,6 +568,7 @@ def inventory_breakdown(db: Session) -> dict:
                     "in_production": in_prod,
                     "shipped": shipped,
                     "gap": product_gap,
+                    "pending": pending,
                 })
                 totals["on_hold"] += on_hold
                 totals["available"] += available
@@ -540,6 +576,7 @@ def inventory_breakdown(db: Session) -> dict:
                 totals["in_production"] += in_prod
                 totals["shipped"] += shipped
                 totals["gap"] += product_gap
+                totals["pending"] += pending
         else:
             key = (p.id, "")
             on_hold = on_hold_map.get(key, 0)
@@ -547,6 +584,7 @@ def inventory_breakdown(db: Session) -> dict:
             shipped = shipped_map.get(key, 0)
             available = p.quantity
             in_warehouse = available + on_hold
+            pending = pending_map.get(key, 0)
 
             items.append({
                 "product_id": p.id,
@@ -562,6 +600,7 @@ def inventory_breakdown(db: Session) -> dict:
                 "in_production": in_prod,
                 "shipped": shipped,
                 "gap": product_gap,
+                "pending": pending,
             })
             totals["on_hold"] += on_hold
             totals["available"] += available
@@ -569,6 +608,7 @@ def inventory_breakdown(db: Session) -> dict:
             totals["in_production"] += in_prod
             totals["shipped"] += shipped
             totals["gap"] += product_gap
+            totals["pending"] += pending
 
     return {
         "totals": totals,
@@ -707,6 +747,18 @@ def inventory_daily_chart(
 
     total_in_warehouse = total_available + total_on_hold
 
+    # Get total pending from active stock requests
+    ACTIVE_SR_STATUSES = [StockRequestStatus.PENDING, StockRequestStatus.APPROVED, StockRequestStatus.RECEIVING]
+    total_pending = (
+        db.query(func.coalesce(
+            func.sum(StockRequestItem.quantity_requested - StockRequestItem.quantity_received), 0
+        ))
+        .join(StockRequest)
+        .filter(StockRequest.status.in_(ACTIVE_SR_STATUSES))
+        .scalar()
+    )
+    total_pending = max(int(total_pending), 0)
+
     # Get daily gap from inventory logs
     q_logs = db.query(
         func.date(InventoryLog.created_at).label("log_date"),
@@ -743,6 +795,7 @@ def inventory_daily_chart(
             "in_production": total_in_production,
             "shipped": total_shipped,
             "gap": gap_by_date.get(d, 0),
+            "pending": total_pending,
         })
 
     return {"chart": chart_data}
