@@ -336,8 +336,8 @@ tr:hover{background:#f8f9ff}
         <div id="bd-shipped" style="font-size:26px;font-weight:700;color:#0c5460">0</div>
       </div>
       <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #e91e63">
-        <div style="font-size:12px;color:#e91e63;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Gap</div>
-        <div style="font-size:10px;color:#999;margin-bottom:2px">adjustment variance</div>
+        <div style="font-size:12px;color:#e91e63;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Adjustment</div>
+        <div style="font-size:10px;color:#999;margin-bottom:2px">inventory adjustments</div>
         <div id="bd-gap" style="font-size:26px;font-weight:700;color:#e91e63">0</div>
       </div>
     </div>
@@ -388,7 +388,7 @@ tr:hover{background:#f8f9ff}
             <th style="cursor:pointer" onclick="sortInvLog('product_name')">Product <span id="inv-log-sort-product_name"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('change')">Change <span id="inv-log-sort-change"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('balance_after')">Balance <span id="inv-log-sort-balance_after"></span></th>
-            <th style="cursor:pointer" onclick="sortInvLog('gap')">Gap <span id="inv-log-sort-gap"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('gap')">Adjustment <span id="inv-log-sort-gap"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('reason')">Reason <span id="inv-log-sort-reason"></span></th>
             <th>Reference</th>
             <th>Note</th>
@@ -418,7 +418,7 @@ tr:hover{background:#f8f9ff}
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="on_hold" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#ffc107;display:inline-block"></span> On Hold</label>
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="in_production" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#6c3483;display:inline-block"></span> In Production</label>
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="shipped" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#0c5460;display:inline-block"></span> Shipped</label>
-            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="gap" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#e91e63;display:inline-block"></span> Gap (line)</label>
+            <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="gap" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#e91e63;display:inline-block"></span> Adjustment (line)</label>
           </div>
         </div>
       </div>
@@ -2751,7 +2751,7 @@ function renderDailyChart() {
     on_hold:      { label: 'On Hold',       color: '#ffc107', type: 'bar' },
     in_production:{ label: 'In Production', color: '#6c3483', type: 'bar' },
     shipped:      { label: 'Shipped',       color: '#0c5460', type: 'bar' },
-    gap:          { label: 'Gap',           color: '#e91e63', type: 'line' },
+    gap:          { label: 'Adjustment',    color: '#e91e63', type: 'line' },
   };
 
   const datasets = [];
@@ -2798,7 +2798,7 @@ function renderDailyChart() {
           position: 'right',
           beginAtZero: true,
           display: hasGap,
-          title: { display: hasGap, text: 'Gap', font: { size: 12 } },
+          title: { display: hasGap, text: 'Adjustment', font: { size: 12 } },
           grid: { drawOnChartArea: false },
         },
       },

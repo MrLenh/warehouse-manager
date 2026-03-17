@@ -151,6 +151,15 @@ def inventory_overview(db: Session) -> list[dict]:
     in_prod_map = _qty_map(IN_PRODUCTION_STATUSES)
     shipped_map = _qty_map(SHIPPED_STATUSES)
 
+    # Pre-compute cumulative gap per product from adjustment logs
+    gap_rows = (
+        db.query(InventoryLog.product_id, func.coalesce(func.sum(InventoryLog.gap), 0).label("total_gap"))
+        .filter(InventoryLog.reason == "adjustment")
+        .group_by(InventoryLog.product_id)
+        .all()
+    )
+    gap_map = {r.product_id: int(r.total_gap) for r in gap_rows}
+
     products = db.query(Product).all()
     result = []
 
@@ -219,6 +228,7 @@ def inventory_overview(db: Session) -> list[dict]:
                     "in_warehouse": in_warehouse,
                     "in_production": in_prod_map.get(key, 0),
                     "shipped": shipped_map.get(key, 0),
+                    "gap": gap_map.get(p.id, 0),
                 })
         else:
             # Product without variants
@@ -266,6 +276,7 @@ def inventory_overview(db: Session) -> list[dict]:
                 "in_warehouse": in_warehouse,
                 "in_production": in_prod_map.get(key, 0),
                 "shipped": shipped_map.get(key, 0),
+                "gap": gap_map.get(p.id, 0),
             })
 
     return result
