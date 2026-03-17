@@ -34,6 +34,17 @@ def inventory_overview_report(db: Session = Depends(get_db)):
     return report_service.inventory_overview(db)
 
 
+@router.get("/inventory-breakdown")
+def inventory_breakdown_report(db: Session = Depends(get_db)):
+    """Inventory split by order lifecycle:
+    - on_hold: confirmed, processing, label_purchased
+    - available: current stock (ready for new orders)
+    - in_production: packing, packed
+    - shipped: drop_off, shipped, in_transit, delivered
+    """
+    return report_service.inventory_breakdown(db)
+
+
 @router.get("/inventory-movement")
 def inventory_movement_report(
     product_id: str | None = None,
