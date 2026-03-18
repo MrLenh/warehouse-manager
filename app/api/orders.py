@@ -588,8 +588,8 @@ def update_status(
     if not order:
         raise HTTPException(404, "Order not found")
 
-    # Check if batch should transition to done (all orders drop_off)
-    if data.status == OrderStatus.DROP_OFF:
+    # Check if batch should transition to done (all orders drop_off/shipped/on_hold)
+    if data.status in (OrderStatus.DROP_OFF, OrderStatus.ON_HOLD):
         from app.services.picking_service import check_batch_done
         check_batch_done(db, order_id)
 
