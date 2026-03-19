@@ -202,6 +202,7 @@ def _migrate_order_status_enum():
             ("packing", "processing"),
             ("packed", "packing"),
             ("drop_off", "label_purchased"),
+            ("on_hold", "delivered"),
         ]
         with engine.begin() as conn:
             for val, after in new_values:

@@ -504,7 +504,7 @@ def batch_drop_off(db: Session, picking_list_id: str) -> dict:
         order = db.query(Order).filter(Order.id == oid).first()
         if not order:
             continue
-        if order.status in (OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED):
+        if order.status in (OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED, OrderStatus.ON_HOLD):
             # Already done, just include the label
             results.append({
                 "order_id": order.id,
@@ -571,12 +571,12 @@ def check_batch_done(db: Session, order_id: str) -> None:
         db.query(PickItem.order_id).filter(PickItem.picking_list_id == pl.id).distinct().all()
     }
 
-    # Check if all orders are drop_off (or later)
-    drop_off_statuses = {OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED}
+    # Check if all orders are drop_off (or later) or on_hold
+    done_statuses = {OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED, OrderStatus.ON_HOLD}
     all_done = True
     for oid in batch_order_ids:
         order = db.query(Order).filter(Order.id == oid).first()
-        if not order or order.status not in drop_off_statuses:
+        if not order or order.status not in done_statuses:
             all_done = False
             break
 

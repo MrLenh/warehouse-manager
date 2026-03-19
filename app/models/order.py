@@ -26,6 +26,7 @@ class OrderStatus(str, PyEnum):
     SHIPPED = "shipped"
     IN_TRANSIT = "in_transit"
     DELIVERED = "delivered"
+    ON_HOLD = "on_hold"
     CANCELLED = "cancelled"
 
 
