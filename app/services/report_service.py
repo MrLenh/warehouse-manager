@@ -694,10 +694,13 @@ def inventory_daily_chart(
     db: Session,
     start_date: str | None = None,
     end_date: str | None = None,
+    sku: str | None = None,
 ) -> dict:
     """Daily inventory chart data: reconstruct historical inventory levels
     by replaying InventoryLog changes backwards from current state,
-    and order status_history for on_hold/in_production/shipped."""
+    and order status_history for on_hold/in_production/shipped.
+    Shipped shows per-day new shipments (not cumulative).
+    Optional sku filter to show data for a single product/variant."""
     import json as _json
     from datetime import timedelta
 
@@ -722,9 +725,27 @@ def inventory_daily_chart(
         dates.append(current.isoformat())
         current += timedelta(days=1)
 
+    # --- Resolve SKU filter to product IDs ---
+    sku_product_ids = None  # None means no filter
+    if sku:
+        sku_lower = sku.strip().lower()
+        matched_ids = set()
+        # Check variants first
+        variants = db.query(Variant).filter(func.lower(Variant.variant_sku) == sku_lower).all()
+        for v in variants:
+            matched_ids.add(v.product_id)
+        # Check products
+        products_matched = db.query(Product).filter(func.lower(Product.sku) == sku_lower).all()
+        for p in products_matched:
+            matched_ids.add(p.id)
+        sku_product_ids = matched_ids if matched_ids else set()
+
     # --- 1. Reconstruct historical 'available' from InventoryLog ---
     # Current available stock
     products = db.query(Product).all()
+    if sku_product_ids is not None:
+        products = [p for p in products if p.id in sku_product_ids]
+
     current_available = 0
     for p in products:
         if p.variants:
@@ -733,40 +754,24 @@ def inventory_daily_chart(
             current_available += p.quantity
 
     # Get daily net changes from inventory logs (all dates from start_date onwards)
-    daily_changes_rows = (
-        db.query(
-            func.date(InventoryLog.created_at).label("log_date"),
-            func.coalesce(func.sum(InventoryLog.change), 0).label("net_change"),
-            func.coalesce(func.sum(InventoryLog.gap), 0).label("daily_gap"),
-        )
-        .group_by(func.date(InventoryLog.created_at))
-        .all()
+    log_query = db.query(
+        func.date(InventoryLog.created_at).label("log_date"),
+        func.coalesce(func.sum(InventoryLog.change), 0).label("net_change"),
+        func.coalesce(func.sum(InventoryLog.gap), 0).label("daily_gap"),
     )
+    if sku_product_ids is not None:
+        log_query = log_query.filter(InventoryLog.product_id.in_(sku_product_ids))
+    daily_changes_rows = log_query.group_by(func.date(InventoryLog.created_at)).all()
+
     daily_net = {str(r.log_date): int(r.net_change) for r in daily_changes_rows}
     gap_by_date = {str(r.log_date): int(r.daily_gap) for r in daily_changes_rows}
 
     # Work backwards from current available to reconstruct each day's ending available
-    # available[today] = current_available
-    # available[day] = available[day+1] - net_change[day+1]
     today = datetime.utcnow().date()
     available_by_date = {}
     running = current_available
 
-    # Build all dates from end_dt back to start_dt, then forward from today
-    all_dates_back = []
-    d = today
-    while d >= start_dt:
-        all_dates_back.append(d.isoformat())
-        d -= timedelta(days=1)
-
-    # Forward pass: from today to end_dt if end_dt is in the future
-    d = today + timedelta(days=1)
-    while d <= end_dt:
-        all_dates_back.insert(0, d.isoformat())
-        d += timedelta(days=1)
-
     # Start from today's value and go backwards
-    running = current_available
     available_by_date[today.isoformat()] = running
     d = today
     while d >= start_dt:
@@ -774,7 +779,6 @@ def inventory_daily_chart(
         if d == today:
             available_by_date[d_str] = running
         else:
-            # The next day's available was computed already
             next_d = (d + timedelta(days=1)).isoformat()
             next_day_change = daily_net.get(next_d, 0)
             running = running - next_day_change
@@ -790,12 +794,16 @@ def inventory_daily_chart(
     # --- 2. Reconstruct on_hold / in_production / shipped from order status_history ---
     # Load all orders with their items
     orders = db.query(Order).all()
+
+    # Build per-order qty (optionally filtered by SKU)
     order_items_qty = {}
     for o in orders:
-        total_qty = sum(item.quantity for item in o.items)
+        if sku_product_ids is not None:
+            total_qty = sum(item.quantity for item in o.items if item.product_id in sku_product_ids)
+        else:
+            total_qty = sum(item.quantity for item in o.items)
         order_items_qty[o.id] = total_qty
 
-    # For each date, determine what status each order was in at end of that day
     # Parse status_history to find the status at each date
     def _order_status_at_date(order, target_date_str):
         """Get the order status at end of a given date by replaying status_history."""
@@ -809,12 +817,10 @@ def inventory_daily_chart(
             history = []
 
         if not history:
-            # No history; use current status if order was created before target date
             if order.created_at and order.created_at <= target_end:
                 return order.status if isinstance(order.status, str) else order.status.value
             return None
 
-        # Find the latest status entry on or before target date
         last_status = None
         for entry in history:
             ts_str = entry.get("timestamp") or entry.get("time") or entry.get("at") or ""
@@ -822,7 +828,7 @@ def inventory_daily_chart(
                 continue
             try:
                 ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                ts = ts.replace(tzinfo=None)  # strip tz for comparison
+                ts = ts.replace(tzinfo=None)
             except (ValueError, TypeError):
                 continue
             if ts <= target_end:
@@ -831,9 +837,36 @@ def inventory_daily_chart(
         return last_status
 
     # Pre-compute per-date totals
+    # For shipped: count only orders that FIRST entered a shipped status on that date
     on_hold_by_date = {}
     in_prod_by_date = {}
     shipped_by_date = {}
+
+    # Pre-compute each order's first shipped date for per-day shipped counting
+    order_first_shipped_date = {}
+    for o in orders:
+        qty = order_items_qty.get(o.id, 0)
+        if qty == 0:
+            continue
+        history = []
+        raw = o.status_history or "[]"
+        try:
+            history = _json.loads(raw) if isinstance(raw, str) else raw
+        except (ValueError, TypeError):
+            history = []
+        for entry in history:
+            status = entry.get("status") or entry.get("to") or entry.get("new_status")
+            if status in SHIPPED_STATUSES:
+                ts_str = entry.get("timestamp") or entry.get("time") or entry.get("at") or ""
+                if not ts_str:
+                    continue
+                try:
+                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    ts = ts.replace(tzinfo=None)
+                    order_first_shipped_date[o.id] = ts.date().isoformat()
+                except (ValueError, TypeError):
+                    pass
+                break  # first shipped status entry
 
     for d_str in dates:
         on_hold = 0
@@ -853,7 +886,13 @@ def inventory_daily_chart(
                 on_hold += qty
             elif status in IN_PRODUCTION_STATUSES:
                 in_prod += qty
-            elif status in SHIPPED_STATUSES:
+
+        # Shipped per day: count orders whose first shipped date is this day
+        for o in orders:
+            qty = order_items_qty.get(o.id, 0)
+            if qty == 0:
+                continue
+            if order_first_shipped_date.get(o.id) == d_str:
                 shipped += qty
 
         on_hold_by_date[d_str] = on_hold
@@ -862,14 +901,16 @@ def inventory_daily_chart(
 
     # --- 3. Pending from active stock requests (use current value for all dates) ---
     ACTIVE_SR_STATUSES = [StockRequestStatus.PENDING, StockRequestStatus.APPROVED, StockRequestStatus.RECEIVING]
-    total_pending = (
+    pending_query = (
         db.query(func.coalesce(
             func.sum(StockRequestItem.quantity_requested - StockRequestItem.quantity_received), 0
         ))
         .join(StockRequest)
         .filter(StockRequest.status.in_(ACTIVE_SR_STATUSES))
-        .scalar()
     )
+    if sku_product_ids is not None:
+        pending_query = pending_query.filter(StockRequestItem.product_id.in_(sku_product_ids))
+    total_pending = pending_query.scalar()
     total_pending = max(int(total_pending), 0)
 
     # --- 4. Build chart data ---

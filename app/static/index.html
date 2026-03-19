@@ -428,6 +428,11 @@ tr:hover{background:#f8f9ff}
           </div>
         </div>
       </div>
+      <!-- SKU Filter -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <input type="text" id="inv-daily-sku-filter" class="search" placeholder="Filter by SKU... (type or click SKU below)" style="max-width:300px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        <span id="inv-daily-sku-badge" style="display:none;background:#667eea;color:#fff;padding:4px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer" title="Click to clear filter"></span>
+      </div>
       <!-- Chart -->
       <div class="card" style="margin-bottom:16px;padding:12px">
         <div style="position:relative;width:100%;height:320px">
@@ -2703,6 +2708,7 @@ document.getElementById('search-inventory').addEventListener('input', () => rend
 let invDailyLoaded = false;
 let invDailyChart = null;
 let invDailyChartData = [];
+let invDailySkuFilter = '';
 
 function setDailyRange(range) {
   const end = new Date();
@@ -2713,6 +2719,56 @@ function setDailyRange(range) {
   document.getElementById('inv-daily-start').value = start.toISOString().slice(0, 10);
   document.getElementById('inv-daily-end').value = end.toISOString().slice(0, 10);
 }
+
+function setDailySkuFilter(sku) {
+  invDailySkuFilter = sku || '';
+  const input = document.getElementById('inv-daily-sku-filter');
+  const badge = document.getElementById('inv-daily-sku-badge');
+  input.value = invDailySkuFilter;
+  if (invDailySkuFilter) {
+    badge.style.display = 'inline-block';
+    badge.textContent = 'SKU: ' + invDailySkuFilter + ' ✕';
+  } else {
+    badge.style.display = 'none';
+  }
+  loadDailyChartOnly();
+}
+
+async function loadDailyChartOnly() {
+  const startDate = document.getElementById('inv-daily-start').value;
+  const endDate = document.getElementById('inv-daily-end').value;
+  const params = [];
+  if (startDate) params.push('start_date=' + startDate);
+  if (endDate) params.push('end_date=' + endDate);
+  if (invDailySkuFilter) params.push('sku=' + encodeURIComponent(invDailySkuFilter));
+  const qs = params.length ? '?' + params.join('&') : '';
+  const res = await fetch(API + '/reports/inventory-daily-chart' + qs);
+  const chartResp = await res.json();
+  invDailyChartData = chartResp.chart || [];
+  renderDailyChart();
+}
+
+// SKU filter input: debounced search on Enter or after typing
+let _skuFilterTimer = null;
+document.addEventListener('DOMContentLoaded', function() {
+  const skuInput = document.getElementById('inv-daily-sku-filter');
+  if (skuInput) {
+    skuInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        clearTimeout(_skuFilterTimer);
+        setDailySkuFilter(skuInput.value.trim());
+      }
+    });
+    skuInput.addEventListener('input', function() {
+      clearTimeout(_skuFilterTimer);
+      _skuFilterTimer = setTimeout(() => {
+        if (!skuInput.value.trim()) setDailySkuFilter('');
+      }, 500);
+    });
+  }
+  const badge = document.getElementById('inv-daily-sku-badge');
+  if (badge) badge.addEventListener('click', () => setDailySkuFilter(''));
+});
 
 function toggleMetricDropdown() {
   const dd = document.getElementById('metric-dropdown');
@@ -2844,7 +2900,7 @@ function renderInventoryDaily(data) {
         <tbody>${day.items.map(r => {
           const netColor = r.net_change > 0 ? '#28a745' : r.net_change < 0 ? '#dc3545' : '#666';
           return `<tr>
-            <td><strong>${esc(r.sku)}</strong></td>
+            <td><strong style="cursor:pointer;color:#667eea;text-decoration:underline" onclick="setDailySkuFilter('${esc(r.sku)}')">${esc(r.sku)}</strong></td>
             <td>${esc(r.product_name)}</td>
             <td style="color:#28a745;font-weight:${r.inbound ? '600' : '400'}">${r.inbound ? '+' + r.inbound : '-'}</td>
             <td style="color:#dc3545;font-weight:${r.order ? '600' : '400'}">${r.order || '-'}</td>
