@@ -3242,6 +3242,7 @@ async function loadReports() {
   document.getElementById('report-cards').innerHTML = `
     <div class="report-card"><div class="number">${ord.total_orders ?? 0}</div><div class="label">Total Orders</div></div>
     <div class="report-card"><div class="number">${ord.total_items ?? 0}</div><div class="label">Total Items</div></div>
+    <div class="report-card"><div class="number" style="color:#0c5460">${ord.shipped_items ?? 0}</div><div class="label">Shipped Items</div></div>
     <div class="report-card"><div class="number">${ord.total_invoices ?? 0}</div><div class="label">Total Invoices</div></div>
     <div class="report-card"><div class="number">$${(ord.total_processing_fees ?? 0).toFixed(2)}</div><div class="label">Processing Fees</div></div>
     <div class="report-card"><div class="number">$${(ord.total_shipping_cost ?? 0).toFixed(2)}</div><div class="label">Shipping Fees</div></div>

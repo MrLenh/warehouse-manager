@@ -43,6 +43,10 @@ def _group_by_category(products: list[Product]) -> list[dict]:
 
 
 def order_summary(db: Session, start_date: datetime | None = None, end_date: datetime | None = None, customer_id: str | None = None) -> dict:
+    SHIPPED_STATUSES = {
+        OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED,
+    }
+
     q = db.query(Order)
     if start_date:
         q = q.filter(Order.created_at >= start_date)
@@ -58,6 +62,7 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
     total_shipping = 0.0
     total_processing = 0.0
     total_items = 0
+    shipped_items = 0
 
     for o in orders:
         status_val = o.status if isinstance(o.status, str) else o.status.value
@@ -65,7 +70,28 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
         total_revenue += o.total_price
         total_shipping += o.shipping_cost
         total_processing += o.processing_fee
-        total_items += sum(item.quantity for item in o.items)
+        items_qty = sum(item.quantity for item in o.items)
+        total_items += items_qty
+        if status_val in {s.value if not isinstance(s, str) else s for s in SHIPPED_STATUSES}:
+            shipped_items += items_qty
+
+    # Shipped items by updated_at: orders shipped (status changed) within the date range
+    # This catches orders created before the date range but shipped within it
+    shipped_items_by_ship_date = 0
+    if start_date or end_date:
+        sq = db.query(Order).filter(
+            Order.status.in_(list(SHIPPED_STATUSES))
+        )
+        if customer_id:
+            sq = sq.filter(Order.customer_id == customer_id)
+        if start_date:
+            sq = sq.filter(Order.updated_at >= start_date)
+        if end_date:
+            sq = sq.filter(Order.updated_at <= end_date)
+        for o in sq.all():
+            shipped_items_by_ship_date += sum(item.quantity for item in o.items)
+    else:
+        shipped_items_by_ship_date = shipped_items
 
     # Orders grouped by date for chart
     orders_by_date: dict[str, int] = {}
@@ -88,6 +114,7 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
     return {
         "total_orders": total,
         "total_items": total_items,
+        "shipped_items": shipped_items_by_ship_date,
         "orders_by_status": by_status,
         "total_revenue": round(total_revenue, 2),
         "total_shipping_cost": round(total_shipping, 2),
