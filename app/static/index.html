@@ -3154,7 +3154,7 @@ async function saveStockRequest() {
   const body = {
     supplier: document.getElementById('sr-supplier').value,
     ship_from: document.getElementById('sr-ship-from').value,
-    tracking_id: document.getElementById('sr-tracking').value || null,
+    tracking_id: document.getElementById('sr-tracking').value || "",
     notes: document.getElementById('sr-notes').value,
     items,
   };
