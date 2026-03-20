@@ -534,6 +534,40 @@ tr:hover{background:#f8f9ff}
       <!-- Summary cards -->
       <div class="report-grid" id="batch-report-cards" style="grid-template-columns:repeat(4,1fr)"></div>
 
+      <!-- Daily Chart -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <h3 style="margin:0">Daily Chart</h3>
+          <label style="font-size:13px;color:#666">From:
+            <input type="date" id="batch-chart-start" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <label style="font-size:13px;color:#666">To:
+            <input type="date" id="batch-chart-end" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="loadBatchDailyChart()">Load</button>
+          <button class="btn btn-outline btn-sm" onclick="setBatchChartRange('7d')">7 Days</button>
+          <button class="btn btn-outline btn-sm" onclick="setBatchChartRange('30d')">30 Days</button>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <label style="font-size:13px;color:#666">Metric:
+              <select id="batch-chart-metric" onchange="renderBatchDailyChart()" style="padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+                <option value="drop_off_orders">Orders Drop Off</option>
+                <option value="drop_off_items">Items Drop Off</option>
+                <option value="working_minutes">Working Time (min)</option>
+              </select>
+            </label>
+            <label style="font-size:13px;color:#666">Group:
+              <select id="batch-chart-group" onchange="renderBatchDailyChart()" style="padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+                <option value="total">Total</option>
+                <option value="staff">By Staff</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div style="position:relative;width:100%;height:320px">
+          <canvas id="batch-daily-chart"></canvas>
+        </div>
+      </div>
+
       <!-- Staff Performance -->
       <div class="card" style="margin-bottom:16px">
         <h3 style="margin-bottom:12px">Staff Performance</h3>
@@ -3321,6 +3355,7 @@ function clearBatchReportFilters() {
 
 async function loadBatchReport() {
   if (document.getElementById('batch-report-staff').options.length <= 1) loadBatchReportStaff();
+  if (!batchDailyChartData.length) loadBatchDailyChart();
 
   const date = document.getElementById('batch-report-date').value;
   const staff = document.getElementById('batch-report-staff').value;
@@ -3423,6 +3458,103 @@ async function loadBatchReport() {
   } catch (e) {
     console.error('Failed to load batch report:', e);
   }
+}
+
+// Batch Daily Chart
+let batchDailyChart = null;
+let batchDailyChartData = [];
+
+const STAFF_COLORS = ['#667eea','#28a745','#e67e22','#e91e63','#00bcd4','#9c27b0','#ff9800','#607d8b','#795548','#3f51b5','#009688','#f44336'];
+
+function setBatchChartRange(range) {
+  const end = new Date();
+  const start = new Date();
+  if (range === '7d') start.setDate(end.getDate() - 6);
+  else if (range === '30d') start.setDate(end.getDate() - 29);
+  document.getElementById('batch-chart-start').value = start.toISOString().slice(0, 10);
+  document.getElementById('batch-chart-end').value = end.toISOString().slice(0, 10);
+  loadBatchDailyChart();
+}
+
+async function loadBatchDailyChart() {
+  const startDate = document.getElementById('batch-chart-start').value;
+  const endDate = document.getElementById('batch-chart-end').value;
+  if (!startDate || !endDate) {
+    setBatchChartRange('7d');
+    return;
+  }
+  const params = [];
+  if (startDate) params.push('start_date=' + startDate);
+  if (endDate) params.push('end_date=' + endDate);
+  const qs = params.length ? '?' + params.join('&') : '';
+
+  try {
+    const res = await fetch(API + '/reports/batches-daily-chart' + qs);
+    const data = await res.json();
+    batchDailyChartData = data.chart || [];
+    renderBatchDailyChart();
+  } catch (e) {
+    console.error('Failed to load batch daily chart:', e);
+  }
+}
+
+function renderBatchDailyChart() {
+  if (!batchDailyChartData.length) return;
+  const metric = document.getElementById('batch-chart-metric').value;
+  const group = document.getElementById('batch-chart-group').value;
+  const labels = batchDailyChartData.map(d => d.date);
+
+  const datasets = [];
+
+  if (group === 'total') {
+    datasets.push({
+      label: document.getElementById('batch-chart-metric').selectedOptions[0].text,
+      data: batchDailyChartData.map(d => d[metric] || 0),
+      backgroundColor: '#667eeaCC',
+      borderColor: '#667eea',
+      borderWidth: 1,
+    });
+  } else {
+    // Collect all staff usernames across all days
+    const staffSet = new Set();
+    for (const day of batchDailyChartData) {
+      for (const s of (day.staff || [])) staffSet.add(s.username);
+    }
+    const staffNames = Array.from(staffSet).sort();
+    staffNames.forEach((uname, idx) => {
+      const color = STAFF_COLORS[idx % STAFF_COLORS.length];
+      datasets.push({
+        label: uname,
+        data: batchDailyChartData.map(d => {
+          const s = (d.staff || []).find(x => x.username === uname);
+          return s ? (s[metric] || 0) : 0;
+        }),
+        backgroundColor: color + 'CC',
+        borderColor: color,
+        borderWidth: 1,
+      });
+    });
+  }
+
+  if (batchDailyChart) batchDailyChart.destroy();
+  const ctx = document.getElementById('batch-daily-chart').getContext('2d');
+  batchDailyChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 14, padding: 12, font: { size: 12 } } },
+        tooltip: { mode: 'index', intersect: false },
+      },
+      scales: {
+        x: { stacked: group === 'staff', grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+        y: { stacked: group === 'staff', position: 'left', beginAtZero: true, title: { display: true, text: document.getElementById('batch-chart-metric').selectedOptions[0].text, font: { size: 12 } }, grid: { color: '#f0f0f0' } },
+      },
+    },
+  });
 }
 
 // Auth

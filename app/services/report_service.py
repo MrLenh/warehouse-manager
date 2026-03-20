@@ -481,6 +481,136 @@ def batch_report(db: Session, date: str | None = None, assigned_to: str | None =
     }
 
 
+def batch_daily_chart(db: Session, start_date: str | None = None, end_date: str | None = None) -> dict:
+    """Daily chart data for batches: orders & items dropped off, and working time per day.
+
+    Returns per-day totals and per-staff breakdowns so the frontend can toggle grouping.
+    """
+    import json
+    from app.models.picking import PickingList, PickingListStatus, PickItem
+
+    today = datetime.utcnow().date()
+    if end_date:
+        end_d = datetime.fromisoformat(end_date).date()
+    else:
+        end_d = today
+    if start_date:
+        start_d = datetime.fromisoformat(start_date).date()
+    else:
+        start_d = end_d  # default: single day
+
+    # --- Drop-off data: scan order status_history for drop_off transitions ---
+    orders = db.query(Order).all()
+    # Map order_id -> list of item quantities (for counting items)
+    order_items_qty: dict[str, int] = {}
+    for oi in db.query(OrderItem).all():
+        order_items_qty[oi.order_id] = order_items_qty.get(oi.order_id, 0) + oi.quantity
+
+    # Build day -> {total drop-off orders, total drop-off items, per-staff}
+    from collections import defaultdict
+    day_data: dict[str, dict] = {}
+
+    # Initialize all days in range
+    d = start_d
+    while d <= end_d:
+        ds = d.isoformat()
+        day_data[ds] = {
+            "date": ds,
+            "drop_off_orders": 0,
+            "drop_off_items": 0,
+            "staff": defaultdict(lambda: {"drop_off_orders": 0, "drop_off_items": 0, "working_seconds": 0}),
+        }
+        d += __import__("datetime").timedelta(days=1)
+
+    # Find which orders were dropped off on which day, and by whom (via batch assignment)
+    # Build order_id -> assigned_to from picking lists
+    pick_items = db.query(PickItem).all()
+    order_to_staff: dict[str, str] = {}
+    pl_map: dict[str, PickingList] = {}
+    for pi in pick_items:
+        if pi.picking_list_id not in pl_map:
+            pl_map[pi.picking_list_id] = pi.picking_list
+        pl = pl_map[pi.picking_list_id]
+        if pl and pl.assigned_to:
+            order_to_staff[pi.order_id] = pl.assigned_to
+
+    for order in orders:
+        try:
+            history = json.loads(order.status_history) if order.status_history else []
+        except (json.JSONDecodeError, TypeError):
+            history = []
+        for entry in history:
+            if entry.get("status") == "drop_off":
+                ts = entry.get("timestamp", "")
+                try:
+                    drop_date = datetime.fromisoformat(ts).date() if ts else None
+                except (ValueError, TypeError):
+                    drop_date = None
+                if drop_date and start_d <= drop_date <= end_d:
+                    ds = drop_date.isoformat()
+                    if ds in day_data:
+                        items_count = order_items_qty.get(order.id, 0)
+                        day_data[ds]["drop_off_orders"] += 1
+                        day_data[ds]["drop_off_items"] += items_count
+                        staff = order_to_staff.get(order.id, "unassigned")
+                        day_data[ds]["staff"][staff]["drop_off_orders"] += 1
+                        day_data[ds]["staff"][staff]["drop_off_items"] += items_count
+                break  # Only count the first drop_off transition per order
+
+    # --- Working time data: from pick items picked_at ---
+    all_batches = db.query(PickingList).filter(PickingList.status != PickingListStatus.ARCHIVED).all()
+    for batch in all_batches:
+        if not batch.assigned_to:
+            continue
+        items = batch.items
+        picked_times = [i.picked_at for i in items if i.picked and i.picked_at]
+        if not picked_times:
+            continue
+
+        # Group picks by day
+        from collections import defaultdict as _dd
+        day_picks: dict[str, list] = _dd(list)
+        for t in picked_times:
+            t_naive = t.replace(tzinfo=None) if t and t.tzinfo else t
+            pd = t_naive.date()
+            if start_d <= pd <= end_d:
+                day_picks[pd.isoformat()].append(t_naive)
+
+        for ds, times in day_picks.items():
+            if ds not in day_data:
+                continue
+            first = min(times)
+            last = max(times)
+            secs = (last - first).total_seconds() if first != last else 0
+            day_data[ds]["staff"][batch.assigned_to]["working_seconds"] += secs
+
+    # Build response
+    chart = []
+    for ds in sorted(day_data.keys()):
+        dd = day_data[ds]
+        total_working = sum(s["working_seconds"] for s in dd["staff"].values())
+        staff_list = []
+        for uname, sdata in dd["staff"].items():
+            staff_list.append({
+                "username": uname,
+                "drop_off_orders": sdata["drop_off_orders"],
+                "drop_off_items": sdata["drop_off_items"],
+                "working_seconds": round(sdata["working_seconds"]),
+                "working_minutes": round(sdata["working_seconds"] / 60, 1),
+            })
+        staff_list.sort(key=lambda x: x["username"])
+        chart.append({
+            "date": ds,
+            "drop_off_orders": dd["drop_off_orders"],
+            "drop_off_items": dd["drop_off_items"],
+            "working_seconds": round(total_working),
+            "working_minutes": round(total_working / 60, 1),
+            "staff": staff_list,
+        })
+
+    return {"chart": chart}
+
+
 def _format_duration(seconds: float) -> str:
     """Format seconds into human readable duration like '2h 15m'."""
     if seconds <= 0:
