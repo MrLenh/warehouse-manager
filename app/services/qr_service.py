@@ -3,6 +3,7 @@ import json
 import os
 
 import barcode
+import qrcode
 from barcode.writer import ImageWriter
 from PIL import Image, ImageDraw, ImageFont
 
@@ -253,6 +254,35 @@ def generate_box_labels_pdf(boxes_info: list[dict]) -> bytes:
 
     buf = io.BytesIO()
     pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=DPI)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def generate_stock_request_qr(sr_id: str, request_number: str) -> bytes:
+    """Generate a QR code image encoding the mobile receiving URL. Returns PNG bytes."""
+    base = settings.BASE_URL.rstrip("/")
+    url = f"{base}/receiving/{sr_id}"
+
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+    # Add label text below QR code
+    font = _get_font(28)
+    label = request_number
+    text_bbox = font.getbbox(label)
+    text_w = text_bbox[2] - text_bbox[0]
+    text_h = text_bbox[3] - text_bbox[1]
+
+    qr_w, qr_h = img.size
+    canvas = Image.new("RGB", (qr_w, qr_h + text_h + 16), "white")
+    canvas.paste(img, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    draw.text(((qr_w - text_w) // 2, qr_h + 4), label, fill="black", font=font)
+
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
     buf.seek(0)
     return buf.getvalue()
 

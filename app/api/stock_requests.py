@@ -12,7 +12,7 @@ from app.schemas.stock_request import (
     StockRequestTrackingUpdate,
 )
 from app.services import stock_request_service
-from app.services.qr_service import generate_box_labels_pdf
+from app.services.qr_service import generate_box_labels_pdf, generate_stock_request_qr
 
 router = APIRouter(prefix="/stock-requests", tags=["Stock Requests"])
 
@@ -209,6 +209,16 @@ def print_box_labels(sr_id: str, db: Session = Depends(get_db)):
                         headers={"Content-Disposition": f"inline; filename=box-labels-{sr.request_number}.png"})
     return Response(content=pdf_bytes, media_type="application/pdf",
                     headers={"Content-Disposition": f"inline; filename=box-labels-{sr.request_number}.pdf"})
+
+
+@router.get("/{sr_id}/qrcode")
+def get_stock_request_qrcode(sr_id: str, db: Session = Depends(get_db)):
+    """Generate a QR code linking to the mobile receiving page."""
+    sr = stock_request_service.get_stock_request(db, sr_id)
+    if not sr:
+        raise HTTPException(404, "Stock request not found")
+    png_bytes = generate_stock_request_qr(sr.id, sr.request_number)
+    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.post("/scan-box/{barcode}", response_model=BoxScanResult)

@@ -3071,6 +3071,7 @@ function renderStockRequests(list) {
         <td>${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
+          ${['approved','receiving'].includes(sr.status) ? `<button class="btn btn-sm btn-outline" onclick="showSrQrCode('${sr.id}','${esc(sr.request_number)}')" title="QR for mobile receiving">QR</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -3230,6 +3231,7 @@ async function viewStockRequest(id) {
       <h3 style="margin:0;font-size:15px;flex:1">Product List</h3>
       <button class="btn btn-outline btn-sm" onclick="window.open(API+'/stock-requests/${sr.id}/checklist','_blank')">Print Checklist</button>
       ${sr.items.some(i => i.box_count > 0) ? '<button class="btn btn-outline btn-sm" onclick="window.open(API+\'/stock-requests/'+sr.id+'/box-labels\',\'_blank\')">Print Box Labels</button>' : ''}
+      ${['approved','receiving','pending'].includes(sr.status) ? '<button class="btn btn-outline btn-sm" onclick="showSrQrCode(\'' + sr.id + '\',\'' + esc(sr.request_number) + '\')">QR Code</button>' : ''}
     </div>
     <table>
       <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Unit Cost</th><th>Boxes</th></tr></thead>
@@ -3250,6 +3252,20 @@ async function viewStockRequest(id) {
   }
   document.getElementById('sr-detail-footer').innerHTML = footerHtml;
   document.getElementById('sr-detail-modal').classList.add('show');
+}
+
+function showSrQrCode(srId, requestNumber) {
+  const w = window.open('', '_blank', 'width=400,height=500');
+  w.document.write(`<html><head><title>QR - ${requestNumber}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:system-ui,sans-serif;text-align:center;padding:20px}img{max-width:280px;margin:20px auto}h2{font-size:18px;color:#333}p{color:#666;font-size:14px;margin:8px 0}.link{word-break:break-all;font-size:12px;color:#888;margin:12px 0}button{padding:10px 24px;font-size:14px;cursor:pointer;border:none;border-radius:8px;background:#667eea;color:#fff;margin:4px}</style></head>
+<body><h2>${requestNumber}</h2><p>Scan to open mobile receiving page</p>
+<img src="${API}/stock-requests/${srId}/qrcode" alt="QR Code">
+<div class="link" id="link"></div>
+<div><button onclick="window.print()">Print</button></div>
+<script>fetch('/api/v1/config').then(r=>r.json()).then(c=>{document.getElementById('link').textContent=c.base_url+'/receiving/${srId}'}).catch(()=>{})<\/script>
+</body></html>`);
+  w.document.close();
 }
 
 async function approveStockRequest(id) {

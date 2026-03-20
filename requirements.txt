@@ -5,6 +5,7 @@ alembic==1.13.3
 pydantic==2.9.2
 pydantic-settings==2.5.2
 python-barcode[images]==0.15.1
+qrcode[pil]==7.4.2
 Pillow==10.4.0
 easypost==9.3.0
 httpx==0.27.2

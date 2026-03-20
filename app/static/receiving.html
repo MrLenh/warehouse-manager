@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Receiving - Warehouse Manager</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e;-webkit-tap-highlight-color:transparent}
+.header{background:linear-gradient(135deg,#28a745,#20c997);color:#fff;padding:16px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header h1{font-size:18px;font-weight:600}
+.header .sub{font-size:13px;opacity:.85;margin-top:2px}
+.container{max-width:800px;margin:0 auto;padding:16px}
+.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:12px}
+.card h3{margin-bottom:10px;font-size:15px;color:#333}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px}
+.meta-grid .label{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.meta-grid .value{font-weight:500;margin-top:1px}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase;display:inline-block}
+.badge-pending{background:#fff3cd;color:#856404}
+.badge-approved{background:#cce5ff;color:#004085}
+.badge-receiving{background:#e8daef;color:#6c3483}
+.badge-completed{background:#d4edda;color:#155724}
+.badge-cancelled{background:#f8d7da;color:#721c24}
+.btn{padding:12px 20px;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;transition:.2s;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.btn-primary{background:#667eea;color:#fff}.btn-primary:hover{background:#5a6fd6}
+.btn-success{background:#28a745;color:#fff}.btn-success:hover{background:#218838}
+.btn-danger{background:#dc3545;color:#fff}
+.btn-outline{background:transparent;border:1px solid #667eea;color:#667eea}
+.btn-sm{padding:8px 14px;font-size:13px;width:auto}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* Scanner */
+.scan-area{display:flex;gap:10px;margin-bottom:12px}
+.scan-input{flex:1;padding:14px 16px;border:2px solid #28a745;border-radius:12px;font-size:16px;outline:none}
+.scan-input:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.2)}
+.scan-result{padding:12px;border-radius:10px;margin-bottom:12px;display:none;font-size:14px;animation:slideIn .3s ease}
+.scan-result.success{background:#d4edda;border:1px solid #c3e6cb;color:#155724;display:block}
+.scan-result.error{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;display:block}
+@keyframes slideIn{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* Items table */
+.item-card{border:1px solid #e8e8e8;border-radius:10px;padding:12px;margin-bottom:8px;transition:.2s}
+.item-card.received{border-color:#28a745;background:#f8fff8}
+.item-header{display:flex;justify-content:space-between;align-items:center}
+.item-sku{font-weight:600;font-size:14px}
+.item-name{font-size:13px;color:#555;margin-top:2px}
+.item-qty{display:flex;gap:8px;align-items:center;margin-top:8px}
+.item-qty label{font-size:12px;color:#888}
+.item-qty input{width:70px;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;text-align:center}
+.item-qty .requested{font-size:13px;color:#555;font-weight:500}
+.item-boxes{font-size:12px;color:#888;margin-top:4px}
+
+/* Progress bar */
+.progress-bar{background:#e9ecef;border-radius:8px;height:20px;overflow:hidden;margin:8px 0}
+.progress-fill{background:linear-gradient(90deg,#28a745,#20c997);height:100%;border-radius:8px;transition:width .5s ease;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;min-width:24px}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:10px;color:#fff;font-size:14px;z-index:300;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast-success{background:#28a745}
+.toast-error{background:#dc3545}
+.toast-info{background:#17a2b8}
+
+.empty{text-align:center;padding:40px;color:#999;font-size:15px}
+.actions{display:flex;gap:8px;margin-top:12px}
+.actions .btn{flex:1}
+
+/* Tracking section */
+.tracking-section{display:flex;gap:8px;align-items:center;margin-top:8px}
+.tracking-section input{flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+.tracking-section select{padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1 id="header-title">Receiving</h1>
+  <div class="sub" id="header-sub">Loading...</div>
+</div>
+
+<div class="container">
+  <!-- Loading state -->
+  <div id="loading" class="card empty">Loading stock request...</div>
+
+  <!-- Error state -->
+  <div id="error" class="card empty" style="display:none;color:#dc3545"></div>
+
+  <!-- Main content -->
+  <div id="content" style="display:none">
+    <!-- Request info -->
+    <div class="card">
+      <h3>Request Info</h3>
+      <div class="meta-grid">
+        <div><div class="label">Supplier</div><div class="value" id="sr-supplier">-</div></div>
+        <div><div class="label">Status</div><div class="value" id="sr-status"></div></div>
+        <div><div class="label">Ship From</div><div class="value" id="sr-ship-from">-</div></div>
+        <div><div class="label">Created</div><div class="value" id="sr-created">-</div></div>
+        <div><div class="label">Tracking</div><div class="value" id="sr-tracking">-</div></div>
+        <div><div class="label">Notes</div><div class="value" id="sr-notes">-</div></div>
+      </div>
+    </div>
+
+    <!-- Box scanner (only when approved/receiving) -->
+    <div id="scanner-card" class="card" style="display:none">
+      <h3>Scan Box Barcode</h3>
+      <div class="scan-area">
+        <input type="text" class="scan-input" id="scan-input" placeholder="Scan box barcode..." autofocus>
+        <button class="btn btn-success btn-sm" onclick="doScan()" style="width:80px">Scan</button>
+      </div>
+      <div class="scan-result" id="scan-result"></div>
+    </div>
+
+    <!-- Progress -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0">Items</h3>
+        <span id="progress-text" style="font-size:13px;color:#888">0 / 0</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill" style="width:0%">0%</div>
+      </div>
+    </div>
+
+    <!-- Items list -->
+    <div id="items-list"></div>
+
+    <!-- Actions -->
+    <div id="actions-card" class="card" style="display:none">
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-save" onclick="saveReceived()">Save Received Qty</button>
+      </div>
+      <div class="actions" style="margin-top:8px">
+        <button class="btn btn-success" id="btn-complete" onclick="completeRequest()" style="display:none">Complete Request</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/v1';
+const srId = window.location.pathname.split('/').filter(Boolean).pop();
+let srData = null;
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+async function loadStockRequest() {
+  try {
+    const res = await fetch(API + '/stock-requests/' + srId);
+    if (!res.ok) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = '';
+      document.getElementById('error').textContent = res.status === 404 ? 'Stock request not found' : 'Error loading stock request';
+      return;
+    }
+    srData = await res.json();
+    renderPage();
+  } catch (err) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = '';
+    document.getElementById('error').textContent = 'Network error: ' + err.message;
+  }
+}
+
+function renderPage() {
+  const sr = srData;
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = '';
+
+  // Header
+  document.getElementById('header-title').textContent = sr.request_number;
+  document.getElementById('header-sub').textContent = (sr.supplier || 'No supplier') + ' | ' + sr.status.toUpperCase();
+
+  // Info
+  document.getElementById('sr-supplier').textContent = sr.supplier || '-';
+  document.getElementById('sr-status').innerHTML = '<span class="badge badge-' + sr.status + '">' + sr.status + '</span>';
+  document.getElementById('sr-ship-from').textContent = sr.ship_from || '-';
+  document.getElementById('sr-created').textContent = new Date(sr.created_at).toLocaleString();
+  document.getElementById('sr-tracking').textContent = sr.tracking_id ? sr.tracking_id + (sr.carrier ? ' (' + sr.carrier + ')' : '') : '-';
+  document.getElementById('sr-notes').textContent = sr.notes || '-';
+
+  const isReceiving = sr.status === 'approved' || sr.status === 'receiving';
+
+  // Scanner
+  document.getElementById('scanner-card').style.display = isReceiving ? '' : 'none';
+
+  // Progress
+  const totalReq = sr.items.reduce((s, i) => s + i.quantity_requested, 0);
+  const totalRcv = sr.items.reduce((s, i) => s + i.quantity_received, 0);
+  const pct = totalReq > 0 ? Math.round(totalRcv / totalReq * 100) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-fill').textContent = pct + '%';
+  document.getElementById('progress-text').textContent = totalRcv + ' / ' + totalReq + ' received';
+
+  // Items
+  document.getElementById('items-list').innerHTML = sr.items.map(item => {
+    const boxesReceived = item.boxes ? item.boxes.filter(b => b.received).length : 0;
+    const allBoxesRcvd = item.box_count > 0 && boxesReceived >= item.box_count;
+    const isItemDone = item.quantity_received >= item.quantity_requested;
+
+    return `<div class="item-card ${isItemDone ? 'received' : ''}">
+      <div class="item-header">
+        <div>
+          <div class="item-sku">${esc(item.sku)}</div>
+          <div class="item-name">${esc(item.product_name)}${item.variant_label ? ' - ' + esc(item.variant_label) : ''}</div>
+        </div>
+        <div style="text-align:right">
+          ${isItemDone ? '<span style="color:#28a745;font-size:20px;font-weight:700">&#10003;</span>' : ''}
+        </div>
+      </div>
+      <div class="item-qty">
+        <div>
+          <label>Requested</label>
+          <div class="requested">${item.quantity_requested}</div>
+        </div>
+        <div>
+          <label>Received</label>
+          ${isReceiving
+            ? '<input type="number" class="rcv-qty" data-item-id="' + item.id + '" value="' + item.quantity_received + '" min="0" inputmode="numeric">'
+            : '<div class="requested">' + item.quantity_received + '</div>'}
+        </div>
+        <div>
+          <label>Unit Cost</label>
+          ${isReceiving
+            ? '<input type="number" class="rcv-cost" data-item-id="' + item.id + '" value="' + item.unit_cost.toFixed(2) + '" step="0.01" min="0" inputmode="decimal" style="width:80px">'
+            : '<div class="requested">$' + item.unit_cost.toFixed(2) + '</div>'}
+        </div>
+      </div>
+      ${item.box_count > 0 ? '<div class="item-boxes">Boxes: ' + boxesReceived + ' / ' + item.box_count + (allBoxesRcvd ? ' &#10003;' : '') + '</div>' : ''}
+    </div>`;
+  }).join('');
+
+  // Actions
+  if (isReceiving) {
+    document.getElementById('actions-card').style.display = '';
+    document.getElementById('btn-complete').style.display = sr.status === 'receiving' ? '' : 'none';
+  } else {
+    document.getElementById('actions-card').style.display = 'none';
+  }
+}
+
+// Box barcode scanning
+document.getElementById('scan-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); doScan(); }
+});
+
+// Global barcode capture
+document.addEventListener('keydown', function(e) {
+  const input = document.getElementById('scan-input');
+  if (!input || input.style.display === 'none') return;
+  if (document.activeElement === input) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Enter') { e.preventDefault(); input.focus(); doScan(); return; }
+  if (e.key.length === 1) { e.preventDefault(); input.focus(); input.value += e.key; }
+});
+
+async function doScan() {
+  const input = document.getElementById('scan-input');
+  const code = input.value.trim();
+  if (!code) return;
+
+  const resultEl = document.getElementById('scan-result');
+
+  try {
+    const res = await fetch(API + '/stock-requests/scan-box/' + encodeURIComponent(code), { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      resultEl.className = 'scan-result success';
+      resultEl.textContent = data.message;
+      toast(data.message);
+      await loadStockRequest();
+    } else {
+      resultEl.className = 'scan-result error';
+      resultEl.textContent = data.message;
+    }
+  } catch (err) {
+    resultEl.className = 'scan-result error';
+    resultEl.textContent = 'Error: ' + err.message;
+  }
+
+  input.value = '';
+  input.focus();
+}
+
+async function saveReceived() {
+  const inputs = document.querySelectorAll('.rcv-qty');
+  const items = Array.from(inputs).map(inp => {
+    const costInput = document.querySelector('.rcv-cost[data-item-id="' + inp.dataset.itemId + '"]');
+    return {
+      item_id: inp.dataset.itemId,
+      quantity_received: parseInt(inp.value) || 0,
+      unit_cost: costInput ? parseFloat(costInput.value) || 0 : undefined,
+    };
+  });
+
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const res = await fetch(API + '/stock-requests/' + srId + '/receive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    if (res.ok) {
+      toast('Received quantities saved!');
+      await loadStockRequest();
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Error saving', 'error');
+    }
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Save Received Qty';
+}
+
+async function completeRequest() {
+  if (!confirm('Complete this stock request? This cannot be undone.')) return;
+
+  try {
+    const res = await fetch(API + '/stock-requests/' + srId + '/complete', { method: 'POST' });
+    if (res.ok) {
+      toast('Stock request completed!');
+      await loadStockRequest();
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Error completing', 'error');
+    }
+  } catch (err) {
+    toast('Error: ' + err.message, 'error');
+  }
+}
+
+// Init
+loadStockRequest();
+</script>
+</body>
+</html>
