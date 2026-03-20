@@ -479,3 +479,179 @@ document.addEventListener('DOMContentLoaded', function() {{
 </html>"""
 
     return HTMLResponse(content=html)
+
+
+@router.get("/{sr_id}/print-box-labels")
+def print_box_labels(sr_id: str, db: Session = Depends(get_db)):
+    """Printable box barcode labels (sticker format) for sticking on boxes."""
+    from html import escape
+
+    from fastapi.responses import HTMLResponse
+
+    sr = stock_request_service.get_stock_request(db, sr_id)
+    if not sr:
+        raise HTTPException(404, "Stock request not found")
+
+    # Build label cards
+    label_cards = ""
+    total_boxes = 0
+    for item in sr.items:
+        if not item.boxes:
+            continue
+        for box in sorted(item.boxes, key=lambda b: b.sequence):
+            total_boxes += 1
+            label_cards += f"""
+            <div class="label-card">
+                <div class="label-header">{escape(sr.request_number)}</div>
+                <div class="label-sku">{escape(item.sku)}</div>
+                <div class="label-product">{escape(item.product_name)}{(' - ' + escape(item.variant_label)) if item.variant_label else ''}</div>
+                <svg class="barcode" data-barcode="{escape(box.barcode)}"></svg>
+                <div class="label-barcode-text">{escape(box.barcode)}</div>
+                <div class="label-box-info">Box #{box.sequence} of {item.box_count} | Qty: {item.quantity_requested}</div>
+            </div>"""
+
+    if not label_cards:
+        label_cards = '<p style="padding:40px;text-align:center;color:#999">No boxes found. Create stock request items with box_count &gt; 0.</p>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Box Labels — {escape(sr.request_number)}</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+@page {{
+    size: A4;
+    margin: 8mm;
+}}
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
+    font-family: -apple-system, 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 16px;
+}}
+
+.print-bar {{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    z-index: 1000;
+}}
+.print-bar button {{
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    background: #667eea;
+    color: #fff;
+}}
+.print-bar button:hover {{ background: #5a6fd6; }}
+.print-bar span {{ font-size: 13px; }}
+
+.labels-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 50px;
+}}
+
+.label-card {{
+    border: 2px dashed #aaa;
+    border-radius: 6px;
+    padding: 10px 8px;
+    text-align: center;
+    page-break-inside: avoid;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}}
+.label-header {{
+    font-size: 8px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}}
+.label-sku {{
+    font-size: 14px;
+    font-weight: 700;
+    font-family: monospace;
+    margin-bottom: 1px;
+}}
+.label-product {{
+    font-size: 10px;
+    color: #555;
+    margin-bottom: 4px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}}
+.barcode {{
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: 45px;
+}}
+.label-barcode-text {{
+    font-family: monospace;
+    font-size: 9px;
+    color: #333;
+    margin-top: 1px;
+}}
+.label-box-info {{
+    font-size: 9px;
+    color: #888;
+    margin-top: 3px;
+}}
+
+@media print {{
+    .print-bar {{ display: none !important; }}
+    body {{ padding: 0; }}
+    .labels-grid {{ margin-top: 0; }}
+    .label-card {{ border-color: #666; }}
+}}
+</style>
+</head>
+<body>
+<div class="print-bar">
+    <button onclick="window.print()">Print Box Labels</button>
+    <span>{escape(sr.request_number)} — {total_boxes} box labels</span>
+</div>
+
+<div class="labels-grid">
+    {label_cards}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {{
+    document.querySelectorAll('.barcode').forEach(function(svg) {{
+        var code = svg.getAttribute('data-barcode');
+        if (code) {{
+            JsBarcode(svg, code, {{
+                format: 'CODE128',
+                width: 1.5,
+                height: 40,
+                displayValue: false,
+                margin: 2,
+            }});
+        }}
+    }});
+}});
+</script>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)

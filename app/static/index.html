@@ -3212,11 +3212,14 @@ async function viewStockRequest(id) {
   }
 
   document.getElementById('sr-detail-body').innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div></div>
-      <button class="btn btn-outline btn-sm" onclick="window.open(API + '/stock-requests/${sr.id}/print-checklist', '_blank')" style="display:flex;align-items:center;gap:4px">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        Print Checklist
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="window.open(API + '/stock-requests/${sr.id}/print-checklist', '_blank')" style="display:flex;align-items:center;gap:5px">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print Product Checklist
+      </button>
+      <button class="btn btn-outline btn-sm" onclick="window.open(API + '/stock-requests/${sr.id}/print-box-labels', '_blank')" style="display:flex;align-items:center;gap:5px">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Print Box Labels (QR/Barcode)
       </button>
     </div>
     <div class="detail-grid">
