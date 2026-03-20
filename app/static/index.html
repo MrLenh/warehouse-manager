@@ -169,6 +169,7 @@ tr:hover{background:#f8f9ff}
 </style>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
 
@@ -3180,11 +3181,44 @@ async function viewStockRequest(id) {
       <td>${isReceiving
         ? '<input type="number" class="rcv-qty" data-item-id="'+i.id+'" value="'+i.quantity_received+'" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
         : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : '')}</td>
+      <td style="text-align:center">${i.box_count || 0}</td>
       <td>$${i.unit_cost.toFixed(2)}</td>
     </tr>`;
   }).join('');
 
+  // Build box barcode sections per item
+  let boxesHtml = '';
+  const hasBoxes = sr.items.some(i => i.boxes && i.boxes.length > 0);
+  if (hasBoxes) {
+    boxesHtml = '<h3 style="margin:16px 0 8px;font-size:15px">Box Barcodes</h3>';
+    for (const item of sr.items) {
+      if (!item.boxes || item.boxes.length === 0) continue;
+      const sorted = [...item.boxes].sort((a, b) => a.sequence - b.sequence);
+      boxesHtml += `<div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#333">
+          ${esc(item.sku)} — ${esc(item.product_name)} ${item.variant_label ? '(' + esc(item.variant_label) + ')' : ''}
+          <span style="color:#999;font-weight:400;margin-left:8px">${item.boxes.length} boxes</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+          ${sorted.map(box => `<div style="border:1px solid #e0e0e0;border-radius:6px;padding:8px;text-align:center;background:${box.received ? '#f0fff0' : '#fff'}">
+            <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase">Box #${box.sequence}</div>
+            <svg class="sr-box-barcode" data-barcode="${esc(box.barcode)}" style="width:100%;height:40px"></svg>
+            <div style="font-family:monospace;font-size:10px;color:#444;margin-top:2px">${esc(box.barcode)}</div>
+            <div style="font-size:10px;margin-top:2px;color:${box.received ? '#28a745' : '#999'}">${box.received ? '✓ Received' : '☐ Pending'}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+  }
+
   document.getElementById('sr-detail-body').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div></div>
+      <button class="btn btn-outline btn-sm" onclick="window.open(API + '/stock-requests/${sr.id}/print-checklist', '_blank')" style="display:flex;align-items:center;gap:4px">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print Checklist
+      </button>
+    </div>
     <div class="detail-grid">
       <div class="detail-item"><div class="label">Supplier</div><div class="value">${esc(sr.supplier) || '-'}</div></div>
       <div class="detail-item"><div class="label">Status</div><div class="value"><span class="badge badge-${sr.status}">${sr.status}</span></div></div>
@@ -3193,13 +3227,24 @@ async function viewStockRequest(id) {
     </div>
     <h3 style="margin:16px 0 8px;font-size:15px">Product List</h3>
     <table>
-      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Unit Cost</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Boxes</th><th>Unit Cost</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
+    ${boxesHtml}
   `;
 
+  // Render barcodes in modal using JsBarcode if available
+  setTimeout(() => {
+    const svgs = document.querySelectorAll('.sr-box-barcode');
+    if (svgs.length > 0 && typeof JsBarcode !== 'undefined') {
+      svgs.forEach(svg => {
+        const code = svg.getAttribute('data-barcode');
+        if (code) JsBarcode(svg, code, { format: 'CODE128', width: 1.5, height: 35, displayValue: false, margin: 2 });
+      });
+    }
+  }, 100);
+
   let footerHtml = '';
-  footerHtml += `<button class="btn btn-outline" onclick="window.open(API + '/stock-requests/${sr.id}/print-checklist', '_blank')" style="margin-right:auto">🖨 Print Checklist</button>`;
   if (sr.status === 'pending') {
     footerHtml += `<button class="btn btn-success" onclick="approveStockRequest('${sr.id}')">Approve</button>`;
     footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Cancel</button>`;
