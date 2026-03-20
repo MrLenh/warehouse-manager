@@ -211,6 +211,52 @@ def generate_order_qr(order) -> bytes:
     return buf.getvalue()
 
 
+def generate_box_barcode_label(barcode_data: str, sku: str, product_name: str, variant_label: str, box_seq: int, box_total: int) -> Image.Image:
+    """Generate a 2x1 inch barcode label for a stock request box."""
+    lines = [
+        ("30", barcode_data, "#000000"),
+        ("22", f"{sku} - {product_name}", "#000000"),
+    ]
+    if variant_label:
+        lines.append(("18", variant_label, "#333333"))
+    lines.append(("18", f"Box {box_seq}/{box_total}", "#333333"))
+
+    return _draw_label_2x1(barcode_data, lines)
+
+
+def generate_box_labels_pdf(boxes_info: list[dict]) -> bytes:
+    """Generate a PDF with barcode labels for all boxes. Each box gets one label page.
+
+    boxes_info: list of dicts with keys: barcode, sku, product_name, variant_label, sequence, box_total
+    Returns PDF bytes (or PNG if single label).
+    """
+    pages = []
+    for info in boxes_info:
+        img = generate_box_barcode_label(
+            barcode_data=info["barcode"],
+            sku=info["sku"],
+            product_name=info["product_name"],
+            variant_label=info.get("variant_label", ""),
+            box_seq=info["sequence"],
+            box_total=info["box_total"],
+        )
+        pages.append(img)
+
+    if not pages:
+        return b""
+
+    if len(pages) == 1:
+        buf = io.BytesIO()
+        pages[0].save(buf, format="PNG", dpi=(DPI, DPI))
+        buf.seek(0)
+        return buf.getvalue()
+
+    buf = io.BytesIO()
+    pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=DPI)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def generate_bulk_qr_page(product, variants: list) -> bytes:
     """Generate a printable PDF with 2x1 inch barcode labels, one per page.
     Returns PDF bytes (or PNG if single label).

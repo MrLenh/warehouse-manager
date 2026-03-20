@@ -303,6 +303,8 @@ def receive_items(db: Session, sr_id: str, data: StockRequestReceive) -> StockRe
             raise ValueError("Received quantity cannot be negative")
 
         item.quantity_received = recv.quantity_received
+        if recv.unit_cost is not None:
+            item.unit_cost = recv.unit_cost
 
         # Add received quantity to inventory
         if recv.quantity_received > 0:

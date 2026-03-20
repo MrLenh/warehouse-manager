@@ -458,7 +458,7 @@ tr:hover{background:#f8f9ff}
         </div>
       </div>
       <table>
-        <thead><tr><th>Request #</th><th>Supplier</th><th>Items</th><th>Total Requested</th><th>Total Received</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Request #</th><th>Supplier</th><th>Items</th><th>Total Requested</th><th>Total Received</th><th>Boxes</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody id="sr-body"></tbody>
       </table>
     </div>
@@ -3055,16 +3055,18 @@ function renderStockRequests(list) {
   const q = (document.getElementById('search-sr').value || '').toLowerCase();
   const filtered = list.filter(sr => !q || sr.request_number.toLowerCase().includes(q) || sr.supplier.toLowerCase().includes(q));
   document.getElementById('sr-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="8" class="empty">No stock requests found</td></tr>'
+    ? '<tr><td colspan="9" class="empty">No stock requests found</td></tr>'
     : filtered.map(sr => {
       const totalReq = sr.items.reduce((s, i) => s + i.quantity_requested, 0);
       const totalRcv = sr.items.reduce((s, i) => s + i.quantity_received, 0);
+      const totalBoxes = sr.items.reduce((s, i) => s + (i.box_count || 0), 0);
       return `<tr>
         <td><strong>${esc(sr.request_number)}</strong></td>
         <td>${esc(sr.supplier) || '-'}</td>
         <td>${sr.items.length}</td>
         <td>${totalReq}</td>
         <td>${totalRcv}</td>
+        <td>${totalBoxes || '-'}</td>
         <td><span class="badge badge-${sr.status}">${sr.status}</span></td>
         <td>${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
@@ -3201,6 +3203,7 @@ async function viewStockRequest(id) {
 
   let itemsHtml = sr.items.map(i => {
     const diff = i.quantity_requested - i.quantity_received;
+    const boxesReceived = i.boxes ? i.boxes.filter(b => b.received).length : 0;
     return `<tr>
       <td>${esc(i.sku)}</td>
       <td>${esc(i.product_name)}</td>
@@ -3209,7 +3212,10 @@ async function viewStockRequest(id) {
       <td>${isReceiving
         ? '<input type="number" class="rcv-qty" data-item-id="'+i.id+'" value="'+i.quantity_received+'" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
         : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : '')}</td>
-      <td>$${i.unit_cost.toFixed(2)}</td>
+      <td>${isReceiving
+        ? '<input type="number" class="rcv-cost" data-item-id="'+i.id+'" value="'+i.unit_cost.toFixed(2)+'" step="0.01" min="0" style="width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
+        : '$' + i.unit_cost.toFixed(2)}</td>
+      <td style="text-align:center">${i.box_count > 0 ? boxesReceived + '/' + i.box_count : '-'}</td>
     </tr>`;
   }).join('');
 
@@ -3220,9 +3226,13 @@ async function viewStockRequest(id) {
       <div class="detail-item"><div class="label">Created</div><div class="value">${new Date(sr.created_at).toLocaleString('en-US')}</div></div>
       <div class="detail-item"><div class="label">Notes</div><div class="value">${esc(sr.notes) || '-'}</div></div>
     </div>
-    <h3 style="margin:16px 0 8px;font-size:15px">Product List</h3>
+    <div style="display:flex;align-items:center;gap:8px;margin:16px 0 8px">
+      <h3 style="margin:0;font-size:15px;flex:1">Product List</h3>
+      <button class="btn btn-outline btn-sm" onclick="window.open(API+'/stock-requests/${sr.id}/checklist','_blank')">Print Checklist</button>
+      ${sr.items.some(i => i.box_count > 0) ? '<button class="btn btn-outline btn-sm" onclick="window.open(API+\'/stock-requests/'+sr.id+'/box-labels\',\'_blank\')">Print Box Labels</button>' : ''}
+    </div>
     <table>
-      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Unit Cost</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Unit Cost</th><th>Boxes</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
   `;
@@ -3250,10 +3260,15 @@ async function approveStockRequest(id) {
 
 async function receiveStockRequest(id) {
   const inputs = document.querySelectorAll('.rcv-qty');
-  const items = Array.from(inputs).map(inp => ({
-    item_id: inp.dataset.itemId,
-    quantity_received: parseInt(inp.value) || 0,
-  }));
+  const items = Array.from(inputs).map(inp => {
+    const costInput = document.querySelector(`.rcv-cost[data-item-id="${inp.dataset.itemId}"]`);
+    const entry = {
+      item_id: inp.dataset.itemId,
+      quantity_received: parseInt(inp.value) || 0,
+    };
+    if (costInput) entry.unit_cost = parseFloat(costInput.value) || 0;
+    return entry;
+  });
   const res = await fetch(API + '/stock-requests/' + id + '/receive', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ items }),
