@@ -3199,6 +3199,7 @@ async function viewStockRequest(id) {
   `;
 
   let footerHtml = '';
+  footerHtml += `<button class="btn btn-outline" onclick="window.open(API + '/stock-requests/${sr.id}/print-checklist', '_blank')" style="margin-right:auto">🖨 Print Checklist</button>`;
   if (sr.status === 'pending') {
     footerHtml += `<button class="btn btn-success" onclick="approveStockRequest('${sr.id}')">Approve</button>`;
     footerHtml += `<button class="btn btn-danger" onclick="cancelStockRequest('${sr.id}')">Cancel</button>`;
