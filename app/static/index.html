@@ -492,6 +492,57 @@ tr:hover{background:#f8f9ff}
         </div>
       </div>
       <div class="report-grid" id="report-cards"></div>
+
+      <!-- Order Time Metrics -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <h3 style="margin:0">Order Time Metrics</h3>
+          <label style="font-size:13px;color:#666">From:
+            <input type="date" id="time-metrics-start" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <label style="font-size:13px;color:#666">To:
+            <input type="date" id="time-metrics-end" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="loadTimeMetrics()">Load</button>
+          <button class="btn btn-outline btn-sm" onclick="setTimeMetricsRange('7d')">7D</button>
+          <button class="btn btn-outline btn-sm" onclick="setTimeMetricsRange('30d')">30D</button>
+          <button class="btn btn-outline btn-sm" onclick="setTimeMetricsRange('90d')">90D</button>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <label style="font-size:13px;color:#666">Group:
+              <select id="time-metrics-group" onchange="loadTimeMetrics()" style="padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+                <option value="daily">Daily</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Overall averages -->
+        <div class="report-grid" id="time-metrics-cards" style="margin-bottom:16px"></div>
+
+        <!-- Chart -->
+        <div style="position:relative;width:100%;height:350px">
+          <canvas id="time-metrics-chart"></canvas>
+        </div>
+
+        <!-- Detail table -->
+        <div style="margin-top:16px;overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Confirmed Time (h)</th>
+                <th>Processing Time (h)</th>
+                <th>Drop Off Time (h)</th>
+                <th>Shipped Time (h)</th>
+                <th>Delivered Time (h)</th>
+              </tr>
+            </thead>
+            <tbody id="time-metrics-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card" style="margin-bottom:16px">
         <h3 style="margin-bottom:12px">Orders by Date</h3>
         <div style="position:relative;width:100%;max-height:1000px;height:400px">
@@ -3226,6 +3277,7 @@ async function cancelStockRequest(id) {
 
 // REPORTS
 let ordersChart = null;
+let timeMetricsChart = null;
 
 async function loadReportCustomers() {
   try {
@@ -3321,6 +3373,125 @@ async function loadReports() {
   document.getElementById('low-stock-body').innerHTML = low.length === 0
     ? '<tr><td colspan="4" class="empty">All products are well-stocked</td></tr>'
     : low.map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td class="stock-low">${p.quantity}</td><td>${esc(p.location)}</td></tr>`).join('');
+
+  // Auto-load time metrics with 30-day default
+  if (!document.getElementById('time-metrics-start').value) {
+    setTimeMetricsRange('30d');
+  } else {
+    loadTimeMetrics();
+  }
+}
+
+// --- Order Time Metrics ---
+function setTimeMetricsRange(range) {
+  const end = new Date();
+  const start = new Date();
+  if (range === '7d') start.setDate(end.getDate() - 6);
+  else if (range === '30d') start.setDate(end.getDate() - 29);
+  else if (range === '90d') start.setDate(end.getDate() - 89);
+  document.getElementById('time-metrics-start').value = start.toISOString().slice(0, 10);
+  document.getElementById('time-metrics-end').value = end.toISOString().slice(0, 10);
+  loadTimeMetrics();
+}
+
+function _fmtHours(h) {
+  if (h == null) return '—';
+  if (h < 1) return (h * 60).toFixed(0) + 'm';
+  if (h < 24) return h.toFixed(1) + 'h';
+  const days = Math.floor(h / 24);
+  const rem = h % 24;
+  return days + 'd ' + rem.toFixed(0) + 'h';
+}
+
+async function loadTimeMetrics() {
+  const startVal = document.getElementById('time-metrics-start').value;
+  const endVal = document.getElementById('time-metrics-end').value;
+  const groupBy = document.getElementById('time-metrics-group').value;
+
+  let params = [];
+  if (startVal) params.push('start_date=' + startVal);
+  if (endVal) params.push('end_date=' + endVal);
+  params.push('group_by=' + groupBy);
+  const qs = '?' + params.join('&');
+
+  try {
+    const res = await fetch(API + '/reports/order-time-metrics' + qs);
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    renderTimeMetrics(data);
+  } catch (e) {
+    console.error('Time metrics error:', e);
+  }
+}
+
+function renderTimeMetrics(data) {
+  const ov = data.overall || {};
+  const METRICS = [
+    { key: 'confirmed_time', label: 'Confirmed Time', desc: 'Confirmed → Processing', color: '#667eea' },
+    { key: 'processing_time', label: 'Processing Time', desc: 'Confirmed → Packed', color: '#f093fb' },
+    { key: 'drop_off_time', label: 'Drop Off Time', desc: 'Confirmed → Drop Off', color: '#4facfe' },
+    { key: 'shipped_time', label: 'Shipped Time', desc: 'Confirmed → Shipped', color: '#43e97b' },
+    { key: 'delivered_time', label: 'Delivered Time', desc: 'Confirmed → Delivered', color: '#fa709a' },
+  ];
+
+  // Overall cards
+  document.getElementById('time-metrics-cards').innerHTML = METRICS.map(m => {
+    const info = ov[m.key] || {};
+    return `<div class="report-card">
+      <div class="number" style="color:${m.color}">${_fmtHours(info.avg_hours)}</div>
+      <div class="label">${m.label}<br><small style="color:#999">${m.desc} (${info.count || 0} orders)</small></div>
+    </div>`;
+  }).join('');
+
+  // Table
+  const chart = data.chart || [];
+  document.getElementById('time-metrics-body').innerHTML = chart.length === 0
+    ? '<tr><td colspan="6" class="empty">No data</td></tr>'
+    : chart.map(r => `<tr>
+        <td>${r.date}</td>
+        <td>${_fmtHours(r.confirmed_time_avg)}${r.confirmed_time_count ? ' <small style="color:#999">('+r.confirmed_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.processing_time_avg)}${r.processing_time_count ? ' <small style="color:#999">('+r.processing_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.drop_off_time_avg)}${r.drop_off_time_count ? ' <small style="color:#999">('+r.drop_off_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.shipped_time_avg)}${r.shipped_time_count ? ' <small style="color:#999">('+r.shipped_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.delivered_time_avg)}${r.delivered_time_count ? ' <small style="color:#999">('+r.delivered_time_count+')</small>' : ''}</td>
+      </tr>`).join('');
+
+  // Chart
+  if (timeMetricsChart) timeMetricsChart.destroy();
+  const ctx = document.getElementById('time-metrics-chart').getContext('2d');
+  const labels = chart.map(r => r.date);
+  const datasets = METRICS.map(m => ({
+    label: m.label,
+    data: chart.map(r => r[m.key + '_avg']),
+    borderColor: m.color,
+    backgroundColor: m.color + '20',
+    tension: 0.3,
+    pointRadius: 3,
+    fill: false,
+  }));
+  timeMetricsChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxRotation: 45, autoSkip: true } },
+        y: { beginAtZero: true, title: { display: true, text: 'Hours' } }
+      },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ': ' + _fmtHours(ctx.parsed.y);
+            }
+          }
+        }
+      }
+    }
+  });
 }
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }

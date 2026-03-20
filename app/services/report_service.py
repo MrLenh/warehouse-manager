@@ -9,6 +9,142 @@ from app.models.product import Product, Variant
 from app.models.stock_request import StockRequest, StockRequestItem, StockRequestStatus
 
 
+def order_time_metrics(
+    db: Session,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    group_by: str = "daily",
+) -> dict:
+    """Calculate average order processing time metrics grouped by day or month.
+
+    Metrics (all measured from confirmed timestamp):
+    - confirmed_time: confirmed → processing
+    - processing_time: confirmed → packed
+    - drop_off_time: confirmed → drop_off
+    - shipped_time: confirmed → shipped
+    - delivered_time: confirmed → delivered
+    """
+    import json
+    from datetime import timedelta
+
+    today = datetime.now(timezone.utc).date()
+    if end_date:
+        end_d = datetime.fromisoformat(end_date).date()
+    else:
+        end_d = today
+    if start_date:
+        start_d = datetime.fromisoformat(start_date).date()
+    else:
+        start_d = end_d - timedelta(days=29)
+
+    orders = db.query(Order).all()
+
+    TARGET_STATUSES = ["processing", "packed", "drop_off", "shipped", "delivered"]
+    METRIC_NAMES = {
+        "processing": "confirmed_time",
+        "packed": "processing_time",
+        "drop_off": "drop_off_time",
+        "shipped": "shipped_time",
+        "delivered": "delivered_time",
+    }
+
+    # Collect per-order durations keyed by the date the order was confirmed
+    # { group_key: { metric_name: [hours, ...] } }
+    from collections import defaultdict
+    grouped: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+
+    for order in orders:
+        try:
+            history = json.loads(order.status_history) if order.status_history else []
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not history:
+            continue
+
+        # Find confirmed timestamp
+        confirmed_ts = None
+        status_timestamps: dict[str, datetime] = {}
+        for entry in history:
+            status = entry.get("status", "")
+            ts_str = entry.get("timestamp", "")
+            if not ts_str:
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            except (ValueError, TypeError):
+                continue
+
+            if status == "confirmed" and confirmed_ts is None:
+                confirmed_ts = ts
+            if status in TARGET_STATUSES and status not in status_timestamps:
+                status_timestamps[status] = ts
+
+        if not confirmed_ts:
+            continue
+
+        confirmed_date = confirmed_ts.date()
+        if confirmed_date < start_d or confirmed_date > end_d:
+            continue
+
+        if group_by == "monthly":
+            group_key = confirmed_date.strftime("%Y-%m")
+        else:
+            group_key = confirmed_date.isoformat()
+
+        for status, metric_name in METRIC_NAMES.items():
+            if status in status_timestamps:
+                delta_hours = (status_timestamps[status] - confirmed_ts).total_seconds() / 3600
+                if delta_hours >= 0:
+                    grouped[group_key][metric_name].append(delta_hours)
+
+    # Build date/month series
+    if group_by == "monthly":
+        keys = set()
+        d = start_d.replace(day=1)
+        while d <= end_d:
+            keys.add(d.strftime("%Y-%m"))
+            if d.month == 12:
+                d = d.replace(year=d.year + 1, month=1)
+            else:
+                d = d.replace(month=d.month + 1)
+        sorted_keys = sorted(keys)
+    else:
+        sorted_keys = []
+        d = start_d
+        while d <= end_d:
+            sorted_keys.append(d.isoformat())
+            d += timedelta(days=1)
+
+    all_metric_names = list(METRIC_NAMES.values())
+    chart = []
+    for key in sorted_keys:
+        entry = {"date": key}
+        bucket = grouped.get(key, {})
+        for mn in all_metric_names:
+            values = bucket.get(mn, [])
+            entry[mn + "_avg"] = round(sum(values) / len(values), 2) if values else None
+            entry[mn + "_count"] = len(values)
+        chart.append(entry)
+
+    # Overall averages
+    overall: dict[str, dict] = {}
+    for mn in all_metric_names:
+        all_vals = []
+        for bucket in grouped.values():
+            all_vals.extend(bucket.get(mn, []))
+        overall[mn] = {
+            "avg_hours": round(sum(all_vals) / len(all_vals), 2) if all_vals else None,
+            "count": len(all_vals),
+        }
+
+    return {
+        "group_by": group_by,
+        "date_range": {"start": start_d.isoformat(), "end": end_d.isoformat()},
+        "overall": overall,
+        "chart": chart,
+    }
+
+
 def inventory_summary(db: Session) -> dict:
     products = db.query(Product).all()
     total_products = len(products)
