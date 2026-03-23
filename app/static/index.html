@@ -730,10 +730,18 @@ tr:hover{background:#f8f9ff}
   <div class="panel" id="panel-jobs">
     <div class="toolbar">
       <h3 style="font-size:16px;font-weight:600">Background Jobs</h3>
-      <button class="btn btn-outline btn-sm" onclick="loadJobs()">Refresh</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="openCreateJobModal()">+ Create Job</button>
+        <button class="btn btn-outline btn-sm" onclick="loadJobs()">Refresh</button>
+      </div>
     </div>
     <div id="jobs-list"></div>
     <div id="jobs-last-result" style="margin-top:16px"></div>
+
+    <div style="margin-top:24px">
+      <h3 style="font-size:16px;font-weight:600;margin-bottom:12px">Custom Jobs</h3>
+      <div id="custom-jobs-list"></div>
+    </div>
   </div>
 
 </div>
@@ -1209,6 +1217,80 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
         <button class="btn btn-outline btn-sm" id="qr-bulk-btn">Download Print Sheet (PNG)</button>
       </div>
       <div id="qr-body" style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE/EDIT CUSTOM JOB MODAL -->
+<div class="modal-overlay" id="custom-job-modal">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <h2 id="custom-job-modal-title">Create Custom Job</h2>
+      <button class="modal-close" onclick="closeModal('custom-job-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cj-edit-id">
+      <div class="form-group"><label>Job Name *</label><input type="text" id="cj-name" placeholder="e.g. Pending to Shipped"></div>
+      <div class="form-group"><label>Description</label><input type="text" id="cj-description" placeholder="Optional description"></div>
+      <div class="form-group">
+        <label>Source Statuses (scan orders with these statuses)</label>
+        <div id="cj-source-statuses" style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="font-size:13px"><input type="checkbox" value="pending"> pending</label>
+          <label style="font-size:13px"><input type="checkbox" value="confirmed"> confirmed</label>
+          <label style="font-size:13px"><input type="checkbox" value="processing"> processing</label>
+          <label style="font-size:13px"><input type="checkbox" value="packing"> packing</label>
+          <label style="font-size:13px"><input type="checkbox" value="packed"> packed</label>
+          <label style="font-size:13px"><input type="checkbox" value="label_purchased"> label_purchased</label>
+          <label style="font-size:13px"><input type="checkbox" value="drop_off"> drop_off</label>
+          <label style="font-size:13px"><input type="checkbox" value="shipped"> shipped</label>
+          <label style="font-size:13px"><input type="checkbox" value="in_transit"> in_transit</label>
+          <label style="font-size:13px"><input type="checkbox" value="delivered"> delivered</label>
+          <label style="font-size:13px"><input type="checkbox" value="on_hold"> on_hold</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tracking Conditions (trigger when tracking status is)</label>
+        <div id="cj-tracking-conditions" style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="font-size:13px"><input type="checkbox" value="pre_transit"> pre_transit</label>
+          <label style="font-size:13px"><input type="checkbox" value="in_transit"> in_transit</label>
+          <label style="font-size:13px"><input type="checkbox" value="out_for_delivery"> out_for_delivery</label>
+          <label style="font-size:13px"><input type="checkbox" value="delivered"> delivered</label>
+          <label style="font-size:13px"><input type="checkbox" value="return_to_sender"> return_to_sender</label>
+          <label style="font-size:13px"><input type="checkbox" value="failure"> failure</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Target Status (set order to)</label>
+          <select id="cj-target-status" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px">
+            <option value="confirmed">confirmed</option>
+            <option value="processing">processing</option>
+            <option value="packing">packing</option>
+            <option value="packed">packed</option>
+            <option value="label_purchased">label_purchased</option>
+            <option value="drop_off">drop_off</option>
+            <option value="shipped" selected>shipped</option>
+            <option value="in_transit">in_transit</option>
+            <option value="delivered">delivered</option>
+            <option value="on_hold">on_hold</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Interval (minutes)</label>
+          <input type="number" id="cj-interval" value="30" min="1" max="1440">
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="font-size:13px"><input type="checkbox" id="cj-require-tracking" checked> Require tracking number</label>
+      </div>
+      <div class="form-group">
+        <label style="font-size:13px"><input type="checkbox" id="cj-enabled" checked> Enabled</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('custom-job-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCustomJob()">Save Job</button>
     </div>
   </div>
 </div>
@@ -4205,13 +4287,16 @@ document.addEventListener('keydown', function(e) {
 
 // === JOBS MANAGEMENT ===
 let jobsData = [];
+let customJobsData = [];
+
 async function loadJobs() {
   try {
-    const res = await fetch(API + '/jobs');
-    if (res.ok) {
-      jobsData = await res.json();
-      renderJobs();
-    }
+    const [jobsRes, customRes] = await Promise.all([
+      fetch(API + '/jobs'),
+      fetch(API + '/jobs/custom'),
+    ]);
+    if (jobsRes.ok) { jobsData = await jobsRes.json(); renderJobs(); }
+    if (customRes.ok) { customJobsData = await customRes.json(); renderCustomJobs(); }
   } catch (err) { toast('Failed to load jobs: ' + err.message, 'error'); }
 }
 
@@ -4263,6 +4348,32 @@ function renderJobs() {
   }
 }
 
+function renderCustomJobs() {
+  const el = document.getElementById('custom-jobs-list');
+  if (!customJobsData.length) { el.innerHTML = '<p style="color:#888;padding:12px">No custom jobs yet. Click "+ Create Job" to add one.</p>'; return; }
+  el.innerHTML = `<table><thead><tr><th>Name</th><th>Source Statuses</th><th>Tracking Conditions</th><th>Target</th><th>Interval</th><th>Status</th><th>Actions</th></tr></thead><tbody>` +
+    customJobsData.map(j => {
+      const src = (j.source_statuses || []).map(s => `<span class="badge badge-${s}">${esc(s)}</span>`).join(' ');
+      const cond = (j.tracking_conditions || []).map(s => `<span class="badge badge-${s}">${esc(s)}</span>`).join(' ') || '<span style="color:#888">any</span>';
+      const enabled = j.enabled ? '<span class="badge badge-delivered">Enabled</span>' : '<span class="badge badge-cancelled">Disabled</span>';
+      return `<tr>
+        <td><strong>${esc(j.name)}</strong>${j.description ? '<br><span style="font-size:11px;color:#888">' + esc(j.description) + '</span>' : ''}</td>
+        <td style="font-size:12px">${src}</td>
+        <td style="font-size:12px">${cond}</td>
+        <td><span class="badge badge-${j.target_status}">${esc(j.target_status)}</span></td>
+        <td style="font-size:13px">${j.interval_minutes}m</td>
+        <td>${enabled}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary btn-sm" onclick="runCustomJobNow('${j.id}')">Run Now</button>
+            <button class="btn btn-outline btn-sm" onclick="editCustomJob('${j.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCustomJob('${j.id}')">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
 async function startJobPrompt(jobId) {
   const mins = prompt('Interval in minutes (default 30):', '30');
   if (mins === null) return;
@@ -4310,6 +4421,106 @@ async function revertJob(jobId) {
     } else { const e = await res.json(); toast(e.detail || 'Revert failed', 'error'); }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = 'Revert'; }
+}
+
+// === CUSTOM JOB CRUD ===
+function openCreateJobModal() {
+  document.getElementById('custom-job-modal-title').textContent = 'Create Custom Job';
+  document.getElementById('cj-edit-id').value = '';
+  document.getElementById('cj-name').value = '';
+  document.getElementById('cj-description').value = '';
+  document.getElementById('cj-target-status').value = 'shipped';
+  document.getElementById('cj-interval').value = '30';
+  document.getElementById('cj-require-tracking').checked = true;
+  document.getElementById('cj-enabled').checked = true;
+  // Uncheck all checkboxes
+  document.querySelectorAll('#cj-source-statuses input').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#cj-tracking-conditions input').forEach(cb => cb.checked = false);
+  document.getElementById('custom-job-modal').classList.add('show');
+}
+
+function editCustomJob(jobId) {
+  const job = customJobsData.find(j => j.id === jobId);
+  if (!job) return;
+  document.getElementById('custom-job-modal-title').textContent = 'Edit Custom Job';
+  document.getElementById('cj-edit-id').value = job.id;
+  document.getElementById('cj-name').value = job.name;
+  document.getElementById('cj-description').value = job.description || '';
+  document.getElementById('cj-target-status').value = job.target_status;
+  document.getElementById('cj-interval').value = job.interval_minutes;
+  document.getElementById('cj-require-tracking').checked = job.require_tracking_number;
+  document.getElementById('cj-enabled').checked = job.enabled;
+  // Set source statuses
+  document.querySelectorAll('#cj-source-statuses input').forEach(cb => {
+    cb.checked = (job.source_statuses || []).includes(cb.value);
+  });
+  // Set tracking conditions
+  document.querySelectorAll('#cj-tracking-conditions input').forEach(cb => {
+    cb.checked = (job.tracking_conditions || []).includes(cb.value);
+  });
+  document.getElementById('custom-job-modal').classList.add('show');
+}
+
+async function saveCustomJob() {
+  const editId = document.getElementById('cj-edit-id').value;
+  const name = document.getElementById('cj-name').value.trim();
+  if (!name) { toast('Job name is required', 'error'); return; }
+
+  const sourceStatuses = [];
+  document.querySelectorAll('#cj-source-statuses input:checked').forEach(cb => sourceStatuses.push(cb.value));
+  const trackingConditions = [];
+  document.querySelectorAll('#cj-tracking-conditions input:checked').forEach(cb => trackingConditions.push(cb.value));
+
+  if (!sourceStatuses.length) { toast('Select at least one source status', 'error'); return; }
+
+  const payload = {
+    name,
+    description: document.getElementById('cj-description').value.trim(),
+    source_statuses: sourceStatuses,
+    tracking_conditions: trackingConditions,
+    target_status: document.getElementById('cj-target-status').value,
+    require_tracking_number: document.getElementById('cj-require-tracking').checked,
+    interval_minutes: parseInt(document.getElementById('cj-interval').value) || 30,
+    enabled: document.getElementById('cj-enabled').checked,
+  };
+
+  try {
+    const url = editId ? API + '/jobs/custom/' + editId : API + '/jobs/custom';
+    const method = editId ? 'PATCH' : 'POST';
+    const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    if (res.ok) {
+      toast(editId ? 'Job updated' : 'Job created');
+      closeModal('custom-job-modal');
+      loadJobs();
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Error saving job', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function deleteCustomJob(jobId) {
+  if (!confirm('Delete this custom job?')) return;
+  try {
+    const res = await fetch(API + '/jobs/custom/' + jobId, { method: 'DELETE' });
+    if (res.ok) { toast('Job deleted'); loadJobs(); }
+    else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function runCustomJobNow(jobId) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Running...';
+  try {
+    const res = await fetch(API + '/jobs/custom/' + jobId + '/run', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      const r = data.result || {};
+      toast(`Done: checked ${r.checked || 0}, updated ${r.updated || 0}`);
+      loadJobs();
+    } else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Run Now'; }
 }
 
 // Init
