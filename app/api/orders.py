@@ -584,6 +584,8 @@ def update_status(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if data.status == OrderStatus.PENDING and user.role == "staff":
+        raise HTTPException(403, "Staff cannot set orders to pending")
     order = order_service.update_order_status(db, order_id, data)
     if not order:
         raise HTTPException(404, "Order not found")
@@ -627,6 +629,8 @@ def open_order(
     db: Session = Depends(get_db),
 ):
     """Open a pending/cancelled order. In-batch → processing, has tracking → label_purchased, otherwise → confirmed."""
+    if user.role == "staff":
+        raise HTTPException(403, "Staff cannot open pending orders")
     try:
         order = order_service.open_order(db, order_id)
     except ValueError as e:

@@ -2459,10 +2459,10 @@ async function viewOrder(id) {
     if (o.status === 'drop_off') {
       footerHtml += `<button class="btn" style="background:#6f42c1;color:#fff" onclick="reprocessOrder('${o.id}','${esc(o.order_number)}')">Re-process</button>`;
     }
-    if (o.status === 'pending') {
+    if (o.status === 'pending' && currentUser && currentUser.role !== 'staff') {
       footerHtml += `<button class="btn" style="background:#28a745;color:#fff" onclick="openOrder('${o.id}')">Open Order</button>`;
     }
-    if (o.status !== 'pending') {
+    if (o.status !== 'pending' && currentUser && currentUser.role !== 'staff') {
       footerHtml += `<button class="btn btn-warning" onclick="updateOrderStatus('${o.id}','pending')">Pending</button>`;
     }
     footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}', ${!!o.label_url})">Cancel Order</button>`;
