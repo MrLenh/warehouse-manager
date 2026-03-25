@@ -775,11 +775,13 @@ const WH_AVAILABLE_FIELDS = {
   base_cost: {label: 'Base Cost (Processing Fee)', group: 'Pricing'},
   total_price: {label: 'Total Price', group: 'Pricing'},
   sku: {label: 'SKU', group: 'Item'},
+  name: {label: 'Item Name', group: 'Item'},
   product_name: {label: 'Product Name', group: 'Item'},
   variant_label: {label: 'Variant', group: 'Item'},
   variant_sku: {label: 'Variant SKU', group: 'Item'},
   quantity: {label: 'Quantity', group: 'Item'},
   unit_price: {label: 'Unit Price', group: 'Item'},
+  product_cost: {label: 'Product Cost', group: 'Pricing'},
 };
 
 const WH_SAMPLE_VALUES = {
@@ -799,11 +801,13 @@ const WH_SAMPLE_VALUES = {
   base_cost: 0,
   total_price: 7.70,
   sku: 'EMBGFUS250',
+  name: 'Sample Item',
   product_name: 'Grommet Flag MLN-1786-TTH',
   variant_label: '5x8ft',
   variant_sku: '',
   quantity: 1,
   unit_price: 0.00,
+  product_cost: 0.00,
 };
 
 async function loadWebhooks() {
