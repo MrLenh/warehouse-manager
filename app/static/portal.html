@@ -639,6 +639,7 @@ async function viewOrder(orderId) {
       <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Item Name</th>
       <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Product</th>
       <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb">Qty</th>
+      <th style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">Product Cost</th>
       <th style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">Price</th>
     </tr></thead><tbody>`;
     for (const item of o.items) {
@@ -647,6 +648,7 @@ async function viewOrder(orderId) {
         <td style="padding:6px 8px">${esc(item.name) || '—'}</td>
         <td style="padding:6px 8px">${esc(item.product_name)}${item.variant_label ? ' <span style="color:#888">(' + esc(item.variant_label) + ')</span>' : ''}</td>
         <td style="padding:6px 8px;text-align:center">${item.quantity}</td>
+        <td style="padding:6px 8px;text-align:right;color:#6b7280">$${(item.product_cost || 0).toFixed(2)}</td>
         <td style="padding:6px 8px;text-align:right">$${(item.unit_price * item.quantity).toFixed(2)}</td>
       </tr>`;
     }
@@ -654,8 +656,8 @@ async function viewOrder(orderId) {
 
     // Totals
     html += `<div style="margin-top:12px;text-align:right;font-size:14px">`;
-    if (o.shipping_cost) html += `<div>Shipping: $${o.shipping_cost.toFixed(2)}</div>`;
-    if (o.processing_fee) html += `<div>Processing: $${o.processing_fee.toFixed(2)}</div>`;
+    html += `<div>Processing Fee: $${(o.processing_fee || 0).toFixed(2)}</div>`;
+    html += `<div>Shipping: $${(o.shipping_cost || 0).toFixed(2)}</div>`;
     html += `<div style="font-weight:700;font-size:16px;margin-top:4px">Total: $${o.total_price.toFixed(2)}</div>`;
     html += `</div>`;
 
