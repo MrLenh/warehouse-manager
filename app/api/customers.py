@@ -521,7 +521,8 @@ def webhook_payload_preview(
             pass
 
     if order_id:
-        order = db.query(Order).filter(Order.id == order_id).first()
+        from sqlalchemy.orm import joinedload
+        order = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order_id).first()
         if not order:
             raise HTTPException(404, "Order not found")
         # Build real payload from order

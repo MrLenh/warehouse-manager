@@ -47,15 +47,17 @@ AVAILABLE_WEBHOOK_FIELDS = {
     "base_cost": ("Base Cost (Processing Fee)", lambda o, i: o.processing_fee),
     "total_price": ("Total Price", lambda o, i: o.total_price),
     "sku": ("SKU", lambda o, i: i.sku if i else ""),
+    "name": ("Item Name", lambda o, i: i.name if i else ""),
     "product_name": ("Product Name", lambda o, i: i.product_name if i else ""),
     "variant_label": ("Variant", lambda o, i: i.variant_label if i else ""),
     "variant_sku": ("Variant SKU", lambda o, i: i.variant_sku if i else ""),
     "quantity": ("Quantity", lambda o, i: i.quantity if i else 0),
     "unit_price": ("Unit Price", lambda o, i: i.unit_price if i else 0.0),
+    "product_cost": ("Product Cost", lambda o, i: i.product_cost if i else 0.0),
 }
 
 # Fields that require line-item iteration
-ITEM_LEVEL_FIELDS = {"id", "sku", "product_name", "variant_label", "variant_sku", "quantity", "unit_price"}
+ITEM_LEVEL_FIELDS = {"id", "sku", "name", "product_name", "variant_label", "variant_sku", "quantity", "unit_price", "product_cost"}
 
 # Retry config
 MAX_RETRIES = 3
@@ -114,9 +116,11 @@ def _build_order_data(order: Order) -> dict:
                 "sku": item.sku,
                 "variant_sku": item.variant_sku or "",
                 "variant_label": item.variant_label or "",
+                "name": item.name or "",
                 "product_name": item.product_name or "",
                 "quantity": item.quantity,
                 "unit_price": item.unit_price,
+                "product_cost": item.product_cost,
             })
 
     status_val = order.status if isinstance(order.status, str) else order.status.value
