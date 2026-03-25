@@ -223,7 +223,27 @@ a.track-link:hover{text-decoration:underline}
         <div class="form-group"><label>Order Name</label><input id="co-name" placeholder="e.g. Don hang A"></div>
         <div class="form-group"><label>Shop Name</label><input id="co-shop-name" placeholder="e.g. Shopee, Lazada..."></div>
       </div>
-      <div class="form-group"><label>Notes</label><input id="co-notes" placeholder="Optional notes"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Status</label>
+          <select id="co-status" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px" onchange="onCreateOrderStatusChange()">
+            <option value="confirmed" selected>Confirmed</option>
+            <option value="label_purchased">Label Purchased</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Notes</label><input id="co-notes" placeholder="Optional notes"></div>
+      </div>
+      <div id="co-lp-fields" style="display:none;margin-bottom:12px;padding:12px;background:#f5f3ff;border-radius:8px;border:1px solid #ddd6fe">
+        <p style="font-size:12px;color:#7c3aed;font-weight:600;margin-bottom:8px">Label Purchased Info</p>
+        <div class="form-row">
+          <div class="form-group"><label>Tracking Number *</label><input id="co-tracking" placeholder="e.g. 9400111899223..."></div>
+          <div class="form-group"><label>Label URL</label><input id="co-label-url" placeholder="https://..."></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Shipping Cost</label><input id="co-shipping-cost" type="number" step="0.01" min="0" value="0" placeholder="0.00"></div>
+          <div class="form-group"><label>Carrier</label><input id="co-carrier" placeholder="e.g. USPS"></div>
+        </div>
+      </div>
       <h3 style="font-size:14px;margin:16px 0 8px;color:#555">Ship To</h3>
       <div class="form-row">
         <div class="form-group"><label>Name *</label><input id="co-ship-name" required></div>
@@ -240,7 +260,7 @@ a.track-link:hover{text-decoration:underline}
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('order-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitOrder()">Create Order</button>
+      <button class="btn btn-primary" id="co-submit-btn" onclick="submitOrder()">Create Order</button>
     </div>
   </div>
 </div>
@@ -435,15 +455,31 @@ async function loadOrders() {
 async function openCreateOrderModal() {
   await fetchProductsCache();
   document.getElementById('co-name').value = '';
+  document.getElementById('co-shop-name').value = '';
+  document.getElementById('co-status').value = 'confirmed';
   document.getElementById('co-notes').value = '';
+  document.getElementById('co-tracking').value = '';
+  document.getElementById('co-label-url').value = '';
+  document.getElementById('co-shipping-cost').value = '0';
+  document.getElementById('co-carrier').value = '';
   document.getElementById('co-ship-name').value = '';
   document.getElementById('co-ship-street1').value = '';
   document.getElementById('co-ship-city').value = '';
   document.getElementById('co-ship-state').value = '';
   document.getElementById('co-ship-zip').value = '';
   document.getElementById('co-items').innerHTML = '';
+  onCreateOrderStatusChange();
   addOrderItem();
   openModal('order-modal');
+}
+
+function onCreateOrderStatusChange() {
+  const status = document.getElementById('co-status').value;
+  const isLP = status === 'label_purchased';
+  document.getElementById('co-lp-fields').style.display = isLP ? 'block' : 'none';
+  const btn = document.getElementById('co-submit-btn');
+  btn.style.background = isLP ? '#7c3aed' : '';
+  btn.style.borderColor = isLP ? '#7c3aed' : '';
 }
 
 function addOrderItem() {
@@ -455,6 +491,12 @@ function addOrderItem() {
 }
 
 async function submitOrder() {
+  const status = document.getElementById('co-status').value;
+  const isLP = status === 'label_purchased';
+  const trackingNumber = document.getElementById('co-tracking').value.trim();
+
+  if (isLP && !trackingNumber) { toast('Tracking number is required for Label Purchased', 'error'); return; }
+
   const shipName = document.getElementById('co-ship-name').value.trim();
   const street1 = document.getElementById('co-ship-street1').value.trim();
   const city = document.getElementById('co-ship-city').value.trim();
@@ -480,6 +522,11 @@ async function submitOrder() {
     ship_to: { name: shipName, street1, city, state, zip, country: 'US' },
     items,
     notes: document.getElementById('co-notes').value.trim(),
+    status,
+    carrier: document.getElementById('co-carrier').value.trim(),
+    tracking_number: isLP ? trackingNumber : '',
+    label_url: isLP ? document.getElementById('co-label-url').value.trim() : '',
+    shipping_cost_override: isLP ? (parseFloat(document.getElementById('co-shipping-cost').value) || 0) : 0,
   };
 
   try {
