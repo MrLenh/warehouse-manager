@@ -3,7 +3,7 @@
 import csv
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -135,6 +135,7 @@ PORTAL_CSV_COLUMNS = [
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
     "sku", "item_name", "quantity", "notes",
+    "tracking_number", "label_url", "shipping_cost",
 ]
 
 
@@ -164,11 +165,19 @@ def download_import_template(user: User = Depends(get_current_user), db: Session
 @router.post("/orders/import")
 def import_orders(
     file: UploadFile,
+    status: str = Form("confirmed"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Import orders via CSV. customer_name is locked to the logged-in customer."""
     customer = _require_customer(user, db)
+
+    # Validate status
+    from app.models.order import OrderStatus
+    valid_statuses = [s.value for s in OrderStatus]
+    if status not in valid_statuses:
+        status = "confirmed"
+    is_label_purchased = status == "label_purchased"
 
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(400, "Only CSV files are supported")
@@ -206,6 +215,17 @@ def import_orders(
 
         ship_to_name = (row.get("ship_to_name") or "").strip() or customer.name
 
+        tracking_number = (row.get("tracking_number") or "").strip()
+        label_url = (row.get("label_url") or "").strip()
+        try:
+            shipping_cost = float(row.get("shipping_cost") or 0)
+        except (ValueError, TypeError):
+            shipping_cost = 0.0
+
+        if is_label_purchased and not tracking_number:
+            errors.append({"row": row_num, "error": "tracking_number is required for label_purchased status"})
+            continue
+
         if order_name not in order_groups:
             order_groups[order_name] = {
                 "customer_name": customer.name,
@@ -223,6 +243,9 @@ def import_orders(
                 "service": (row.get("service") or "").strip(),
                 "notes": (row.get("notes") or "").strip(),
                 "display_order_name": (row.get("order_name") or "").strip(),
+                "tracking_number": tracking_number,
+                "label_url": label_url,
+                "shipping_cost": shipping_cost,
                 "items": [],
             }
             group_order.append(order_name)
@@ -290,10 +313,19 @@ def import_orders(
             carrier=group["carrier"],
             service=group["service"],
             notes=group["notes"],
+            status=status,
         )
 
         try:
-            order_service.create_order(db, order_data)
+            new_order = order_service.create_order(db, order_data)
+            # Apply tracking info if present
+            if group.get("tracking_number"):
+                new_order.tracking_number = group["tracking_number"]
+            if group.get("label_url"):
+                new_order.label_url = group["label_url"]
+            if group.get("shipping_cost"):
+                new_order.shipping_cost = group["shipping_cost"]
+            db.commit()
             created += 1
             created_details.append({"order_name": group["display_order_name"] or key, "items": len(resolved_items)})
         except ValueError as e:
