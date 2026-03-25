@@ -464,7 +464,7 @@ tr:hover{background:#f8f9ff}
         </div>
       </div>
       <table>
-        <thead><tr><th>Request #</th><th>Supplier</th><th>Items</th><th>Total Requested</th><th>Total Received</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Request #</th><th>Supplier</th><th>Items</th><th>Total Requested</th><th>Total Received</th><th>Boxes</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
         <tbody id="sr-body"></tbody>
       </table>
     </div>
@@ -498,6 +498,57 @@ tr:hover{background:#f8f9ff}
         </div>
       </div>
       <div class="report-grid" id="report-cards"></div>
+
+      <!-- Order Time Metrics -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <h3 style="margin:0">Order Time Metrics</h3>
+          <label style="font-size:13px;color:#666">From:
+            <input type="date" id="time-metrics-start" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <label style="font-size:13px;color:#666">To:
+            <input type="date" id="time-metrics-end" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="loadTimeMetrics()">Load</button>
+          <button class="btn btn-outline btn-sm" onclick="setTimeMetricsRange('7d')">7D</button>
+          <button class="btn btn-outline btn-sm" onclick="setTimeMetricsRange('30d')">30D</button>
+          <button class="btn btn-outline btn-sm" onclick="setTimeMetricsRange('90d')">90D</button>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <label style="font-size:13px;color:#666">Group:
+              <select id="time-metrics-group" onchange="loadTimeMetrics()" style="padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+                <option value="daily">Daily</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <!-- Overall averages -->
+        <div class="report-grid" id="time-metrics-cards" style="margin-bottom:16px"></div>
+
+        <!-- Chart -->
+        <div style="position:relative;width:100%;height:350px">
+          <canvas id="time-metrics-chart"></canvas>
+        </div>
+
+        <!-- Detail table -->
+        <div style="margin-top:16px;overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Confirmed Time (h)</th>
+                <th>Processing Time (h)</th>
+                <th>Drop Off Time (h)</th>
+                <th>Shipped Time (h)</th>
+                <th>Delivered Time (h)</th>
+              </tr>
+            </thead>
+            <tbody id="time-metrics-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card" style="margin-bottom:16px">
         <h3 style="margin-bottom:12px">Orders by Date</h3>
         <div style="position:relative;width:100%;max-height:1000px;height:400px">
@@ -539,6 +590,40 @@ tr:hover{background:#f8f9ff}
 
       <!-- Summary cards -->
       <div class="report-grid" id="batch-report-cards" style="grid-template-columns:repeat(4,1fr)"></div>
+
+      <!-- Daily Chart -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <h3 style="margin:0">Daily Chart</h3>
+          <label style="font-size:13px;color:#666">From:
+            <input type="date" id="batch-chart-start" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <label style="font-size:13px;color:#666">To:
+            <input type="date" id="batch-chart-end" style="margin-left:4px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="loadBatchDailyChart()">Load</button>
+          <button class="btn btn-outline btn-sm" onclick="setBatchChartRange('7d')">7 Days</button>
+          <button class="btn btn-outline btn-sm" onclick="setBatchChartRange('30d')">30 Days</button>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <label style="font-size:13px;color:#666">Metric:
+              <select id="batch-chart-metric" onchange="renderBatchDailyChart()" style="padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+                <option value="drop_off_orders">Orders Drop Off</option>
+                <option value="drop_off_items">Items Drop Off</option>
+                <option value="working_minutes">Working Time (min)</option>
+              </select>
+            </label>
+            <label style="font-size:13px;color:#666">Group:
+              <select id="batch-chart-group" onchange="renderBatchDailyChart()" style="padding:5px 8px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+                <option value="total">Total</option>
+                <option value="staff">By Staff</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div style="position:relative;width:100%;height:320px">
+          <canvas id="batch-daily-chart"></canvas>
+        </div>
+      </div>
 
       <!-- Staff Performance -->
       <div class="card" style="margin-bottom:16px">
@@ -651,10 +736,18 @@ tr:hover{background:#f8f9ff}
   <div class="panel" id="panel-jobs">
     <div class="toolbar">
       <h3 style="font-size:16px;font-weight:600">Background Jobs</h3>
-      <button class="btn btn-outline btn-sm" onclick="loadJobs()">Refresh</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="openCreateJobModal()">+ Create Job</button>
+        <button class="btn btn-outline btn-sm" onclick="loadJobs()">Refresh</button>
+      </div>
     </div>
     <div id="jobs-list"></div>
     <div id="jobs-last-result" style="margin-top:16px"></div>
+
+    <div style="margin-top:24px">
+      <h3 style="font-size:16px;font-weight:600;margin-bottom:12px">Custom Jobs</h3>
+      <div id="custom-jobs-list"></div>
+    </div>
   </div>
 
 </div>
@@ -1143,6 +1236,80 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
         <button class="btn btn-outline btn-sm" id="qr-bulk-btn">Download Print Sheet (PNG)</button>
       </div>
       <div id="qr-body" style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE/EDIT CUSTOM JOB MODAL -->
+<div class="modal-overlay" id="custom-job-modal">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <h2 id="custom-job-modal-title">Create Custom Job</h2>
+      <button class="modal-close" onclick="closeModal('custom-job-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cj-edit-id">
+      <div class="form-group"><label>Job Name *</label><input type="text" id="cj-name" placeholder="e.g. Pending to Shipped"></div>
+      <div class="form-group"><label>Description</label><input type="text" id="cj-description" placeholder="Optional description"></div>
+      <div class="form-group">
+        <label>Source Statuses (scan orders with these statuses)</label>
+        <div id="cj-source-statuses" style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="font-size:13px"><input type="checkbox" value="pending"> pending</label>
+          <label style="font-size:13px"><input type="checkbox" value="confirmed"> confirmed</label>
+          <label style="font-size:13px"><input type="checkbox" value="processing"> processing</label>
+          <label style="font-size:13px"><input type="checkbox" value="packing"> packing</label>
+          <label style="font-size:13px"><input type="checkbox" value="packed"> packed</label>
+          <label style="font-size:13px"><input type="checkbox" value="label_purchased"> label_purchased</label>
+          <label style="font-size:13px"><input type="checkbox" value="drop_off"> drop_off</label>
+          <label style="font-size:13px"><input type="checkbox" value="shipped"> shipped</label>
+          <label style="font-size:13px"><input type="checkbox" value="in_transit"> in_transit</label>
+          <label style="font-size:13px"><input type="checkbox" value="delivered"> delivered</label>
+          <label style="font-size:13px"><input type="checkbox" value="on_hold"> on_hold</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tracking Conditions (trigger when tracking status is)</label>
+        <div id="cj-tracking-conditions" style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="font-size:13px"><input type="checkbox" value="pre_transit"> pre_transit</label>
+          <label style="font-size:13px"><input type="checkbox" value="in_transit"> in_transit</label>
+          <label style="font-size:13px"><input type="checkbox" value="out_for_delivery"> out_for_delivery</label>
+          <label style="font-size:13px"><input type="checkbox" value="delivered"> delivered</label>
+          <label style="font-size:13px"><input type="checkbox" value="return_to_sender"> return_to_sender</label>
+          <label style="font-size:13px"><input type="checkbox" value="failure"> failure</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Target Status (set order to)</label>
+          <select id="cj-target-status" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px">
+            <option value="confirmed">confirmed</option>
+            <option value="processing">processing</option>
+            <option value="packing">packing</option>
+            <option value="packed">packed</option>
+            <option value="label_purchased">label_purchased</option>
+            <option value="drop_off">drop_off</option>
+            <option value="shipped" selected>shipped</option>
+            <option value="in_transit">in_transit</option>
+            <option value="delivered">delivered</option>
+            <option value="on_hold">on_hold</option>
+            <option value="cancelled">cancelled</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Interval (minutes)</label>
+          <input type="number" id="cj-interval" value="30" min="1" max="1440">
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="font-size:13px"><input type="checkbox" id="cj-require-tracking" checked> Require tracking number</label>
+      </div>
+      <div class="form-group">
+        <label style="font-size:13px"><input type="checkbox" id="cj-enabled" checked> Enabled</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('custom-job-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCustomJob()">Save Job</button>
     </div>
   </div>
 </div>
@@ -2425,10 +2592,10 @@ async function viewOrder(id) {
     if (o.status === 'drop_off') {
       footerHtml += `<button class="btn" style="background:#6f42c1;color:#fff" onclick="reprocessOrder('${o.id}','${esc(o.order_number)}')">Re-process</button>`;
     }
-    if (o.status === 'pending') {
+    if (o.status === 'pending' && currentUser && currentUser.role !== 'staff') {
       footerHtml += `<button class="btn" style="background:#28a745;color:#fff" onclick="openOrder('${o.id}')">Open Order</button>`;
     }
-    if (o.status !== 'pending') {
+    if (o.status !== 'pending' && currentUser && currentUser.role !== 'staff') {
       footerHtml += `<button class="btn btn-warning" onclick="updateOrderStatus('${o.id}','pending')">Pending</button>`;
     }
     footerHtml += `<button class="btn btn-danger" onclick="cancelOrder('${o.id}', ${!!o.label_url})">Cancel Order</button>`;
@@ -3072,20 +3239,23 @@ function renderStockRequests(list) {
   const q = (document.getElementById('search-sr').value || '').toLowerCase();
   const filtered = list.filter(sr => !q || sr.request_number.toLowerCase().includes(q) || sr.supplier.toLowerCase().includes(q));
   document.getElementById('sr-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="8" class="empty">No stock requests found</td></tr>'
+    ? '<tr><td colspan="9" class="empty">No stock requests found</td></tr>'
     : filtered.map(sr => {
       const totalReq = sr.items.reduce((s, i) => s + i.quantity_requested, 0);
       const totalRcv = sr.items.reduce((s, i) => s + i.quantity_received, 0);
+      const totalBoxes = sr.items.reduce((s, i) => s + (i.box_count || 0), 0);
       return `<tr>
         <td><strong>${esc(sr.request_number)}</strong></td>
         <td>${esc(sr.supplier) || '-'}</td>
         <td>${sr.items.length}</td>
         <td>${totalReq}</td>
         <td>${totalRcv}</td>
+        <td>${totalBoxes || '-'}</td>
         <td><span class="badge badge-${sr.status}">${sr.status}</span></td>
         <td>${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
+          ${['approved','receiving'].includes(sr.status) ? `<button class="btn btn-sm btn-outline" onclick="showSrQrCode('${sr.id}','${esc(sr.request_number)}')" title="QR for mobile receiving">QR</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -3218,6 +3388,7 @@ async function viewStockRequest(id) {
 
   let itemsHtml = sr.items.map(i => {
     const diff = i.quantity_requested - i.quantity_received;
+    const boxesReceived = i.boxes ? i.boxes.filter(b => b.received).length : 0;
     return `<tr>
       <td>${esc(i.sku)}</td>
       <td>${esc(i.product_name)}</td>
@@ -3226,8 +3397,10 @@ async function viewStockRequest(id) {
       <td>${isReceiving
         ? '<input type="number" class="rcv-qty" data-item-id="'+i.id+'" value="'+i.quantity_received+'" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
         : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : '')}</td>
-      <td style="text-align:center">${i.box_count || 0}</td>
-      <td>$${i.unit_cost.toFixed(2)}</td>
+      <td>${isReceiving
+        ? '<input type="number" class="rcv-cost" data-item-id="'+i.id+'" value="'+i.unit_cost.toFixed(2)+'" step="0.01" min="0" style="width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
+        : '$' + i.unit_cost.toFixed(2)}</td>
+      <td style="text-align:center">${i.box_count > 0 ? boxesReceived + '/' + i.box_count : '-'}</td>
     </tr>`;
   }).join('');
 
@@ -3273,9 +3446,14 @@ async function viewStockRequest(id) {
       <div class="detail-item"><div class="label">Created</div><div class="value">${new Date(sr.created_at).toLocaleString('en-US')}</div></div>
       <div class="detail-item"><div class="label">Notes</div><div class="value">${esc(sr.notes) || '-'}</div></div>
     </div>
-    <h3 style="margin:16px 0 8px;font-size:15px">Product List</h3>
+    <div style="display:flex;align-items:center;gap:8px;margin:16px 0 8px">
+      <h3 style="margin:0;font-size:15px;flex:1">Product List</h3>
+      <button class="btn btn-outline btn-sm" onclick="window.open(API+'/stock-requests/${sr.id}/checklist','_blank')">Print Checklist</button>
+      ${sr.items.some(i => i.box_count > 0) ? '<button class="btn btn-outline btn-sm" onclick="window.open(API+\'/stock-requests/'+sr.id+'/box-labels\',\'_blank\')">Print Box Labels</button>' : ''}
+      ${['approved','receiving','pending'].includes(sr.status) ? '<button class="btn btn-outline btn-sm" onclick="showSrQrCode(\'' + sr.id + '\',\'' + esc(sr.request_number) + '\')">QR Code</button>' : ''}
+    </div>
     <table>
-      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Boxes</th><th>Unit Cost</th></tr></thead>
+      <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Unit Cost</th><th>Boxes</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
     ${boxesHtml}
@@ -3307,6 +3485,20 @@ async function viewStockRequest(id) {
   document.getElementById('sr-detail-modal').classList.add('show');
 }
 
+function showSrQrCode(srId, requestNumber) {
+  const w = window.open('', '_blank', 'width=400,height=500');
+  w.document.write(`<html><head><title>QR - ${requestNumber}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:system-ui,sans-serif;text-align:center;padding:20px}img{max-width:280px;margin:20px auto}h2{font-size:18px;color:#333}p{color:#666;font-size:14px;margin:8px 0}.link{word-break:break-all;font-size:12px;color:#888;margin:12px 0}button{padding:10px 24px;font-size:14px;cursor:pointer;border:none;border-radius:8px;background:#667eea;color:#fff;margin:4px}</style></head>
+<body><h2>${requestNumber}</h2><p>Scan to open mobile receiving page</p>
+<img src="${API}/stock-requests/${srId}/qrcode" alt="QR Code">
+<div class="link" id="link"></div>
+<div><button onclick="window.print()">Print</button></div>
+<script>fetch('/api/v1/config').then(r=>r.json()).then(c=>{document.getElementById('link').textContent=c.base_url+'/receiving/${srId}'}).catch(()=>{})<\/script>
+</body></html>`);
+  w.document.close();
+}
+
 async function approveStockRequest(id) {
   const res = await fetch(API + '/stock-requests/' + id + '/approve', { method: 'POST' });
   if (res.ok) { toast('Request approved'); closeModal('sr-detail-modal'); loadStockRequests(); }
@@ -3315,10 +3507,15 @@ async function approveStockRequest(id) {
 
 async function receiveStockRequest(id) {
   const inputs = document.querySelectorAll('.rcv-qty');
-  const items = Array.from(inputs).map(inp => ({
-    item_id: inp.dataset.itemId,
-    quantity_received: parseInt(inp.value) || 0,
-  }));
+  const items = Array.from(inputs).map(inp => {
+    const costInput = document.querySelector(`.rcv-cost[data-item-id="${inp.dataset.itemId}"]`);
+    const entry = {
+      item_id: inp.dataset.itemId,
+      quantity_received: parseInt(inp.value) || 0,
+    };
+    if (costInput) entry.unit_cost = parseFloat(costInput.value) || 0;
+    return entry;
+  });
   const res = await fetch(API + '/stock-requests/' + id + '/receive', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ items }),
@@ -3342,6 +3539,7 @@ async function cancelStockRequest(id) {
 
 // REPORTS
 let ordersChart = null;
+let timeMetricsChart = null;
 
 async function loadReportCustomers() {
   try {
@@ -3392,6 +3590,7 @@ async function loadReports() {
   document.getElementById('report-cards').innerHTML = `
     <div class="report-card"><div class="number">${ord.total_orders ?? 0}</div><div class="label">Total Orders</div></div>
     <div class="report-card"><div class="number">${ord.total_items ?? 0}</div><div class="label">Total Items</div></div>
+    <div class="report-card"><div class="number" style="color:#0c5460">${ord.shipped_items ?? 0}</div><div class="label">Shipped Items</div></div>
     <div class="report-card"><div class="number">${ord.total_invoices ?? 0}</div><div class="label">Total Invoices</div></div>
     <div class="report-card"><div class="number">$${(ord.total_processing_fees ?? 0).toFixed(2)}</div><div class="label">Processing Fees</div></div>
     <div class="report-card"><div class="number">$${(ord.total_shipping_cost ?? 0).toFixed(2)}</div><div class="label">Shipping Fees</div></div>
@@ -3436,6 +3635,125 @@ async function loadReports() {
   document.getElementById('low-stock-body').innerHTML = low.length === 0
     ? '<tr><td colspan="4" class="empty">All products are well-stocked</td></tr>'
     : low.map(p => `<tr><td>${esc(p.sku)}</td><td>${esc(p.name)}</td><td class="stock-low">${p.quantity}</td><td>${esc(p.location)}</td></tr>`).join('');
+
+  // Auto-load time metrics with 30-day default
+  if (!document.getElementById('time-metrics-start').value) {
+    setTimeMetricsRange('30d');
+  } else {
+    loadTimeMetrics();
+  }
+}
+
+// --- Order Time Metrics ---
+function setTimeMetricsRange(range) {
+  const end = new Date();
+  const start = new Date();
+  if (range === '7d') start.setDate(end.getDate() - 6);
+  else if (range === '30d') start.setDate(end.getDate() - 29);
+  else if (range === '90d') start.setDate(end.getDate() - 89);
+  document.getElementById('time-metrics-start').value = start.toISOString().slice(0, 10);
+  document.getElementById('time-metrics-end').value = end.toISOString().slice(0, 10);
+  loadTimeMetrics();
+}
+
+function _fmtHours(h) {
+  if (h == null) return '—';
+  if (h < 1) return (h * 60).toFixed(0) + 'm';
+  if (h < 24) return h.toFixed(1) + 'h';
+  const days = Math.floor(h / 24);
+  const rem = h % 24;
+  return days + 'd ' + rem.toFixed(0) + 'h';
+}
+
+async function loadTimeMetrics() {
+  const startVal = document.getElementById('time-metrics-start').value;
+  const endVal = document.getElementById('time-metrics-end').value;
+  const groupBy = document.getElementById('time-metrics-group').value;
+
+  let params = [];
+  if (startVal) params.push('start_date=' + startVal);
+  if (endVal) params.push('end_date=' + endVal);
+  params.push('group_by=' + groupBy);
+  const qs = '?' + params.join('&');
+
+  try {
+    const res = await fetch(API + '/reports/order-time-metrics' + qs);
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    renderTimeMetrics(data);
+  } catch (e) {
+    console.error('Time metrics error:', e);
+  }
+}
+
+function renderTimeMetrics(data) {
+  const ov = data.overall || {};
+  const METRICS = [
+    { key: 'confirmed_time', label: 'Confirmed Time', desc: 'Confirmed → Processing', color: '#667eea' },
+    { key: 'processing_time', label: 'Processing Time', desc: 'Confirmed → Packed', color: '#f093fb' },
+    { key: 'drop_off_time', label: 'Drop Off Time', desc: 'Confirmed → Drop Off', color: '#4facfe' },
+    { key: 'shipped_time', label: 'Shipped Time', desc: 'Confirmed → Shipped', color: '#43e97b' },
+    { key: 'delivered_time', label: 'Delivered Time', desc: 'Confirmed → Delivered', color: '#fa709a' },
+  ];
+
+  // Overall cards
+  document.getElementById('time-metrics-cards').innerHTML = METRICS.map(m => {
+    const info = ov[m.key] || {};
+    return `<div class="report-card">
+      <div class="number" style="color:${m.color}">${_fmtHours(info.avg_hours)}</div>
+      <div class="label">${m.label}<br><small style="color:#999">${m.desc} (${info.count || 0} orders)</small></div>
+    </div>`;
+  }).join('');
+
+  // Table
+  const chart = data.chart || [];
+  document.getElementById('time-metrics-body').innerHTML = chart.length === 0
+    ? '<tr><td colspan="6" class="empty">No data</td></tr>'
+    : chart.map(r => `<tr>
+        <td>${r.date}</td>
+        <td>${_fmtHours(r.confirmed_time_avg)}${r.confirmed_time_count ? ' <small style="color:#999">('+r.confirmed_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.processing_time_avg)}${r.processing_time_count ? ' <small style="color:#999">('+r.processing_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.drop_off_time_avg)}${r.drop_off_time_count ? ' <small style="color:#999">('+r.drop_off_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.shipped_time_avg)}${r.shipped_time_count ? ' <small style="color:#999">('+r.shipped_time_count+')</small>' : ''}</td>
+        <td>${_fmtHours(r.delivered_time_avg)}${r.delivered_time_count ? ' <small style="color:#999">('+r.delivered_time_count+')</small>' : ''}</td>
+      </tr>`).join('');
+
+  // Chart
+  if (timeMetricsChart) timeMetricsChart.destroy();
+  const ctx = document.getElementById('time-metrics-chart').getContext('2d');
+  const labels = chart.map(r => r.date);
+  const datasets = METRICS.map(m => ({
+    label: m.label,
+    data: chart.map(r => r[m.key + '_avg']),
+    borderColor: m.color,
+    backgroundColor: m.color + '20',
+    tension: 0.3,
+    pointRadius: 3,
+    fill: false,
+  }));
+  timeMetricsChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxRotation: 45, autoSkip: true } },
+        y: { beginAtZero: true, title: { display: true, text: 'Hours' } }
+      },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return ctx.dataset.label + ': ' + _fmtHours(ctx.parsed.y);
+            }
+          }
+        }
+      }
+    }
+  });
 }
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
@@ -3470,6 +3788,7 @@ function clearBatchReportFilters() {
 
 async function loadBatchReport() {
   if (document.getElementById('batch-report-staff').options.length <= 1) loadBatchReportStaff();
+  if (!batchDailyChartData.length) loadBatchDailyChart();
 
   const date = document.getElementById('batch-report-date').value;
   const staff = document.getElementById('batch-report-staff').value;
@@ -3572,6 +3891,103 @@ async function loadBatchReport() {
   } catch (e) {
     console.error('Failed to load batch report:', e);
   }
+}
+
+// Batch Daily Chart
+let batchDailyChart = null;
+let batchDailyChartData = [];
+
+const STAFF_COLORS = ['#667eea','#28a745','#e67e22','#e91e63','#00bcd4','#9c27b0','#ff9800','#607d8b','#795548','#3f51b5','#009688','#f44336'];
+
+function setBatchChartRange(range) {
+  const end = new Date();
+  const start = new Date();
+  if (range === '7d') start.setDate(end.getDate() - 6);
+  else if (range === '30d') start.setDate(end.getDate() - 29);
+  document.getElementById('batch-chart-start').value = start.toISOString().slice(0, 10);
+  document.getElementById('batch-chart-end').value = end.toISOString().slice(0, 10);
+  loadBatchDailyChart();
+}
+
+async function loadBatchDailyChart() {
+  const startDate = document.getElementById('batch-chart-start').value;
+  const endDate = document.getElementById('batch-chart-end').value;
+  if (!startDate || !endDate) {
+    setBatchChartRange('7d');
+    return;
+  }
+  const params = [];
+  if (startDate) params.push('start_date=' + startDate);
+  if (endDate) params.push('end_date=' + endDate);
+  const qs = params.length ? '?' + params.join('&') : '';
+
+  try {
+    const res = await fetch(API + '/reports/batches-daily-chart' + qs);
+    const data = await res.json();
+    batchDailyChartData = data.chart || [];
+    renderBatchDailyChart();
+  } catch (e) {
+    console.error('Failed to load batch daily chart:', e);
+  }
+}
+
+function renderBatchDailyChart() {
+  if (!batchDailyChartData.length) return;
+  const metric = document.getElementById('batch-chart-metric').value;
+  const group = document.getElementById('batch-chart-group').value;
+  const labels = batchDailyChartData.map(d => d.date);
+
+  const datasets = [];
+
+  if (group === 'total') {
+    datasets.push({
+      label: document.getElementById('batch-chart-metric').selectedOptions[0].text,
+      data: batchDailyChartData.map(d => d[metric] || 0),
+      backgroundColor: '#667eeaCC',
+      borderColor: '#667eea',
+      borderWidth: 1,
+    });
+  } else {
+    // Collect all staff usernames across all days
+    const staffSet = new Set();
+    for (const day of batchDailyChartData) {
+      for (const s of (day.staff || [])) staffSet.add(s.username);
+    }
+    const staffNames = Array.from(staffSet).sort();
+    staffNames.forEach((uname, idx) => {
+      const color = STAFF_COLORS[idx % STAFF_COLORS.length];
+      datasets.push({
+        label: uname,
+        data: batchDailyChartData.map(d => {
+          const s = (d.staff || []).find(x => x.username === uname);
+          return s ? (s[metric] || 0) : 0;
+        }),
+        backgroundColor: color + 'CC',
+        borderColor: color,
+        borderWidth: 1,
+      });
+    });
+  }
+
+  if (batchDailyChart) batchDailyChart.destroy();
+  const ctx = document.getElementById('batch-daily-chart').getContext('2d');
+  batchDailyChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 14, padding: 12, font: { size: 12 } } },
+        tooltip: { mode: 'index', intersect: false },
+      },
+      scales: {
+        x: { stacked: group === 'staff', grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
+        y: { stacked: group === 'staff', position: 'left', beginAtZero: true, title: { display: true, text: document.getElementById('batch-chart-metric').selectedOptions[0].text, font: { size: 12 } }, grid: { color: '#f0f0f0' } },
+      },
+    },
+  });
 }
 
 // Auth
@@ -4020,13 +4436,16 @@ document.addEventListener('keydown', function(e) {
 
 // === JOBS MANAGEMENT ===
 let jobsData = [];
+let customJobsData = [];
+
 async function loadJobs() {
   try {
-    const res = await fetch(API + '/jobs');
-    if (res.ok) {
-      jobsData = await res.json();
-      renderJobs();
-    }
+    const [jobsRes, customRes] = await Promise.all([
+      fetch(API + '/jobs'),
+      fetch(API + '/jobs/custom'),
+    ]);
+    if (jobsRes.ok) { jobsData = await jobsRes.json(); renderJobs(); }
+    if (customRes.ok) { customJobsData = await customRes.json(); renderCustomJobs(); }
   } catch (err) { toast('Failed to load jobs: ' + err.message, 'error'); }
 }
 
@@ -4078,6 +4497,32 @@ function renderJobs() {
   }
 }
 
+function renderCustomJobs() {
+  const el = document.getElementById('custom-jobs-list');
+  if (!customJobsData.length) { el.innerHTML = '<p style="color:#888;padding:12px">No custom jobs yet. Click "+ Create Job" to add one.</p>'; return; }
+  el.innerHTML = `<table><thead><tr><th>Name</th><th>Source Statuses</th><th>Tracking Conditions</th><th>Target</th><th>Interval</th><th>Status</th><th>Actions</th></tr></thead><tbody>` +
+    customJobsData.map(j => {
+      const src = (j.source_statuses || []).map(s => `<span class="badge badge-${s}">${esc(s)}</span>`).join(' ');
+      const cond = (j.tracking_conditions || []).map(s => `<span class="badge badge-${s}">${esc(s)}</span>`).join(' ') || '<span style="color:#888">any</span>';
+      const enabled = j.enabled ? '<span class="badge badge-delivered">Enabled</span>' : '<span class="badge badge-cancelled">Disabled</span>';
+      return `<tr>
+        <td><strong>${esc(j.name)}</strong>${j.description ? '<br><span style="font-size:11px;color:#888">' + esc(j.description) + '</span>' : ''}</td>
+        <td style="font-size:12px">${src}</td>
+        <td style="font-size:12px">${cond}</td>
+        <td><span class="badge badge-${j.target_status}">${esc(j.target_status)}</span></td>
+        <td style="font-size:13px">${j.interval_minutes}m</td>
+        <td>${enabled}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-primary btn-sm" onclick="runCustomJobNow('${j.id}')">Run Now</button>
+            <button class="btn btn-outline btn-sm" onclick="editCustomJob('${j.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCustomJob('${j.id}')">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
 async function startJobPrompt(jobId) {
   const mins = prompt('Interval in minutes (default 30):', '30');
   if (mins === null) return;
@@ -4125,6 +4570,106 @@ async function revertJob(jobId) {
     } else { const e = await res.json(); toast(e.detail || 'Revert failed', 'error'); }
   } catch (err) { toast('Error: ' + err.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = 'Revert'; }
+}
+
+// === CUSTOM JOB CRUD ===
+function openCreateJobModal() {
+  document.getElementById('custom-job-modal-title').textContent = 'Create Custom Job';
+  document.getElementById('cj-edit-id').value = '';
+  document.getElementById('cj-name').value = '';
+  document.getElementById('cj-description').value = '';
+  document.getElementById('cj-target-status').value = 'shipped';
+  document.getElementById('cj-interval').value = '30';
+  document.getElementById('cj-require-tracking').checked = true;
+  document.getElementById('cj-enabled').checked = true;
+  // Uncheck all checkboxes
+  document.querySelectorAll('#cj-source-statuses input').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#cj-tracking-conditions input').forEach(cb => cb.checked = false);
+  document.getElementById('custom-job-modal').classList.add('show');
+}
+
+function editCustomJob(jobId) {
+  const job = customJobsData.find(j => j.id === jobId);
+  if (!job) return;
+  document.getElementById('custom-job-modal-title').textContent = 'Edit Custom Job';
+  document.getElementById('cj-edit-id').value = job.id;
+  document.getElementById('cj-name').value = job.name;
+  document.getElementById('cj-description').value = job.description || '';
+  document.getElementById('cj-target-status').value = job.target_status;
+  document.getElementById('cj-interval').value = job.interval_minutes;
+  document.getElementById('cj-require-tracking').checked = job.require_tracking_number;
+  document.getElementById('cj-enabled').checked = job.enabled;
+  // Set source statuses
+  document.querySelectorAll('#cj-source-statuses input').forEach(cb => {
+    cb.checked = (job.source_statuses || []).includes(cb.value);
+  });
+  // Set tracking conditions
+  document.querySelectorAll('#cj-tracking-conditions input').forEach(cb => {
+    cb.checked = (job.tracking_conditions || []).includes(cb.value);
+  });
+  document.getElementById('custom-job-modal').classList.add('show');
+}
+
+async function saveCustomJob() {
+  const editId = document.getElementById('cj-edit-id').value;
+  const name = document.getElementById('cj-name').value.trim();
+  if (!name) { toast('Job name is required', 'error'); return; }
+
+  const sourceStatuses = [];
+  document.querySelectorAll('#cj-source-statuses input:checked').forEach(cb => sourceStatuses.push(cb.value));
+  const trackingConditions = [];
+  document.querySelectorAll('#cj-tracking-conditions input:checked').forEach(cb => trackingConditions.push(cb.value));
+
+  if (!sourceStatuses.length) { toast('Select at least one source status', 'error'); return; }
+
+  const payload = {
+    name,
+    description: document.getElementById('cj-description').value.trim(),
+    source_statuses: sourceStatuses,
+    tracking_conditions: trackingConditions,
+    target_status: document.getElementById('cj-target-status').value,
+    require_tracking_number: document.getElementById('cj-require-tracking').checked,
+    interval_minutes: parseInt(document.getElementById('cj-interval').value) || 30,
+    enabled: document.getElementById('cj-enabled').checked,
+  };
+
+  try {
+    const url = editId ? API + '/jobs/custom/' + editId : API + '/jobs/custom';
+    const method = editId ? 'PATCH' : 'POST';
+    const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    if (res.ok) {
+      toast(editId ? 'Job updated' : 'Job created');
+      closeModal('custom-job-modal');
+      loadJobs();
+    } else {
+      const e = await res.json();
+      toast(e.detail || 'Error saving job', 'error');
+    }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function deleteCustomJob(jobId) {
+  if (!confirm('Delete this custom job?')) return;
+  try {
+    const res = await fetch(API + '/jobs/custom/' + jobId, { method: 'DELETE' });
+    if (res.ok) { toast('Job deleted'); loadJobs(); }
+    else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+async function runCustomJobNow(jobId) {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Running...';
+  try {
+    const res = await fetch(API + '/jobs/custom/' + jobId + '/run', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      const r = data.result || {};
+      toast(`Done: checked ${r.checked || 0}, updated ${r.updated || 0}`);
+      loadJobs();
+    } else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Run Now'; }
 }
 
 // Init

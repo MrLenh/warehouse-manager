@@ -309,52 +309,10 @@ def receive_items(db: Session, sr_id: str, data: StockRequestReceive) -> StockRe
         if recv.quantity_received < 0:
             raise ValueError("Received quantity cannot be negative")
 
+        # Only record received quantities — inventory is updated on complete
         item.quantity_received = recv.quantity_received
-
-        # Add received quantity to inventory
-        if recv.quantity_received > 0:
-            if item.variant_id:
-                variant = db.query(Variant).filter(Variant.id == item.variant_id).first()
-                if variant:
-                    variant.quantity += recv.quantity_received
-                    balance = variant.quantity
-                else:
-                    balance = recv.quantity_received
-            else:
-                product = db.query(Product).filter(Product.id == item.product_id).first()
-                if product:
-                    product.quantity += recv.quantity_received
-                    balance = product.quantity
-                else:
-                    balance = recv.quantity_received
-
-            # Create stock batch for FIFO tracking
-            batch = StockBatch(
-                product_id=item.product_id,
-                variant_id=item.variant_id or "",
-                stock_request_id=sr.id,
-                unit_cost=item.unit_cost,
-                quantity_received=recv.quantity_received,
-                quantity_remaining=recv.quantity_received,
-            )
-            db.add(batch)
-            products_to_recalculate.add((item.product_id, item.variant_id or ""))
-
-            log = InventoryLog(
-                product_id=item.product_id,
-                change=recv.quantity_received,
-                reason="stock_request",
-                reference_id=sr.id,
-                balance_after=balance,
-                note=f"[SR {sr.request_number}] Received {recv.quantity_received}"
-                + (f" for variant {item.variant_label}" if item.variant_label else ""),
-            )
-            db.add(log)
-
-    # Recalculate prices based on FIFO weighted average
-    db.flush()
-    for product_id, variant_id in products_to_recalculate:
-        _recalculate_price_from_batches(db, product_id, variant_id)
+        if recv.unit_cost is not None:
+            item.unit_cost = recv.unit_cost
 
     db.commit()
     db.refresh(sr)
@@ -367,7 +325,60 @@ def complete_stock_request(db: Session, sr_id: str) -> StockRequest | None:
         return None
     if sr.status != StockRequestStatus.RECEIVING:
         raise ValueError(f"Cannot complete stock request in '{sr.status}' status")
+
     sr.status = StockRequestStatus.COMPLETED
+
+    # Add received quantities to inventory
+    products_to_recalculate: set[tuple[str, str]] = set()
+
+    for item in sr.items:
+        qty = item.quantity_received or 0
+        if qty <= 0:
+            continue
+
+        if item.variant_id:
+            variant = db.query(Variant).filter(Variant.id == item.variant_id).first()
+            if variant:
+                variant.quantity += qty
+                balance = variant.quantity
+            else:
+                balance = qty
+        else:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                product.quantity += qty
+                balance = product.quantity
+            else:
+                balance = qty
+
+        # Create stock batch for FIFO tracking
+        batch = StockBatch(
+            product_id=item.product_id,
+            variant_id=item.variant_id or "",
+            stock_request_id=sr.id,
+            unit_cost=item.unit_cost,
+            quantity_received=qty,
+            quantity_remaining=qty,
+        )
+        db.add(batch)
+        products_to_recalculate.add((item.product_id, item.variant_id or ""))
+
+        log = InventoryLog(
+            product_id=item.product_id,
+            change=qty,
+            reason="stock_request",
+            reference_id=sr.id,
+            balance_after=balance,
+            note=f"[SR {sr.request_number}] Completed - received {qty}"
+            + (f" for variant {item.variant_label}" if item.variant_label else ""),
+        )
+        db.add(log)
+
+    # Recalculate prices based on FIFO weighted average
+    db.flush()
+    for product_id, variant_id in products_to_recalculate:
+        _recalculate_price_from_batches(db, product_id, variant_id)
+
     db.commit()
     db.refresh(sr)
     return sr

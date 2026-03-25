@@ -229,6 +229,7 @@ def init_db():
     import app.models.user  # noqa: F401
     import app.models.customer  # noqa: F401
     import app.models.invoice  # noqa: F401
+    import app.models.custom_job  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_add_columns()

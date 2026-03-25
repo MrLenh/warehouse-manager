@@ -31,6 +31,79 @@ def _run_tracking_job():
         db.close()
 
 
+def _make_custom_job_runner(job_id: str):
+    """Create a runner function for a custom job by ID."""
+    def _runner():
+        from app.database import SessionLocal
+        from app.services.custom_job_service import execute_custom_job, get_custom_job
+
+        db = SessionLocal()
+        try:
+            job = get_custom_job(db, job_id)
+            if not job:
+                logger.error("Custom job '%s' not found in DB", job_id)
+                _last_results[f"custom_{job_id}"] = {
+                    "error": "Job not found in database",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+                return
+            result = execute_custom_job(db, job)
+            _last_results[f"custom_{job_id}"] = result
+        except Exception as e:
+            logger.error("Custom job '%s' error: %s", job_id, e)
+            _last_results[f"custom_{job_id}"] = {
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        finally:
+            db.close()
+    return _runner
+
+
+def register_custom_job(job_id: str, name: str, interval_minutes: int = 30, start_paused: bool = True):
+    """Register a custom job in the scheduler."""
+    scheduler_id = f"custom_{job_id}"
+    scheduler.add_job(
+        _make_custom_job_runner(job_id),
+        "interval",
+        minutes=interval_minutes,
+        id=scheduler_id,
+        name=name,
+        replace_existing=True,
+        next_run_time=None if start_paused else datetime.now(timezone.utc),
+    )
+    logger.info("Registered custom job '%s' (%s) every %d min", name, scheduler_id, interval_minutes)
+    return scheduler_id
+
+
+def unregister_custom_job(job_id: str):
+    """Remove a custom job from the scheduler."""
+    scheduler_id = f"custom_{job_id}"
+    job = scheduler.get_job(scheduler_id)
+    if job:
+        scheduler.remove_job(scheduler_id)
+        _last_results.pop(scheduler_id, None)
+        logger.info("Unregistered custom job '%s'", scheduler_id)
+
+
+def _load_custom_jobs():
+    """Load all enabled custom jobs from DB and register them (paused)."""
+    from app.database import SessionLocal
+    from app.services.custom_job_service import list_custom_jobs
+
+    db = SessionLocal()
+    try:
+        jobs = list_custom_jobs(db)
+        for job in jobs:
+            if job.enabled:
+                register_custom_job(job.id, job.name, job.interval_minutes, start_paused=True)
+        logger.info("Loaded %d custom jobs from DB", len([j for j in jobs if j.enabled]))
+    except Exception as e:
+        logger.error("Failed to load custom jobs: %s", e)
+    finally:
+        db.close()
+
+
 def init_scheduler():
     """Initialize scheduler with default jobs (paused). Call during app startup."""
     if scheduler.running:
@@ -47,6 +120,9 @@ def init_scheduler():
     )
     scheduler.start()
     logger.info("Scheduler started with jobs paused")
+
+    # Load custom jobs from DB
+    _load_custom_jobs()
 
 
 def shutdown_scheduler():
@@ -125,11 +201,18 @@ def revert_last_job(job_id: str) -> dict:
         raise ValueError("No changes to revert from the last run")
 
     from app.database import SessionLocal
-    from app.services.tracking_service import revert_tracking_updates
+
+    # Use appropriate revert function based on job type
+    if job_id == "tracking_check":
+        from app.services.tracking_service import revert_tracking_updates
+        revert_fn = revert_tracking_updates
+    else:
+        from app.services.custom_job_service import revert_custom_job
+        revert_fn = revert_custom_job
 
     db = SessionLocal()
     try:
-        result = revert_tracking_updates(db, snapshots)
+        result = revert_fn(db, snapshots)
         # Clear revert snapshots after successful revert
         last["revert_snapshots"] = []
         last["reverted"] = True

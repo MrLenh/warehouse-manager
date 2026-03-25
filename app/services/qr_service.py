@@ -3,6 +3,7 @@ import json
 import os
 
 import barcode
+import qrcode
 from barcode.writer import ImageWriter
 from PIL import Image, ImageDraw, ImageFont
 
@@ -207,6 +208,81 @@ def generate_order_qr(order) -> bytes:
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", dpi=(DPI, DPI))
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def generate_box_barcode_label(barcode_data: str, sku: str, product_name: str, variant_label: str, box_seq: int, box_total: int) -> Image.Image:
+    """Generate a 2x1 inch barcode label for a stock request box."""
+    lines = [
+        ("30", barcode_data, "#000000"),
+        ("22", f"{sku} - {product_name}", "#000000"),
+    ]
+    if variant_label:
+        lines.append(("18", variant_label, "#333333"))
+    lines.append(("18", f"Box {box_seq}/{box_total}", "#333333"))
+
+    return _draw_label_2x1(barcode_data, lines)
+
+
+def generate_box_labels_pdf(boxes_info: list[dict]) -> bytes:
+    """Generate a PDF with barcode labels for all boxes. Each box gets one label page.
+
+    boxes_info: list of dicts with keys: barcode, sku, product_name, variant_label, sequence, box_total
+    Returns PDF bytes (or PNG if single label).
+    """
+    pages = []
+    for info in boxes_info:
+        img = generate_box_barcode_label(
+            barcode_data=info["barcode"],
+            sku=info["sku"],
+            product_name=info["product_name"],
+            variant_label=info.get("variant_label", ""),
+            box_seq=info["sequence"],
+            box_total=info["box_total"],
+        )
+        pages.append(img)
+
+    if not pages:
+        return b""
+
+    if len(pages) == 1:
+        buf = io.BytesIO()
+        pages[0].save(buf, format="PNG", dpi=(DPI, DPI))
+        buf.seek(0)
+        return buf.getvalue()
+
+    buf = io.BytesIO()
+    pages[0].save(buf, format="PDF", save_all=True, append_images=pages[1:], resolution=DPI)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def generate_stock_request_qr(sr_id: str, request_number: str) -> bytes:
+    """Generate a QR code image encoding the mobile receiving URL. Returns PNG bytes."""
+    base = settings.BASE_URL.rstrip("/")
+    url = f"{base}/receiving/{sr_id}"
+
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+    # Add label text below QR code
+    font = _get_font(28)
+    label = request_number
+    text_bbox = font.getbbox(label)
+    text_w = text_bbox[2] - text_bbox[0]
+    text_h = text_bbox[3] - text_bbox[1]
+
+    qr_w, qr_h = img.size
+    canvas = Image.new("RGB", (qr_w, qr_h + text_h + 16), "white")
+    canvas.paste(img, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    draw.text(((qr_w - text_w) // 2, qr_h + 4), label, fill="black", font=font)
+
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
     buf.seek(0)
     return buf.getvalue()
 
