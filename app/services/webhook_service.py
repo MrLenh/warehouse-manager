@@ -32,7 +32,7 @@ EVENT_TRACKING_UPDATED = "tracking.updated"
 # Item may be None for order-level-only payloads.
 AVAILABLE_WEBHOOK_FIELDS = {
     "id": ("Line Item ID", lambda o, i: i.id[1:] if i and i.id and i.id.startswith("N") else (i.id if i else "")),
-    "order_number": ("Order Number", lambda o, i: o.order_name or ""),
+    "order_number": ("Order Number", lambda o, i: o.order_number or ""),
     "order_name": ("Order Name", lambda o, i: o.order_name or ""),
     "status": ("Order Status", lambda o, i: o.status if isinstance(o.status, str) else o.status.value),
     "customer_name": ("Customer Name", lambda o, i: o.customer_name),
