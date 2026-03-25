@@ -352,6 +352,13 @@ tr:hover{background:#f8f9ff}
       </div>
 
       <div class="form-group" style="margin-top:12px">
+        <label style="font-weight:600;font-size:13px">Test with Order</label>
+        <select id="wh-order-select" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px" onchange="whLoadOrderPreview()">
+          <option value="">-- Sample data (no order) --</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-top:12px">
         <label style="display:flex;align-items:center;gap:8px">
           Payload Preview
           <span style="font-size:11px;color:#888;font-weight:normal">(editable — chỉnh JSON trước khi test)</span>
@@ -907,9 +914,25 @@ function whUpdatePreview() {
   whValidateJson();
 }
 
-function whResetPreview() {
-  whUpdatePreview();
+async function whResetPreview() {
   document.getElementById('wh-json-error').style.display = 'none';
+  const custId = document.getElementById('wh-edit-id').value;
+  const orderId = document.getElementById('wh-order-select').value;
+  try {
+    const url = API + '/customers/' + custId + '/webhook/preview' + (orderId ? '?order_id=' + encodeURIComponent(orderId) : '');
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('wh-payload-preview').value = JSON.stringify(data.payload, null, 2);
+      return;
+    }
+  } catch {}
+  // Fallback to local preview
+  whUpdatePreview();
+}
+
+async function whLoadOrderPreview() {
+  await whResetPreview();
 }
 
 function whValidateJson() {
@@ -935,7 +958,7 @@ function whGetEditedPayload() {
   }
 }
 
-function openWhModal(custId) {
+async function openWhModal(custId) {
   const c = whCustomers.find(x => x.id === custId);
   if (!c) return;
   document.getElementById('wh-edit-id').value = c.id;
@@ -946,7 +969,24 @@ function openWhModal(custId) {
 
   const selectedFields = _parseFields(c);
   _renderFieldsGrid(selectedFields);
-  whUpdatePreview();
+
+  // Load orders for selector
+  const sel = document.getElementById('wh-order-select');
+  while (sel.options.length > 1) sel.remove(1);
+  try {
+    const res = await fetch(API + '/customers/' + custId + '/webhook/preview');
+    if (res.ok) {
+      const data = await res.json();
+      (data.orders || []).forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = o.order_number + (o.order_name ? ' - ' + o.order_name : '') + ' [' + o.status + ']';
+        sel.appendChild(opt);
+      });
+      // Show default payload from API
+      document.getElementById('wh-payload-preview').value = JSON.stringify(data.payload, null, 2);
+    }
+  } catch {}
 
   document.getElementById('wh-modal').classList.add('show');
 }

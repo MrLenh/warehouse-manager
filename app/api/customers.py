@@ -491,6 +491,85 @@ async def test_customer_webhook(customer_id: str, request: Request, user: User =
         return {"success": False, "status_code": 0, "url": c.webhook_url, "error": str(e)}
 
 
+@router.get("/{customer_id}/webhook/preview")
+def webhook_payload_preview(
+    customer_id: str,
+    order_id: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get webhook payload preview for a customer. If order_id provided, use real order data."""
+    import json as _json
+    from app.services.webhook_service import (
+        AVAILABLE_WEBHOOK_FIELDS,
+        ITEM_LEVEL_FIELDS,
+        _build_event_envelope,
+        _build_order_data,
+        _build_custom_payloads,
+    )
+
+    c = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not c:
+        raise HTTPException(404, "Customer not found")
+
+    # Parse customer's selected fields
+    selected_fields = []
+    if c.webhook_payload_fields:
+        try:
+            selected_fields = _json.loads(c.webhook_payload_fields)
+        except (ValueError, TypeError):
+            pass
+
+    if order_id:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(404, "Order not found")
+        # Build real payload from order
+        if selected_fields:
+            payloads = _build_custom_payloads(order, selected_fields)
+            payload = payloads[0] if payloads else {}
+        else:
+            order_data = _build_order_data(order)
+            payload = _build_event_envelope("order.updated", order, order_data)
+    else:
+        # Default sample payload
+        from app.services.webhook_service import _build_event_envelope
+        payload = _build_event_envelope("order.shipped", None, {
+            "object": "order",
+            "id": "ORD-SAMPLE",
+            "order_number": "SAMPLE-001",
+            "order_name": "#SAMPLE-001",
+            "status": "shipped",
+            "customer": {"name": c.name, "email": c.email or "", "phone": c.phone or ""},
+            "shop_name": "",
+            "shipping_address": {"name": "", "line1": "", "line2": "", "city": "", "state": "", "postal_code": "", "country": "US"},
+            "shipping": {"carrier": "USPS", "service": "GroundAdvantage", "tracking_number": "", "tracking_status": "", "tracking_url": "", "label_url": ""},
+            "amount": {"shipping": 0, "processing_fee": 0, "total": 0, "currency": "usd"},
+            "items": [],
+            "metadata": {"status_history": []},
+            "created_at": "",
+            "updated_at": "",
+        })
+
+    # Also return customer's orders for the selector
+    orders = (
+        db.query(Order)
+        .filter(
+            (Order.customer_id == c.id)
+            | (sa_func.lower(Order.customer_name) == c.name.lower().strip())
+        )
+        .order_by(Order.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    order_list = [
+        {"id": o.id, "order_number": o.order_number, "order_name": o.order_name or "", "status": o.status.value if hasattr(o.status, "value") else str(o.status)}
+        for o in orders
+    ]
+
+    return {"payload": payload, "orders": order_list}
+
+
 # ---------------------------------------------------------------------------
 # Customers CRUD
 # ---------------------------------------------------------------------------
