@@ -343,53 +343,6 @@ def import_orders(
     return {"created": created, "created_details": created_details, "errors": errors}
 
 
-@router.get("/orders/{order_id}")
-def get_order(order_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    customer = _require_customer(user, db)
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if order.customer_id != customer.id and order.customer_name.lower().strip() != customer.name.lower().strip():
-        raise HTTPException(403, "Access denied")
-    return {
-        "id": order.id,
-        "order_number": order.order_number,
-        "order_name": order.order_name or "",
-        "shop_name": order.shop_name or "",
-        "customer_name": order.customer_name or "",
-        "status": order.status.value if hasattr(order.status, "value") else str(order.status),
-        "tracking_number": order.tracking_number or "",
-        "tracking_url": order.tracking_url or "",
-        "label_url": order.label_url or "",
-        "carrier": order.carrier or "",
-        "service": order.service or "",
-        "ship_to_name": order.ship_to_name or "",
-        "ship_to_street1": order.ship_to_street1 or "",
-        "ship_to_street2": order.ship_to_street2 or "",
-        "ship_to_city": order.ship_to_city or "",
-        "ship_to_state": order.ship_to_state or "",
-        "ship_to_zip": order.ship_to_zip or "",
-        "ship_to_country": order.ship_to_country or "",
-        "shipping_cost": order.shipping_cost,
-        "processing_fee": order.processing_fee,
-        "total_price": order.total_price,
-        "notes": order.notes or "",
-        "created_at": order.created_at.isoformat() if order.created_at else "",
-        "items": [
-            {
-                "sku": i.sku,
-                "name": i.name or "",
-                "product_name": i.product_name,
-                "variant_label": i.variant_label or "",
-                "quantity": i.quantity,
-                "unit_price": i.unit_price,
-                "image_url": i.image_url,
-            }
-            for i in order.items
-        ],
-    }
-
-
 # ---------------------------------------------------------------------------
 # Export orders
 # ---------------------------------------------------------------------------
@@ -480,6 +433,53 @@ def export_orders(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.get("/orders/{order_id}")
+def get_order(order_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    customer = _require_customer(user, db)
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.customer_id != customer.id and order.customer_name.lower().strip() != customer.name.lower().strip():
+        raise HTTPException(403, "Access denied")
+    return {
+        "id": order.id,
+        "order_number": order.order_number,
+        "order_name": order.order_name or "",
+        "shop_name": order.shop_name or "",
+        "customer_name": order.customer_name or "",
+        "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+        "tracking_number": order.tracking_number or "",
+        "tracking_url": order.tracking_url or "",
+        "label_url": order.label_url or "",
+        "carrier": order.carrier or "",
+        "service": order.service or "",
+        "ship_to_name": order.ship_to_name or "",
+        "ship_to_street1": order.ship_to_street1 or "",
+        "ship_to_street2": order.ship_to_street2 or "",
+        "ship_to_city": order.ship_to_city or "",
+        "ship_to_state": order.ship_to_state or "",
+        "ship_to_zip": order.ship_to_zip or "",
+        "ship_to_country": order.ship_to_country or "",
+        "shipping_cost": order.shipping_cost,
+        "processing_fee": order.processing_fee,
+        "total_price": order.total_price,
+        "notes": order.notes or "",
+        "created_at": order.created_at.isoformat() if order.created_at else "",
+        "items": [
+            {
+                "sku": i.sku,
+                "name": i.name or "",
+                "product_name": i.product_name,
+                "variant_label": i.variant_label or "",
+                "quantity": i.quantity,
+                "unit_price": i.unit_price,
+                "image_url": i.image_url,
+            }
+            for i in order.items
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -696,9 +696,15 @@ def export_portal_invoice_csv(
 # ---------------------------------------------------------------------------
 
 
+class PortalOrderCreate(OrderCreate):
+    tracking_number: str = ""
+    label_url: str = ""
+    shipping_cost_override: float = 0.0
+
+
 @router.post("/orders", status_code=201)
 def create_portal_order(
-    data: OrderCreate,
+    data: PortalOrderCreate,
     request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -713,6 +719,15 @@ def create_portal_order(
         order = order_service.create_order(db, data)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    # Apply tracking info for label_purchased orders
+    if data.tracking_number:
+        order.tracking_number = data.tracking_number
+    if data.label_url:
+        order.label_url = data.label_url
+    if data.shipping_cost_override:
+        order.shipping_cost = data.shipping_cost_override
+    if data.tracking_number or data.label_url or data.shipping_cost_override:
+        db.commit()
     auth_service.log_activity(
         db, user.id, user.username, "create_order",
         detail=f"Portal: {order.order_number}",
