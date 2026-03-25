@@ -196,7 +196,10 @@ def _build_custom_payloads(order: Order, fields: list[str], event_type: str = EV
         data[field] = resolver(order, None)
 
     # Build items array if item-level fields are selected
+    # Always include 'name' in items when any item field is selected
     if has_item_fields and hasattr(order, "items") and order.items:
+        if "name" not in item_level_fields:
+            item_level_fields.append("name")
         items_list = []
         for item in order.items:
             item_data = {}
