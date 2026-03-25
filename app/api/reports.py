@@ -76,6 +76,27 @@ def inventory_movement_report(
     return report_service.inventory_movement(db, product_id=product_id, reason=reason, limit=limit, offset=offset)
 
 
+@router.get("/order-time-metrics")
+def order_time_metrics(
+    start_date: str | None = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: str | None = Query(None, description="End date YYYY-MM-DD"),
+    group_by: str = Query("daily", description="Group by: daily or monthly"),
+    db: Session = Depends(get_db),
+):
+    """Average order processing time metrics (confirmed→processing, confirmed→packed, etc.) grouped daily/monthly."""
+    return report_service.order_time_metrics(db, start_date=start_date, end_date=end_date, group_by=group_by)
+
+
+@router.get("/batches-daily-chart")
+def batches_daily_chart(
+    start_date: str | None = Query(None, description="Start date YYYY-MM-DD"),
+    end_date: str | None = Query(None, description="End date YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+):
+    """Daily chart data for batches: drop-off orders/items and working time, with per-staff breakdown."""
+    return report_service.batch_daily_chart(db, start_date=start_date, end_date=end_date)
+
+
 @router.get("/batches")
 def batch_report(
     date: str | None = Query(None, description="Date in YYYY-MM-DD format"),

@@ -138,6 +138,7 @@ a.track-link:hover{text-decoration:underline}
     <div class="panel-header">
       <h2>My Orders</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input class="search" id="order-search" placeholder="Search orders..." oninput="loadOrders()" style="margin:0">
         <select id="order-status-filter" onchange="loadOrders()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
           <option value="">All statuses</option>
           <option value="confirmed">Confirmed</option><option value="processing">Processing</option>
@@ -425,8 +426,9 @@ function buildProductOptions() {
 // --- Orders ---
 async function loadOrders() {
   const status = document.getElementById('order-status-filter').value;
+  const q = (document.getElementById('order-search').value || '').trim();
   try {
-    const res = await fetch(API + '/orders?limit=200' + (status ? '&status=' + status : ''));
+    const res = await fetch(API + '/orders?limit=200' + (status ? '&status=' + status : '') + (q ? '&q=' + encodeURIComponent(q) : ''));
     if (!res.ok) return;
     const data = await res.json();
     const tbody = document.getElementById('orders-body');

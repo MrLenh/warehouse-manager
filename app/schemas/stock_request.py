@@ -31,6 +31,7 @@ class StockRequestTrackingUpdate(BaseModel):
 class StockRequestItemReceive(BaseModel):
     item_id: str
     quantity_received: int
+    unit_cost: float | None = None
 
 
 class StockRequestReceive(BaseModel):

@@ -122,12 +122,17 @@ async def auth_middleware(request: Request, call_next):
         or path.startswith("/uploads/")
         or path.startswith("/api/v1/auth/")
         or path.startswith("/picking/")
+        or path.startswith("/receiving/")
         or path == "/health"
     ):
         return await call_next(request)
 
     # Public API: picking list summary (for mobile QR scan)
     if path.startswith("/api/v1/picking-lists/") and path.endswith("/summary"):
+        return await call_next(request)
+
+    # Public API: stock request endpoints for mobile receiving page
+    if path.startswith("/api/v1/stock-requests/"):
         return await call_next(request)
 
     # For API requests, let the dependency handle auth (returns 401)
@@ -229,6 +234,12 @@ def packing_detail_page(picking_list_id: str):
 def picking_summary_page(picking_list_id: str):
     """Mobile-optimized picking summary page — landing for picking list QR scan."""
     return FileResponse(STATIC_DIR / "picking.html")
+
+
+@app.get("/receiving/{sr_id}")
+def receiving_page(sr_id: str):
+    """Mobile-optimized receiving page — landing for stock request QR scan."""
+    return FileResponse(STATIC_DIR / "receiving.html")
 
 
 @app.get("/api/v1/config")
