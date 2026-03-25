@@ -22,17 +22,6 @@ from app.services import auth_service, order_service, product_service, stock_req
 router = APIRouter(prefix="/portal", tags=["customer-portal"])
 
 
-def _get_product_cost(item) -> float:
-    """Get product cost from catalog for an order item."""
-    if not item.product:
-        return 0.0
-    if item.variant_id:
-        for v in item.product.variants:
-            if v.id == item.variant_id:
-                return v.effective_price
-    return item.product.price
-
-
 def _require_customer(user: User, db: Session) -> Customer:
     """Ensure user is a customer and return their Customer record."""
     if user.role != "customer" or not user.customer_id:
@@ -477,7 +466,7 @@ def get_order(order_id: str, user: User = Depends(get_current_user), db: Session
                 "variant_label": i.variant_label or "",
                 "quantity": i.quantity,
                 "unit_price": i.unit_price,
-                "product_cost": _get_product_cost(i),
+                "product_cost": i.product_cost,
                 "image_url": i.image_url,
             }
             for i in order.items
