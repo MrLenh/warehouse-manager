@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.inventory_log import InventoryLog
 from app.models.product import Product, Variant
@@ -130,13 +130,20 @@ def create_stock_request(db: Session, data: StockRequestCreate) -> StockRequest:
 
 
 def get_stock_request(db: Session, sr_id: str) -> StockRequest | None:
-    return db.query(StockRequest).filter(StockRequest.id == sr_id).first()
+    return (
+        db.query(StockRequest)
+        .options(joinedload(StockRequest.items).joinedload(StockRequestItem.boxes))
+        .filter(StockRequest.id == sr_id)
+        .first()
+    )
 
 
 def list_stock_requests(
     db: Session, skip: int = 0, limit: int = 100, status: StockRequestStatus | None = None
 ) -> list[StockRequest]:
-    q = db.query(StockRequest)
+    q = db.query(StockRequest).options(
+        joinedload(StockRequest.items).joinedload(StockRequestItem.boxes)
+    )
     if status:
         q = q.filter(StockRequest.status == status)
     return q.order_by(StockRequest.created_at.desc()).offset(skip).limit(limit).all()
