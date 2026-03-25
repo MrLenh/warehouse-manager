@@ -32,7 +32,7 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 
 def _find_invoiceable_orders(db: Session, customer: Customer, date_to: date) -> list[Order]:
     """Find orders matching customer name, created up to date_to, not yet invoiced.
-    Only orders with status label_purchased or drop_off are eligible."""
+    Only orders with status drop_off or shipped are eligible."""
     end = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59)
     return (
         db.query(Order)
@@ -41,7 +41,7 @@ def _find_invoiceable_orders(db: Session, customer: Customer, date_to: date) -> 
             | (sa_func.lower(Order.customer_name) == customer.name.lower().strip()),
             Order.created_at <= end,
             Order.invoice_id.is_(None),
-            Order.status.in_(["label_purchased", "drop_off"]),
+            Order.status.in_(["drop_off", "shipped"]),
         )
         .order_by(Order.created_at)
         .all()
@@ -64,10 +64,10 @@ def _build_order_out(o: Order) -> InvoiceOrderOut:
     )
 
 
-def _calc_totals(orders: list[Order], processing_fee_unit: float, stocking_fee_unit: float, discount: float = 0.0):
+def _calc_totals(orders: list[Order], stocking_fee_unit: float, discount: float = 0.0):
     order_count = len(orders)
     item_count = sum(sum(i.quantity for i in o.items) for o in orders)
-    processing_fee_total = round(processing_fee_unit * item_count, 2)
+    processing_fee_total = round(sum(o.processing_fee for o in orders), 2)
     shipping_fee_total = round(sum(o.shipping_cost for o in orders), 2)
     stocking_fee_total = round(stocking_fee_unit * item_count, 2)
     subtotal = processing_fee_total + shipping_fee_total + stocking_fee_total
@@ -75,7 +75,7 @@ def _calc_totals(orders: list[Order], processing_fee_unit: float, stocking_fee_u
     return {
         "order_count": order_count,
         "item_count": item_count,
-        "processing_fee_unit": processing_fee_unit,
+        "processing_fee_unit": 0.0,
         "processing_fee_total": processing_fee_total,
         "shipping_fee_total": shipping_fee_total,
         "stocking_fee_unit": stocking_fee_unit,
@@ -119,7 +119,6 @@ def _invoice_to_out(inv: Invoice, customer: Customer | None, orders: list[Order]
 def preview_invoice(
     customer_id: str,
     date_to: date,
-    processing_fee_unit: float | None = None,
     stocking_fee_unit: float | None = None,
     discount: float = 0.0,
     user: User = Depends(get_current_user),
@@ -130,11 +129,10 @@ def preview_invoice(
     if not customer:
         raise HTTPException(404, "Customer not found")
 
-    pfu = processing_fee_unit if processing_fee_unit is not None else settings.PROCESSING_FEE_EXTRA_ITEM
     sfu = stocking_fee_unit if stocking_fee_unit is not None else settings.STOCKING_FEE_PER_ITEM
 
     orders = _find_invoiceable_orders(db, customer, date_to)
-    totals = _calc_totals(orders, pfu, sfu, discount)
+    totals = _calc_totals(orders, sfu, discount)
     return InvoicePreview(**totals, orders=[_build_order_out(o) for o in orders])
 
 
@@ -148,14 +146,13 @@ def create_invoice(
     if not customer:
         raise HTTPException(404, "Customer not found")
 
-    pfu = body.processing_fee_unit if body.processing_fee_unit is not None else settings.PROCESSING_FEE_EXTRA_ITEM
     sfu = body.stocking_fee_unit if body.stocking_fee_unit is not None else settings.STOCKING_FEE_PER_ITEM
 
     orders = _find_invoiceable_orders(db, customer, body.date_to)
     if not orders:
         raise HTTPException(400, "No invoiceable orders found for this customer and date range")
 
-    totals = _calc_totals(orders, pfu, sfu, body.discount)
+    totals = _calc_totals(orders, sfu, body.discount)
 
     # Generate invoice number: INV-0001, INV-0002 …
     last = db.query(Invoice).order_by(Invoice.created_at.desc()).first()

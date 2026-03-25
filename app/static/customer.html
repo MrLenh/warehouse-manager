@@ -288,10 +288,7 @@ tr:hover{background:#f8f9ff}
         </div>
       </div>
       <div class="form-group"><label>Invoice Name *</label><input id="inv-name" placeholder="e.g. January 2026 Invoice"></div>
-      <div class="form-row">
-        <div class="form-group"><label>Processing Fee / item ($)</label><input id="inv-proc-fee" type="number" step="0.01" min="0"></div>
-        <div class="form-group"><label>Stocking Fee / item ($)</label><input id="inv-stock-fee" type="number" step="0.01" min="0"></div>
-      </div>
+      <div class="form-group"><label>Stocking Fee / item ($)</label><input id="inv-stock-fee" type="number" step="0.01" min="0"></div>
       <div class="form-group"><label>Discount ($)</label><input id="inv-discount" type="number" step="0.01" min="0" value="0"></div>
       <div class="form-group"><label>Notes</label><textarea id="inv-notes" rows="2"></textarea></div>
       <div style="text-align:center;margin:16px 0">
@@ -315,6 +312,7 @@ tr:hover{background:#f8f9ff}
     </div>
     <div class="modal-body" id="inv-detail-body"></div>
     <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" id="btn-export-inv" onclick="exportInvoice()" style="margin-right:auto">Export CSV</button>
       <button class="btn btn-outline" onclick="closeInvDetail()">Close</button>
       <button class="btn btn-danger btn-sm" id="btn-del-inv" onclick="deleteInvoice()">Delete Invoice</button>
     </div>
@@ -523,7 +521,7 @@ async function loadInvoices() {
 function renderInvoices(invoices) {
   const wrap = document.getElementById('inv-table-wrap');
   if (!invoices.length) { wrap.innerHTML = '<div class="empty">No invoices found</div>'; return; }
-  wrap.innerHTML = `<table><thead><tr><th>Invoice #</th><th>Name</th><th>Customer</th><th>Status</th><th>Date To</th><th>Orders</th><th>Items</th><th>Discount</th><th>Total</th><th>Created</th><th></th></tr></thead><tbody>` +
+  wrap.innerHTML = `<table><thead><tr><th>Invoice #</th><th>Name</th><th>Customer</th><th>Status</th><th>Date To</th><th>Orders</th><th>Items</th><th>Processing</th><th>Shipping</th><th>Stocking</th><th>Discount</th><th>Total</th><th>Created</th><th></th></tr></thead><tbody>` +
     invoices.map(inv => `<tr>
       <td><strong>${esc(inv.invoice_number)}</strong></td>
       <td>${esc(inv.invoice_name)}</td>
@@ -532,6 +530,9 @@ function renderInvoices(invoices) {
       <td>${inv.date_to}</td>
       <td>${inv.order_count}</td>
       <td>${inv.item_count}</td>
+      <td>$${inv.processing_fee_total.toFixed(2)}</td>
+      <td>$${inv.shipping_fee_total.toFixed(2)}</td>
+      <td>$${inv.stocking_fee_total.toFixed(2)}</td>
       <td>${inv.discount > 0 ? '-$' + inv.discount.toFixed(2) : '-'}</td>
       <td><strong>$${inv.total_price.toFixed(2)}</strong></td>
       <td>${new Date(inv.created_at).toLocaleDateString()}</td>
@@ -547,7 +548,6 @@ function openInvModal() {
   document.getElementById('inv-customer').value = '';
   document.getElementById('inv-date-to').value = new Date().toISOString().slice(0, 10);
   document.getElementById('inv-name').value = '';
-  document.getElementById('inv-proc-fee').value = '';
   document.getElementById('inv-stock-fee').value = '';
   document.getElementById('inv-discount').value = '0';
   document.getElementById('inv-notes').value = '';
@@ -566,10 +566,8 @@ async function previewInvoice() {
   if (!custId || !dateTo) { toast('Select customer and date', 'error'); return; }
 
   const params = new URLSearchParams({customer_id: custId, date_to: dateTo});
-  const pf = document.getElementById('inv-proc-fee').value;
   const sf = document.getElementById('inv-stock-fee').value;
   const disc = parseFloat(document.getElementById('inv-discount').value) || 0;
-  if (pf !== '') params.set('processing_fee_unit', pf);
   if (sf !== '') params.set('stocking_fee_unit', sf);
   if (disc > 0) params.set('discount', disc);
 
@@ -597,7 +595,7 @@ function renderPreview(p) {
       <table class="summary-table">
         <tr><td>Orders</td><td>${p.order_count}</td></tr>
         <tr><td>Total Items</td><td>${p.item_count}</td></tr>
-        <tr><td>Processing Fee (${p.item_count} items x $${p.processing_fee_unit.toFixed(2)})</td><td>$${p.processing_fee_total.toFixed(2)}</td></tr>
+        <tr><td>Processing Fee (from orders)</td><td>$${p.processing_fee_total.toFixed(2)}</td></tr>
         <tr><td>Shipping Fee</td><td>$${p.shipping_fee_total.toFixed(2)}</td></tr>
         <tr><td>Stocking Fee (${p.item_count} items x $${p.stocking_fee_unit.toFixed(2)})</td><td>$${p.stocking_fee_total.toFixed(2)}</td></tr>
         ${p.discount > 0 ? `<tr><td>Discount</td><td style="color:#dc3545">-$${p.discount.toFixed(2)}</td></tr>` : ''}
@@ -606,12 +604,13 @@ function renderPreview(p) {
     </div>
     <div class="card">
       <h3>Orders (${p.orders.length})</h3>
-      <table class="inv-orders-table"><thead><tr><th>Order #</th><th>Name</th><th>Status</th><th>Items</th><th>Shipping</th><th>Created</th></tr></thead><tbody>` +
+      <table class="inv-orders-table"><thead><tr><th>Order #</th><th>Name</th><th>Status</th><th>Items</th><th>Processing</th><th>Shipping</th><th>Created</th></tr></thead><tbody>` +
     p.orders.map(o => `<tr>
       <td><strong>${esc(o.order_number)}</strong></td>
       <td>${esc(o.order_name)}</td>
       <td><span class="badge badge-${o.status}">${o.status}</span></td>
       <td>${o.item_count}</td>
+      <td>$${o.processing_fee.toFixed(2)}</td>
       <td>$${o.shipping_cost.toFixed(2)}</td>
       <td>${new Date(o.created_at).toLocaleDateString()}</td>
     </tr>`).join('') +
@@ -625,10 +624,8 @@ async function createInvoice() {
   if (!custId || !dateTo || !name) { toast('Fill all required fields', 'error'); return; }
 
   const body = {customer_id: custId, date_to: dateTo, invoice_name: name, notes: document.getElementById('inv-notes').value.trim()};
-  const pf = document.getElementById('inv-proc-fee').value;
   const sf = document.getElementById('inv-stock-fee').value;
   const disc = parseFloat(document.getElementById('inv-discount').value) || 0;
-  if (pf !== '') body.processing_fee_unit = parseFloat(pf);
   if (sf !== '') body.stocking_fee_unit = parseFloat(sf);
   if (disc > 0) body.discount = disc;
 
@@ -682,7 +679,7 @@ async function viewInvoice(id) {
         <table class="summary-table">
           <tr><td>Orders</td><td>${inv.order_count}</td></tr>
           <tr><td>Total Items</td><td>${inv.item_count}</td></tr>
-          <tr><td>Processing Fee (${inv.item_count} x $${inv.processing_fee_unit.toFixed(2)})</td><td>$${inv.processing_fee_total.toFixed(2)}</td></tr>
+          <tr><td>Processing Fee (from orders)</td><td>$${inv.processing_fee_total.toFixed(2)}</td></tr>
           <tr><td>Shipping Fee</td><td>$${inv.shipping_fee_total.toFixed(2)}</td></tr>
           <tr><td>Stocking Fee (${inv.item_count} x $${inv.stocking_fee_unit.toFixed(2)})</td><td>$${inv.stocking_fee_total.toFixed(2)}</td></tr>
           ${inv.discount > 0 ? `<tr><td>Discount</td><td style="color:#dc3545">-$${inv.discount.toFixed(2)}</td></tr>` : ''}
@@ -691,13 +688,14 @@ async function viewInvoice(id) {
       </div>
       <div class="card">
         <h3>Orders (${inv.orders.length})</h3>
-        <table class="inv-orders-table"><thead><tr><th>Order #</th><th>Name</th><th>Customer</th><th>Status</th><th>Items</th><th>Shipping</th><th>Created</th></tr></thead><tbody>` +
+        <table class="inv-orders-table"><thead><tr><th>Order #</th><th>Name</th><th>Customer</th><th>Status</th><th>Items</th><th>Processing</th><th>Shipping</th><th>Created</th></tr></thead><tbody>` +
       inv.orders.map(o => `<tr>
         <td><strong>${esc(o.order_number)}</strong></td>
         <td>${esc(o.order_name)}</td>
         <td>${esc(o.customer_name)}</td>
         <td><span class="badge badge-${o.status}">${o.status}</span></td>
         <td>${o.item_count}</td>
+        <td>$${o.processing_fee.toFixed(2)}</td>
         <td>$${o.shipping_cost.toFixed(2)}</td>
         <td>${new Date(o.created_at).toLocaleDateString()}</td>
       </tr>`).join('') +
@@ -707,6 +705,11 @@ async function viewInvoice(id) {
 }
 
 function closeInvDetail() { document.getElementById('inv-detail-modal').classList.remove('show'); }
+
+function exportInvoice() {
+  if (!currentInvId) return;
+  window.location.href = API + '/customers/invoices/' + currentInvId + '/export';
+}
 
 async function changeInvStatus() {
   const status = document.getElementById('inv-status-sel').value;
