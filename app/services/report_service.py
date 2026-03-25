@@ -9,6 +9,142 @@ from app.models.product import Product, Variant
 from app.models.stock_request import StockRequest, StockRequestItem, StockRequestStatus
 
 
+def order_time_metrics(
+    db: Session,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    group_by: str = "daily",
+) -> dict:
+    """Calculate average order processing time metrics grouped by day or month.
+
+    Metrics (all measured from confirmed timestamp):
+    - confirmed_time: confirmed → processing
+    - processing_time: confirmed → packed
+    - drop_off_time: confirmed → drop_off
+    - shipped_time: confirmed → shipped
+    - delivered_time: confirmed → delivered
+    """
+    import json
+    from datetime import timedelta
+
+    today = datetime.now(timezone.utc).date()
+    if end_date:
+        end_d = datetime.fromisoformat(end_date).date()
+    else:
+        end_d = today
+    if start_date:
+        start_d = datetime.fromisoformat(start_date).date()
+    else:
+        start_d = end_d - timedelta(days=29)
+
+    orders = db.query(Order).all()
+
+    TARGET_STATUSES = ["processing", "packed", "drop_off", "shipped", "delivered"]
+    METRIC_NAMES = {
+        "processing": "confirmed_time",
+        "packed": "processing_time",
+        "drop_off": "drop_off_time",
+        "shipped": "shipped_time",
+        "delivered": "delivered_time",
+    }
+
+    # Collect per-order durations keyed by the date the order was confirmed
+    # { group_key: { metric_name: [hours, ...] } }
+    from collections import defaultdict
+    grouped: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+
+    for order in orders:
+        try:
+            history = json.loads(order.status_history) if order.status_history else []
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not history:
+            continue
+
+        # Find confirmed timestamp
+        confirmed_ts = None
+        status_timestamps: dict[str, datetime] = {}
+        for entry in history:
+            status = entry.get("status", "")
+            ts_str = entry.get("timestamp", "")
+            if not ts_str:
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            except (ValueError, TypeError):
+                continue
+
+            if status == "confirmed" and confirmed_ts is None:
+                confirmed_ts = ts
+            if status in TARGET_STATUSES and status not in status_timestamps:
+                status_timestamps[status] = ts
+
+        if not confirmed_ts:
+            continue
+
+        confirmed_date = confirmed_ts.date()
+        if confirmed_date < start_d or confirmed_date > end_d:
+            continue
+
+        if group_by == "monthly":
+            group_key = confirmed_date.strftime("%Y-%m")
+        else:
+            group_key = confirmed_date.isoformat()
+
+        for status, metric_name in METRIC_NAMES.items():
+            if status in status_timestamps:
+                delta_hours = (status_timestamps[status] - confirmed_ts).total_seconds() / 3600
+                if delta_hours >= 0:
+                    grouped[group_key][metric_name].append(delta_hours)
+
+    # Build date/month series
+    if group_by == "monthly":
+        keys = set()
+        d = start_d.replace(day=1)
+        while d <= end_d:
+            keys.add(d.strftime("%Y-%m"))
+            if d.month == 12:
+                d = d.replace(year=d.year + 1, month=1)
+            else:
+                d = d.replace(month=d.month + 1)
+        sorted_keys = sorted(keys)
+    else:
+        sorted_keys = []
+        d = start_d
+        while d <= end_d:
+            sorted_keys.append(d.isoformat())
+            d += timedelta(days=1)
+
+    all_metric_names = list(METRIC_NAMES.values())
+    chart = []
+    for key in sorted_keys:
+        entry = {"date": key}
+        bucket = grouped.get(key, {})
+        for mn in all_metric_names:
+            values = bucket.get(mn, [])
+            entry[mn + "_avg"] = round(sum(values) / len(values), 2) if values else None
+            entry[mn + "_count"] = len(values)
+        chart.append(entry)
+
+    # Overall averages
+    overall: dict[str, dict] = {}
+    for mn in all_metric_names:
+        all_vals = []
+        for bucket in grouped.values():
+            all_vals.extend(bucket.get(mn, []))
+        overall[mn] = {
+            "avg_hours": round(sum(all_vals) / len(all_vals), 2) if all_vals else None,
+            "count": len(all_vals),
+        }
+
+    return {
+        "group_by": group_by,
+        "date_range": {"start": start_d.isoformat(), "end": end_d.isoformat()},
+        "overall": overall,
+        "chart": chart,
+    }
+
+
 def inventory_summary(db: Session) -> dict:
     products = db.query(Product).all()
     total_products = len(products)
@@ -43,6 +179,10 @@ def _group_by_category(products: list[Product]) -> list[dict]:
 
 
 def order_summary(db: Session, start_date: datetime | None = None, end_date: datetime | None = None, customer_id: str | None = None) -> dict:
+    SHIPPED_STATUSES = {
+        OrderStatus.DROP_OFF, OrderStatus.SHIPPED, OrderStatus.IN_TRANSIT, OrderStatus.DELIVERED,
+    }
+
     q = db.query(Order)
     if start_date:
         q = q.filter(Order.created_at >= start_date)
@@ -58,6 +198,7 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
     total_shipping = 0.0
     total_processing = 0.0
     total_items = 0
+    shipped_items = 0
 
     for o in orders:
         status_val = o.status if isinstance(o.status, str) else o.status.value
@@ -65,7 +206,28 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
         total_revenue += o.total_price
         total_shipping += o.shipping_cost
         total_processing += o.processing_fee
-        total_items += sum(item.quantity for item in o.items)
+        items_qty = sum(item.quantity for item in o.items)
+        total_items += items_qty
+        if status_val in {s.value if not isinstance(s, str) else s for s in SHIPPED_STATUSES}:
+            shipped_items += items_qty
+
+    # Shipped items by updated_at: orders shipped (status changed) within the date range
+    # This catches orders created before the date range but shipped within it
+    shipped_items_by_ship_date = 0
+    if start_date or end_date:
+        sq = db.query(Order).filter(
+            Order.status.in_(list(SHIPPED_STATUSES))
+        )
+        if customer_id:
+            sq = sq.filter(Order.customer_id == customer_id)
+        if start_date:
+            sq = sq.filter(Order.updated_at >= start_date)
+        if end_date:
+            sq = sq.filter(Order.updated_at <= end_date)
+        for o in sq.all():
+            shipped_items_by_ship_date += sum(item.quantity for item in o.items)
+    else:
+        shipped_items_by_ship_date = shipped_items
 
     # Orders grouped by date for chart
     orders_by_date: dict[str, int] = {}
@@ -88,6 +250,7 @@ def order_summary(db: Session, start_date: datetime | None = None, end_date: dat
     return {
         "total_orders": total,
         "total_items": total_items,
+        "shipped_items": shipped_items_by_ship_date,
         "orders_by_status": by_status,
         "total_revenue": round(total_revenue, 2),
         "total_shipping_cost": round(total_shipping, 2),
@@ -452,6 +615,136 @@ def batch_report(db: Session, date: str | None = None, assigned_to: str | None =
         },
         "staff_summary": staff_summary,
     }
+
+
+def batch_daily_chart(db: Session, start_date: str | None = None, end_date: str | None = None) -> dict:
+    """Daily chart data for batches: orders & items dropped off, and working time per day.
+
+    Returns per-day totals and per-staff breakdowns so the frontend can toggle grouping.
+    """
+    import json
+    from app.models.picking import PickingList, PickingListStatus, PickItem
+
+    today = datetime.utcnow().date()
+    if end_date:
+        end_d = datetime.fromisoformat(end_date).date()
+    else:
+        end_d = today
+    if start_date:
+        start_d = datetime.fromisoformat(start_date).date()
+    else:
+        start_d = end_d  # default: single day
+
+    # --- Drop-off data: scan order status_history for drop_off transitions ---
+    orders = db.query(Order).all()
+    # Map order_id -> list of item quantities (for counting items)
+    order_items_qty: dict[str, int] = {}
+    for oi in db.query(OrderItem).all():
+        order_items_qty[oi.order_id] = order_items_qty.get(oi.order_id, 0) + oi.quantity
+
+    # Build day -> {total drop-off orders, total drop-off items, per-staff}
+    from collections import defaultdict
+    day_data: dict[str, dict] = {}
+
+    # Initialize all days in range
+    d = start_d
+    while d <= end_d:
+        ds = d.isoformat()
+        day_data[ds] = {
+            "date": ds,
+            "drop_off_orders": 0,
+            "drop_off_items": 0,
+            "staff": defaultdict(lambda: {"drop_off_orders": 0, "drop_off_items": 0, "working_seconds": 0}),
+        }
+        d += __import__("datetime").timedelta(days=1)
+
+    # Find which orders were dropped off on which day, and by whom (via batch assignment)
+    # Build order_id -> assigned_to from picking lists
+    pick_items = db.query(PickItem).all()
+    order_to_staff: dict[str, str] = {}
+    pl_map: dict[str, PickingList] = {}
+    for pi in pick_items:
+        if pi.picking_list_id not in pl_map:
+            pl_map[pi.picking_list_id] = pi.picking_list
+        pl = pl_map[pi.picking_list_id]
+        if pl and pl.assigned_to:
+            order_to_staff[pi.order_id] = pl.assigned_to
+
+    for order in orders:
+        try:
+            history = json.loads(order.status_history) if order.status_history else []
+        except (json.JSONDecodeError, TypeError):
+            history = []
+        for entry in history:
+            if entry.get("status") == "drop_off":
+                ts = entry.get("timestamp", "")
+                try:
+                    drop_date = datetime.fromisoformat(ts).date() if ts else None
+                except (ValueError, TypeError):
+                    drop_date = None
+                if drop_date and start_d <= drop_date <= end_d:
+                    ds = drop_date.isoformat()
+                    if ds in day_data:
+                        items_count = order_items_qty.get(order.id, 0)
+                        day_data[ds]["drop_off_orders"] += 1
+                        day_data[ds]["drop_off_items"] += items_count
+                        staff = order_to_staff.get(order.id, "unassigned")
+                        day_data[ds]["staff"][staff]["drop_off_orders"] += 1
+                        day_data[ds]["staff"][staff]["drop_off_items"] += items_count
+                break  # Only count the first drop_off transition per order
+
+    # --- Working time data: from pick items picked_at ---
+    all_batches = db.query(PickingList).filter(PickingList.status != PickingListStatus.ARCHIVED).all()
+    for batch in all_batches:
+        if not batch.assigned_to:
+            continue
+        items = batch.items
+        picked_times = [i.picked_at for i in items if i.picked and i.picked_at]
+        if not picked_times:
+            continue
+
+        # Group picks by day
+        from collections import defaultdict as _dd
+        day_picks: dict[str, list] = _dd(list)
+        for t in picked_times:
+            t_naive = t.replace(tzinfo=None) if t and t.tzinfo else t
+            pd = t_naive.date()
+            if start_d <= pd <= end_d:
+                day_picks[pd.isoformat()].append(t_naive)
+
+        for ds, times in day_picks.items():
+            if ds not in day_data:
+                continue
+            first = min(times)
+            last = max(times)
+            secs = (last - first).total_seconds() if first != last else 0
+            day_data[ds]["staff"][batch.assigned_to]["working_seconds"] += secs
+
+    # Build response
+    chart = []
+    for ds in sorted(day_data.keys()):
+        dd = day_data[ds]
+        total_working = sum(s["working_seconds"] for s in dd["staff"].values())
+        staff_list = []
+        for uname, sdata in dd["staff"].items():
+            staff_list.append({
+                "username": uname,
+                "drop_off_orders": sdata["drop_off_orders"],
+                "drop_off_items": sdata["drop_off_items"],
+                "working_seconds": round(sdata["working_seconds"]),
+                "working_minutes": round(sdata["working_seconds"] / 60, 1),
+            })
+        staff_list.sort(key=lambda x: x["username"])
+        chart.append({
+            "date": ds,
+            "drop_off_orders": dd["drop_off_orders"],
+            "drop_off_items": dd["drop_off_items"],
+            "working_seconds": round(total_working),
+            "working_minutes": round(total_working / 60, 1),
+            "staff": staff_list,
+        })
+
+    return {"chart": chart}
 
 
 def _format_duration(seconds: float) -> str:

@@ -101,6 +101,7 @@ def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_
 @router.get("/orders")
 def list_orders(
     status: str = "",
+    q: str = "",
     skip: int = 0,
     limit: int = 50,
     user: User = Depends(get_current_user),
@@ -113,6 +114,14 @@ def list_orders(
     )
     if status:
         query = query.filter(Order.status == status)
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            Order.order_number.ilike(search)
+            | Order.order_name.ilike(search)
+            | Order.shop_name.ilike(search)
+            | Order.tracking_number.ilike(search)
+        )
     total = query.count()
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     return {

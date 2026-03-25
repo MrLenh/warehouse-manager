@@ -17,7 +17,7 @@ _TRACKING_TO_ORDER_STATUS = {
     "delivered": OrderStatus.DELIVERED,
 }
 
-_PRE_SHIPPED = {OrderStatus.LABEL_PURCHASED, OrderStatus.DROP_OFF}
+_PRE_SHIPPED = {OrderStatus.PENDING, OrderStatus.LABEL_PURCHASED, OrderStatus.DROP_OFF}
 
 
 def check_tracking_updates(db: Session) -> dict:
@@ -35,6 +35,7 @@ def check_tracking_updates(db: Session) -> dict:
         .filter(
             Order.tracking_number != "",
             Order.status.in_([
+                OrderStatus.PENDING,
                 OrderStatus.DROP_OFF,
                 OrderStatus.SHIPPED,
                 OrderStatus.IN_TRANSIT,
