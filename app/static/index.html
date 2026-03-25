@@ -283,9 +283,7 @@ tr:hover{background:#f8f9ff}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
         <button class="btn btn-outline btn-sm" onclick="exportOrders()">Export CSV</button>
-        <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
-        <button class="btn btn-sm" onclick="openImportLabelPurchasedModal()" style="background:#7c3aed;color:#fff">Import Label Purchased</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
         <button class="btn btn-primary btn-sm" id="btn-create-label-batch" onclick="createLabelBatch()" style="display:none">Create Label Batch (<span id="label-batch-count">0</span>)</button>
         <button class="btn btn-sm" id="btn-mark-shipped" onclick="batchMarkShipped()" style="display:none;background:#17a2b8;color:#fff">Mark Shipped (<span id="mark-shipped-count">0</span>)</button>
@@ -1079,7 +1077,7 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
         Choose the initial status for all imported orders. Use this when syncing orders from another system to avoid re-processing orders that were already shipped or have tracking.
       </p>
       <label style="font-weight:600;font-size:13px">Initial Order Status</label>
-      <select id="import-order-status" class="input" style="margin-top:4px">
+      <select id="import-order-status" class="input" style="margin-top:4px" onchange="onImportStatusChange()">
         <option value="pending">Pending</option>
         <option value="confirmed" selected>Confirmed (default)</option>
         <option value="processing">Processing</option>
@@ -1095,9 +1093,21 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
       <div id="import-status-warning" style="display:none;margin-top:8px;padding:8px 12px;background:#fef3c7;border-radius:6px;font-size:12px;color:#92400e">
         Orders imported with this status will skip the normal fulfillment flow. Inventory will still be deducted.
       </div>
+      <!-- Label Purchased options -->
+      <div id="import-lp-options" style="display:none;margin-top:12px;padding:12px;background:#f5f3ff;border-radius:8px;border:1px solid #ddd6fe">
+        <p style="font-size:12px;color:#7c3aed;margin-bottom:8px;font-weight:600">Label Purchased Options</p>
+        <label style="font-weight:600;font-size:13px">Customer</label>
+        <select id="import-lp-customer" class="input" style="margin-top:4px">
+          <option value="">-- No customer (use CSV name) --</option>
+        </select>
+        <div style="margin-top:8px">
+          <a href="/api/v1/orders/import-label-purchased-template" class="btn btn-outline btn-sm" download style="font-size:11px">Download Label Purchased CSV Template</a>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
-      <label class="btn btn-primary" style="margin:0">
+      <a id="import-csv-template-link" href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download style="margin-right:auto">CSV Template</a>
+      <label class="btn btn-primary" id="import-order-btn" style="margin:0">
         Select CSV &amp; Import
         <input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="startOrderImport(this)">
       </label>
@@ -1119,33 +1129,6 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
   </div>
 </div>
 
-<!-- IMPORT LABEL PURCHASED MODAL -->
-<div class="modal-overlay" id="import-label-purchased-modal">
-  <div class="modal" style="width:500px">
-    <div class="modal-header">
-      <h2>Import Orders - Label Purchased</h2>
-      <button class="modal-close" onclick="closeModal('import-label-purchased-modal')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
-        Import orders that already have shipping labels purchased. All orders will be created with status <strong>Label Purchased</strong> and linked to the selected customer.
-      </p>
-      <label style="font-weight:600;font-size:13px">Customer</label>
-      <select id="import-lp-customer" class="input" style="margin-top:4px">
-        <option value="">-- No customer (use CSV name) --</option>
-      </select>
-      <div style="margin-top:12px">
-        <a href="/api/v1/orders/import-label-purchased-template" class="btn btn-outline btn-sm" download>Download CSV Template</a>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <label class="btn btn-primary" style="margin:0;background:#7c3aed;border-color:#7c3aed">
-        Select CSV &amp; Import
-        <input type="file" accept=".csv" id="csv-import-label-purchased" style="display:none" onchange="startLabelPurchasedImport(this)">
-      </label>
-    </div>
-  </div>
-</div>
 
 <!-- QR CODE MODAL -->
 <div class="modal-overlay" id="qr-modal">
@@ -1472,50 +1455,13 @@ async function importCSV(input) {
   input.value = '';
 }
 
-function openImportOrderModal() {
+async function openImportOrderModal() {
   document.getElementById('import-order-status').value = 'confirmed';
   document.getElementById('import-status-warning').style.display = 'none';
   document.getElementById('csv-import-orders').value = '';
-  openModal('import-order-modal');
-}
-
-// Show warning for non-standard statuses
-document.addEventListener('DOMContentLoaded', () => {
-  const sel = document.getElementById('import-order-status');
-  if (sel) sel.addEventListener('change', () => {
-    const warn = document.getElementById('import-status-warning');
-    warn.style.display = ['pending','confirmed'].includes(sel.value) ? 'none' : 'block';
-  });
-});
-
-async function startOrderImport(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const status = document.getElementById('import-order-status').value;
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('status', status);
-  closeModal('import-order-modal');
-  try {
-    const res = await fetch(API + '/orders/import', { method: 'POST', body: formData });
-    if (!res.ok) {
-      let errMsg;
-      try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
-      toast((errMsg || 'Order import error').slice(0,200), 'error');
-      input.value = '';
-      return;
-    }
-    const result = await res.json();
-    result._importStatus = status;
-    showImportReport(result);
-    loadOrders();
-  } catch(e) { toast('Connection error: ' + e.message, 'error'); }
-  input.value = '';
-}
-
-async function openImportLabelPurchasedModal() {
+  onImportStatusChange();
+  // Pre-load customers for label purchased option
   const sel = document.getElementById('import-lp-customer');
-  // Keep first option, clear the rest
   while (sel.options.length > 1) sel.remove(1);
   try {
     const res = await fetch(API + '/customers');
@@ -1529,29 +1475,53 @@ async function openImportLabelPurchasedModal() {
       });
     }
   } catch {}
-  document.getElementById('csv-import-label-purchased').value = '';
-  openModal('import-label-purchased-modal');
+  openModal('import-order-modal');
 }
 
-async function startLabelPurchasedImport(input) {
+function onImportStatusChange() {
+  const status = document.getElementById('import-order-status').value;
+  const warn = document.getElementById('import-status-warning');
+  const lpOptions = document.getElementById('import-lp-options');
+  const templateLink = document.getElementById('import-csv-template-link');
+  const importBtn = document.getElementById('import-order-btn');
+  warn.style.display = ['pending','confirmed'].includes(status) ? 'none' : 'block';
+  const isLP = status === 'label_purchased';
+  lpOptions.style.display = isLP ? 'block' : 'none';
+  templateLink.href = isLP ? '/api/v1/orders/import-label-purchased-template' : '/api/v1/orders/import-template';
+  importBtn.style.background = isLP ? '#7c3aed' : '';
+  importBtn.style.borderColor = isLP ? '#7c3aed' : '';
+}
+
+async function startOrderImport(input) {
   const file = input.files[0];
   if (!file) return;
-  const customerId = document.getElementById('import-lp-customer').value;
+  const status = document.getElementById('import-order-status').value;
+  const isLP = status === 'label_purchased';
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('customer_id', customerId);
-  closeModal('import-label-purchased-modal');
+  closeModal('import-order-modal');
   try {
-    const res = await fetch(API + '/orders/import-label-purchased', { method: 'POST', body: formData });
+    let url, importStatus;
+    if (isLP) {
+      const customerId = document.getElementById('import-lp-customer').value;
+      formData.append('customer_id', customerId);
+      url = API + '/orders/import-label-purchased';
+      importStatus = 'label_purchased';
+    } else {
+      formData.append('status', status);
+      url = API + '/orders/import';
+      importStatus = status;
+    }
+    const res = await fetch(url, { method: 'POST', body: formData });
     if (!res.ok) {
       let errMsg;
       try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
-      toast((errMsg || 'Import error').slice(0,200), 'error');
+      toast((errMsg || 'Order import error').slice(0,200), 'error');
       input.value = '';
       return;
     }
     const result = await res.json();
-    result._importStatus = 'label_purchased';
+    result._importStatus = importStatus;
     showImportReport(result);
     loadOrders();
   } catch(e) { toast('Connection error: ' + e.message, 'error'); }
