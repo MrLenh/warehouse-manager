@@ -120,6 +120,16 @@ class OrderItem(Base):
     def image_url(self) -> str:
         return self.product.image_url if self.product else ""
 
+    @property
+    def product_cost(self) -> float:
+        if not self.product:
+            return 0.0
+        if self.variant_id:
+            for v in self.product.variants:
+                if v.id == self.variant_id:
+                    return v.effective_price
+        return self.product.price
+
 
 # Avoid circular import
 from app.models.invoice import Invoice  # noqa: E402, F401
