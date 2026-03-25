@@ -205,6 +205,7 @@ tr:hover{background:#f8f9ff}
   <div class="tab" data-tab="orders">Orders</div>
   <div class="tab" data-tab="inventory">Inventory</div>
   <div class="tab" data-tab="reports">Reports</div>
+  <a href="/customers" class="tab" style="text-decoration:none;color:inherit">Customers</a>
   <div class="tab" data-tab="jobs" id="tab-jobs" style="display:none">Jobs</div>
   <div class="tab" data-tab="users" id="tab-users" style="display:none">Users</div>
 </div>
@@ -284,6 +285,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="exportOrders()">Export CSV</button>
         <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
+        <button class="btn btn-sm" onclick="openImportLabelPurchasedModal()" style="background:#7c3aed;color:#fff">Import Label Purchased</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
         <button class="btn btn-primary btn-sm" id="btn-create-label-batch" onclick="createLabelBatch()" style="display:none">Create Label Batch (<span id="label-batch-count">0</span>)</button>
         <button class="btn btn-sm" id="btn-mark-shipped" onclick="batchMarkShipped()" style="display:none;background:#17a2b8;color:#fff">Mark Shipped (<span id="mark-shipped-count">0</span>)</button>
@@ -1117,6 +1119,34 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
   </div>
 </div>
 
+<!-- IMPORT LABEL PURCHASED MODAL -->
+<div class="modal-overlay" id="import-label-purchased-modal">
+  <div class="modal" style="width:500px">
+    <div class="modal-header">
+      <h2>Import Orders - Label Purchased</h2>
+      <button class="modal-close" onclick="closeModal('import-label-purchased-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+        Import orders that already have shipping labels purchased. All orders will be created with status <strong>Label Purchased</strong> and linked to the selected customer.
+      </p>
+      <label style="font-weight:600;font-size:13px">Customer</label>
+      <select id="import-lp-customer" class="input" style="margin-top:4px">
+        <option value="">-- No customer (use CSV name) --</option>
+      </select>
+      <div style="margin-top:12px">
+        <a href="/api/v1/orders/import-label-purchased-template" class="btn btn-outline btn-sm" download>Download CSV Template</a>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <label class="btn btn-primary" style="margin:0;background:#7c3aed;border-color:#7c3aed">
+        Select CSV &amp; Import
+        <input type="file" accept=".csv" id="csv-import-label-purchased" style="display:none" onchange="startLabelPurchasedImport(this)">
+      </label>
+    </div>
+  </div>
+</div>
+
 <!-- QR CODE MODAL -->
 <div class="modal-overlay" id="qr-modal">
   <div class="modal" style="width:900px">
@@ -1477,6 +1507,51 @@ async function startOrderImport(input) {
     }
     const result = await res.json();
     result._importStatus = status;
+    showImportReport(result);
+    loadOrders();
+  } catch(e) { toast('Connection error: ' + e.message, 'error'); }
+  input.value = '';
+}
+
+async function openImportLabelPurchasedModal() {
+  const sel = document.getElementById('import-lp-customer');
+  // Keep first option, clear the rest
+  while (sel.options.length > 1) sel.remove(1);
+  try {
+    const res = await fetch(API + '/customers');
+    if (res.ok) {
+      const customers = await res.json();
+      customers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name + (c.company ? ` (${c.company})` : '');
+        sel.appendChild(opt);
+      });
+    }
+  } catch {}
+  document.getElementById('csv-import-label-purchased').value = '';
+  openModal('import-label-purchased-modal');
+}
+
+async function startLabelPurchasedImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const customerId = document.getElementById('import-lp-customer').value;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('customer_id', customerId);
+  closeModal('import-label-purchased-modal');
+  try {
+    const res = await fetch(API + '/orders/import-label-purchased', { method: 'POST', body: formData });
+    if (!res.ok) {
+      let errMsg;
+      try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
+      toast((errMsg || 'Import error').slice(0,200), 'error');
+      input.value = '';
+      return;
+    }
+    const result = await res.json();
+    result._importStatus = 'label_purchased';
     showImportReport(result);
     loadOrders();
   } catch(e) { toast('Connection error: ' + e.message, 'error'); }
