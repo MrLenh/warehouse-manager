@@ -169,6 +169,7 @@ tr:hover{background:#f8f9ff}
 </style>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 </head>
 <body>
 
@@ -204,6 +205,7 @@ tr:hover{background:#f8f9ff}
   <div class="tab" data-tab="orders">Orders</div>
   <div class="tab" data-tab="inventory">Inventory</div>
   <div class="tab" data-tab="reports">Reports</div>
+  <a href="/customers" class="tab" style="text-decoration:none;color:inherit">Customers</a>
   <div class="tab" data-tab="jobs" id="tab-jobs" style="display:none">Jobs</div>
   <div class="tab" data-tab="users" id="tab-users" style="display:none">Users</div>
 </div>
@@ -281,7 +283,6 @@ tr:hover{background:#f8f9ff}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
         <button class="btn btn-outline btn-sm" onclick="exportOrders()">Export CSV</button>
-        <a href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
         <button class="btn btn-primary btn-sm" id="btn-create-label-batch" onclick="createLabelBatch()" style="display:none">Create Label Batch (<span id="label-batch-count">0</span>)</button>
@@ -427,6 +428,11 @@ tr:hover{background:#f8f9ff}
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;font-size:13px;white-space:nowrap"><input type="checkbox" value="pending" checked onchange="updateDailyChart()"><span style="width:12px;height:12px;border-radius:2px;background:#ff5722;display:inline-block"></span> Pending (line)</label>
           </div>
         </div>
+      </div>
+      <!-- SKU Filter -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <input type="text" id="inv-daily-sku-filter" class="search" placeholder="Filter by SKU... (type or click SKU below)" style="max-width:300px;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        <span id="inv-daily-sku-badge" style="display:none;background:#667eea;color:#fff;padding:4px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer" title="Click to clear filter"></span>
       </div>
       <!-- Chart -->
       <div class="card" style="margin-bottom:16px;padding:12px">
@@ -1164,7 +1170,7 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
         Choose the initial status for all imported orders. Use this when syncing orders from another system to avoid re-processing orders that were already shipped or have tracking.
       </p>
       <label style="font-weight:600;font-size:13px">Initial Order Status</label>
-      <select id="import-order-status" class="input" style="margin-top:4px">
+      <select id="import-order-status" class="input" style="margin-top:4px" onchange="onImportStatusChange()">
         <option value="pending">Pending</option>
         <option value="confirmed" selected>Confirmed (default)</option>
         <option value="processing">Processing</option>
@@ -1180,9 +1186,21 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
       <div id="import-status-warning" style="display:none;margin-top:8px;padding:8px 12px;background:#fef3c7;border-radius:6px;font-size:12px;color:#92400e">
         Orders imported with this status will skip the normal fulfillment flow. Inventory will still be deducted.
       </div>
+      <!-- Label Purchased options -->
+      <div id="import-lp-options" style="display:none;margin-top:12px;padding:12px;background:#f5f3ff;border-radius:8px;border:1px solid #ddd6fe">
+        <p style="font-size:12px;color:#7c3aed;margin-bottom:8px;font-weight:600">Label Purchased Options</p>
+        <label style="font-weight:600;font-size:13px">Customer</label>
+        <select id="import-lp-customer" class="input" style="margin-top:4px">
+          <option value="">-- No customer (use CSV name) --</option>
+        </select>
+        <div style="margin-top:8px">
+          <a href="/api/v1/orders/import-label-purchased-template" class="btn btn-outline btn-sm" download style="font-size:11px">Download Label Purchased CSV Template</a>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
-      <label class="btn btn-primary" style="margin:0">
+      <a id="import-csv-template-link" href="/api/v1/orders/import-template" class="btn btn-outline btn-sm" download style="margin-right:auto">CSV Template</a>
+      <label class="btn btn-primary" id="import-order-btn" style="margin:0">
         Select CSV &amp; Import
         <input type="file" accept=".csv" id="csv-import-orders" style="display:none" onchange="startOrderImport(this)">
       </label>
@@ -1203,6 +1221,7 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
     </div>
   </div>
 </div>
+
 
 <!-- QR CODE MODAL -->
 <div class="modal-overlay" id="qr-modal">
@@ -1603,32 +1622,64 @@ async function importCSV(input) {
   input.value = '';
 }
 
-function openImportOrderModal() {
+async function openImportOrderModal() {
   document.getElementById('import-order-status').value = 'confirmed';
   document.getElementById('import-status-warning').style.display = 'none';
   document.getElementById('csv-import-orders').value = '';
+  onImportStatusChange();
+  // Pre-load customers for label purchased option
+  const sel = document.getElementById('import-lp-customer');
+  while (sel.options.length > 1) sel.remove(1);
+  try {
+    const res = await fetch(API + '/customers');
+    if (res.ok) {
+      const customers = await res.json();
+      customers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name + (c.company ? ` (${c.company})` : '');
+        sel.appendChild(opt);
+      });
+    }
+  } catch {}
   openModal('import-order-modal');
 }
 
-// Show warning for non-standard statuses
-document.addEventListener('DOMContentLoaded', () => {
-  const sel = document.getElementById('import-order-status');
-  if (sel) sel.addEventListener('change', () => {
-    const warn = document.getElementById('import-status-warning');
-    warn.style.display = ['pending','confirmed'].includes(sel.value) ? 'none' : 'block';
-  });
-});
+function onImportStatusChange() {
+  const status = document.getElementById('import-order-status').value;
+  const warn = document.getElementById('import-status-warning');
+  const lpOptions = document.getElementById('import-lp-options');
+  const templateLink = document.getElementById('import-csv-template-link');
+  const importBtn = document.getElementById('import-order-btn');
+  warn.style.display = ['pending','confirmed'].includes(status) ? 'none' : 'block';
+  const isLP = status === 'label_purchased';
+  lpOptions.style.display = isLP ? 'block' : 'none';
+  templateLink.href = isLP ? '/api/v1/orders/import-label-purchased-template' : '/api/v1/orders/import-template';
+  importBtn.style.background = isLP ? '#7c3aed' : '';
+  importBtn.style.borderColor = isLP ? '#7c3aed' : '';
+}
 
 async function startOrderImport(input) {
   const file = input.files[0];
   if (!file) return;
   const status = document.getElementById('import-order-status').value;
+  const isLP = status === 'label_purchased';
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('status', status);
   closeModal('import-order-modal');
   try {
-    const res = await fetch(API + '/orders/import', { method: 'POST', body: formData });
+    let url, importStatus;
+    if (isLP) {
+      const customerId = document.getElementById('import-lp-customer').value;
+      formData.append('customer_id', customerId);
+      url = API + '/orders/import-label-purchased';
+      importStatus = 'label_purchased';
+    } else {
+      formData.append('status', status);
+      url = API + '/orders/import';
+      importStatus = status;
+    }
+    const res = await fetch(url, { method: 'POST', body: formData });
     if (!res.ok) {
       let errMsg;
       try { const e = await res.json(); errMsg = e.detail; } catch { errMsg = await res.text(); }
@@ -1637,7 +1688,7 @@ async function startOrderImport(input) {
       return;
     }
     const result = await res.json();
-    result._importStatus = status;
+    result._importStatus = importStatus;
     showImportReport(result);
     loadOrders();
   } catch(e) { toast('Connection error: ' + e.message, 'error'); }
@@ -2870,6 +2921,7 @@ document.getElementById('search-inventory').addEventListener('input', () => rend
 let invDailyLoaded = false;
 let invDailyChart = null;
 let invDailyChartData = [];
+let invDailySkuFilter = '';
 
 function setDailyRange(range) {
   const end = new Date();
@@ -2880,6 +2932,56 @@ function setDailyRange(range) {
   document.getElementById('inv-daily-start').value = start.toISOString().slice(0, 10);
   document.getElementById('inv-daily-end').value = end.toISOString().slice(0, 10);
 }
+
+function setDailySkuFilter(sku) {
+  invDailySkuFilter = sku || '';
+  const input = document.getElementById('inv-daily-sku-filter');
+  const badge = document.getElementById('inv-daily-sku-badge');
+  input.value = invDailySkuFilter;
+  if (invDailySkuFilter) {
+    badge.style.display = 'inline-block';
+    badge.textContent = 'SKU: ' + invDailySkuFilter + ' ✕';
+  } else {
+    badge.style.display = 'none';
+  }
+  loadDailyChartOnly();
+}
+
+async function loadDailyChartOnly() {
+  const startDate = document.getElementById('inv-daily-start').value;
+  const endDate = document.getElementById('inv-daily-end').value;
+  const params = [];
+  if (startDate) params.push('start_date=' + startDate);
+  if (endDate) params.push('end_date=' + endDate);
+  if (invDailySkuFilter) params.push('sku=' + encodeURIComponent(invDailySkuFilter));
+  const qs = params.length ? '?' + params.join('&') : '';
+  const res = await fetch(API + '/reports/inventory-daily-chart' + qs);
+  const chartResp = await res.json();
+  invDailyChartData = chartResp.chart || [];
+  renderDailyChart();
+}
+
+// SKU filter input: debounced search on Enter or after typing
+let _skuFilterTimer = null;
+document.addEventListener('DOMContentLoaded', function() {
+  const skuInput = document.getElementById('inv-daily-sku-filter');
+  if (skuInput) {
+    skuInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        clearTimeout(_skuFilterTimer);
+        setDailySkuFilter(skuInput.value.trim());
+      }
+    });
+    skuInput.addEventListener('input', function() {
+      clearTimeout(_skuFilterTimer);
+      _skuFilterTimer = setTimeout(() => {
+        if (!skuInput.value.trim()) setDailySkuFilter('');
+      }, 500);
+    });
+  }
+  const badge = document.getElementById('inv-daily-sku-badge');
+  if (badge) badge.addEventListener('click', () => setDailySkuFilter(''));
+});
 
 function toggleMetricDropdown() {
   const dd = document.getElementById('metric-dropdown');
@@ -3011,7 +3113,7 @@ function renderInventoryDaily(data) {
         <tbody>${day.items.map(r => {
           const netColor = r.net_change > 0 ? '#28a745' : r.net_change < 0 ? '#dc3545' : '#666';
           return `<tr>
-            <td><strong>${esc(r.sku)}</strong></td>
+            <td><strong style="cursor:pointer;color:#667eea;text-decoration:underline" onclick="setDailySkuFilter('${esc(r.sku)}')">${esc(r.sku)}</strong></td>
             <td>${esc(r.product_name)}</td>
             <td style="color:#28a745;font-weight:${r.inbound ? '600' : '400'}">${r.inbound ? '+' + r.inbound : '-'}</td>
             <td style="color:#dc3545;font-weight:${r.order ? '600' : '400'}">${r.order || '-'}</td>
@@ -3268,7 +3370,7 @@ async function saveStockRequest() {
   const body = {
     supplier: document.getElementById('sr-supplier').value,
     ship_from: document.getElementById('sr-ship-from').value,
-    tracking_id: document.getElementById('sr-tracking').value || null,
+    tracking_id: document.getElementById('sr-tracking').value || "",
     notes: document.getElementById('sr-notes').value,
     items,
   };
@@ -3302,7 +3404,42 @@ async function viewStockRequest(id) {
     </tr>`;
   }).join('');
 
+  // Build box barcode sections per item
+  let boxesHtml = '';
+  const hasBoxes = sr.items.some(i => i.boxes && i.boxes.length > 0);
+  if (hasBoxes) {
+    boxesHtml = '<h3 style="margin:16px 0 8px;font-size:15px">Box Barcodes</h3>';
+    for (const item of sr.items) {
+      if (!item.boxes || item.boxes.length === 0) continue;
+      const sorted = [...item.boxes].sort((a, b) => a.sequence - b.sequence);
+      boxesHtml += `<div style="margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:#333">
+          ${esc(item.sku)} — ${esc(item.product_name)} ${item.variant_label ? '(' + esc(item.variant_label) + ')' : ''}
+          <span style="color:#999;font-weight:400;margin-left:8px">${item.boxes.length} boxes</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+          ${sorted.map(box => `<div style="border:1px solid #e0e0e0;border-radius:6px;padding:8px;text-align:center;background:${box.received ? '#f0fff0' : '#fff'}">
+            <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase">Box #${box.sequence}</div>
+            <svg class="sr-box-barcode" data-barcode="${esc(box.barcode)}" style="width:100%;height:40px"></svg>
+            <div style="font-family:monospace;font-size:10px;color:#444;margin-top:2px">${esc(box.barcode)}</div>
+            <div style="font-size:10px;margin-top:2px;color:${box.received ? '#28a745' : '#999'}">${box.received ? '✓ Received' : '☐ Pending'}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+  }
+
   document.getElementById('sr-detail-body').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" onclick="window.open(API + '/stock-requests/${sr.id}/print-checklist', '_blank')" style="display:flex;align-items:center;gap:5px">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print Product Checklist
+      </button>
+      <button class="btn btn-outline btn-sm" onclick="window.open(API + '/stock-requests/${sr.id}/print-box-labels', '_blank')" style="display:flex;align-items:center;gap:5px">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Print Box Labels (QR/Barcode)
+      </button>
+    </div>
     <div class="detail-grid">
       <div class="detail-item"><div class="label">Supplier</div><div class="value">${esc(sr.supplier) || '-'}</div></div>
       <div class="detail-item"><div class="label">Status</div><div class="value"><span class="badge badge-${sr.status}">${sr.status}</span></div></div>
@@ -3319,7 +3456,19 @@ async function viewStockRequest(id) {
       <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>Requested</th><th>Received</th><th>Unit Cost</th><th>Boxes</th></tr></thead>
       <tbody>${itemsHtml}</tbody>
     </table>
+    ${boxesHtml}
   `;
+
+  // Render barcodes in modal using JsBarcode if available
+  setTimeout(() => {
+    const svgs = document.querySelectorAll('.sr-box-barcode');
+    if (svgs.length > 0 && typeof JsBarcode !== 'undefined') {
+      svgs.forEach(svg => {
+        const code = svg.getAttribute('data-barcode');
+        if (code) JsBarcode(svg, code, { format: 'CODE128', width: 1.5, height: 35, displayValue: false, margin: 2 });
+      });
+    }
+  }, 100);
 
   let footerHtml = '';
   if (sr.status === 'pending') {

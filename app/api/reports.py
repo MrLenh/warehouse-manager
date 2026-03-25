@@ -58,10 +58,11 @@ def inventory_daily_report(
 def inventory_daily_chart(
     start_date: str | None = Query(None, description="Start date YYYY-MM-DD"),
     end_date: str | None = Query(None, description="End date YYYY-MM-DD"),
+    sku: str | None = Query(None, description="Filter by product/variant SKU"),
     db: Session = Depends(get_db),
 ):
     """Daily inventory chart data with in_warehouse, available, on_hold, in_production, shipped, gap."""
-    return report_service.inventory_daily_chart(db, start_date=start_date, end_date=end_date)
+    return report_service.inventory_daily_chart(db, start_date=start_date, end_date=end_date, sku=sku)
 
 
 @router.get("/inventory-movement")

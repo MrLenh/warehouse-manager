@@ -226,3 +226,559 @@ def scan_box_barcode(barcode: str, db: Session = Depends(get_db)):
     """Scan a box barcode to mark it as received. Returns box and item info."""
     result = stock_request_service.scan_box_barcode(db, barcode)
     return result
+
+
+@router.get("/{sr_id}/print-checklist")
+def print_checklist(sr_id: str, db: Session = Depends(get_db)):
+    """Printable product checklist for stock request receiving with box barcodes."""
+    from html import escape
+
+    from fastapi.responses import HTMLResponse
+
+    sr = stock_request_service.get_stock_request(db, sr_id)
+    if not sr:
+        raise HTTPException(404, "Stock request not found")
+
+    # Build product rows with box barcodes
+    product_rows = ""
+    box_barcode_sections = ""
+    total_qty = 0
+    total_boxes = 0
+
+    for idx, item in enumerate(sr.items):
+        total_qty += item.quantity_requested
+        total_boxes += item.box_count
+
+        product_rows += f"""<tr>
+            <td class="num">{idx + 1}</td>
+            <td class="sku">{escape(item.sku)}</td>
+            <td class="product">{escape(item.product_name)}</td>
+            <td class="variant">{escape(item.variant_label or '—')}</td>
+            <td class="qty">{item.quantity_requested}</td>
+            <td class="boxes">{item.box_count}</td>
+            <td class="cost">${item.unit_cost:.2f}</td>
+            <td class="check"></td>
+        </tr>"""
+
+        # Box barcode section for this product
+        if item.boxes:
+            box_barcode_sections += f"""
+            <div class="box-section">
+                <div class="box-section-header">
+                    <strong>{escape(item.sku)}</strong> — {escape(item.product_name)}
+                    {(' (' + escape(item.variant_label) + ')') if item.variant_label else ''}
+                    <span class="box-count">{len(item.boxes)} boxes</span>
+                </div>
+                <div class="box-grid">"""
+            for box in sorted(item.boxes, key=lambda b: b.sequence):
+                box_barcode_sections += f"""
+                    <div class="box-card">
+                        <div class="box-label">Box #{box.sequence}</div>
+                        <svg class="barcode" data-barcode="{escape(box.barcode)}"></svg>
+                        <div class="box-barcode-text">{escape(box.barcode)}</div>
+                        <div class="box-sku">{escape(item.sku)}</div>
+                        <div class="box-check">☐ Received</div>
+                    </div>"""
+            box_barcode_sections += """
+                </div>
+            </div>"""
+
+    created = sr.created_at.strftime("%Y-%m-%d %H:%M") if sr.created_at else "—"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stock Request Checklist — {escape(sr.request_number)}</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+@page {{
+    size: A4;
+    margin: 10mm 10mm;
+}}
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
+    font-family: -apple-system, 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 16px;
+}}
+
+.header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #333;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}}
+.header h1 {{
+    font-size: 20px;
+    font-weight: 700;
+}}
+.header .subtitle {{
+    font-size: 13px;
+    color: #666;
+    margin-top: 2px;
+}}
+.header .meta {{
+    text-align: right;
+    font-size: 12px;
+    color: #555;
+    line-height: 1.6;
+}}
+
+.info-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+}}
+.info-item .label {{
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    font-weight: 600;
+}}
+.info-item .value {{
+    font-size: 13px;
+    font-weight: 600;
+    color: #222;
+}}
+
+h2 {{
+    font-size: 15px;
+    margin: 20px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #ddd;
+}}
+
+table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 12px;
+}}
+th {{
+    background: #f0f0f0;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}}
+td {{
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    vertical-align: middle;
+}}
+tr:nth-child(even) {{
+    background: #fafafa;
+}}
+.num {{ width: 30px; text-align: center; color: #999; }}
+.sku {{ font-weight: 600; font-family: monospace; font-size: 12px; }}
+.qty, .boxes {{ text-align: center; font-weight: 700; }}
+.cost {{ text-align: right; }}
+.check {{
+    width: 50px;
+    text-align: center;
+    font-size: 18px;
+}}
+.check::after {{
+    content: '☐';
+}}
+
+.totals-row {{
+    font-weight: 700;
+    background: #e8f4fd !important;
+}}
+
+/* Box barcode sections */
+.box-section {{
+    page-break-inside: avoid;
+    margin-bottom: 16px;
+}}
+.box-section-header {{
+    background: #f0f0f0;
+    padding: 6px 10px;
+    border-radius: 4px 4px 0 0;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    font-size: 12px;
+}}
+.box-section-header .box-count {{
+    float: right;
+    color: #666;
+    font-weight: 400;
+}}
+.box-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 1px solid #ddd;
+}}
+.box-card {{
+    padding: 8px;
+    text-align: center;
+    border-right: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+    page-break-inside: avoid;
+}}
+.box-card:nth-child(3n) {{
+    border-right: none;
+}}
+.box-label {{
+    font-size: 10px;
+    font-weight: 700;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}}
+.barcode {{
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: 40px;
+}}
+.box-barcode-text {{
+    font-family: monospace;
+    font-size: 9px;
+    color: #333;
+    margin-top: 1px;
+}}
+.box-sku {{
+    font-size: 9px;
+    color: #888;
+}}
+.box-check {{
+    font-size: 11px;
+    margin-top: 2px;
+    color: #555;
+}}
+
+.notes {{
+    margin-top: 20px;
+    padding: 12px;
+    border: 1px dashed #ccc;
+    border-radius: 6px;
+    min-height: 60px;
+}}
+.notes-title {{
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    font-weight: 600;
+    margin-bottom: 4px;
+}}
+
+.signature-area {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 30px;
+}}
+.sig-block {{
+    border-top: 1px solid #333;
+    padding-top: 4px;
+    font-size: 11px;
+    color: #666;
+}}
+
+/* Print controls */
+.print-bar {{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    z-index: 1000;
+}}
+.print-bar button {{
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    background: #667eea;
+    color: #fff;
+}}
+.print-bar button:hover {{ background: #5a6fd6; }}
+.print-bar span {{ font-size: 13px; }}
+@media print {{
+    .print-bar {{ display: none !important; }}
+    body {{ padding: 0; }}
+}}
+</style>
+</head>
+<body>
+<div class="print-bar">
+    <button onclick="window.print()">Print Checklist</button>
+    <span>Stock Request: {escape(sr.request_number)}</span>
+</div>
+
+<div class="header" style="margin-top:50px">
+    <div>
+        <h1>Stock Request Checklist</h1>
+        <div class="subtitle">Receiving & Inspection Form</div>
+    </div>
+    <div class="meta">
+        <div><strong>{escape(sr.request_number)}</strong></div>
+        <div>Date: {created}</div>
+        <div>Printed: <script>document.write(new Date().toLocaleString('en-US'))</script></div>
+    </div>
+</div>
+
+<div class="info-grid">
+    <div class="info-item"><div class="label">Supplier</div><div class="value">{escape(sr.supplier or '—')}</div></div>
+    <div class="info-item"><div class="label">Ship From</div><div class="value">{escape(sr.ship_from or '—')}</div></div>
+    <div class="info-item"><div class="label">Tracking</div><div class="value">{escape(sr.tracking_id or '—')}</div></div>
+    <div class="info-item"><div class="label">Status</div><div class="value">{escape(sr.status.value if hasattr(sr.status, 'value') else str(sr.status))}</div></div>
+</div>
+
+<h2>Product Checklist ({len(sr.items)} SKUs, {total_qty} units, {total_boxes} boxes)</h2>
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>SKU</th>
+            <th>Product Name</th>
+            <th>Variant</th>
+            <th>Qty</th>
+            <th>Boxes</th>
+            <th>Unit Cost</th>
+            <th>✓</th>
+        </tr>
+    </thead>
+    <tbody>
+        {product_rows}
+        <tr class="totals-row">
+            <td colspan="4" style="text-align:right">TOTAL</td>
+            <td class="qty">{total_qty}</td>
+            <td class="boxes">{total_boxes}</td>
+            <td colspan="2"></td>
+        </tr>
+    </tbody>
+</table>
+
+{"<h2>Box Barcodes</h2>" + box_barcode_sections if box_barcode_sections else ""}
+
+<div class="notes">
+    <div class="notes-title">Notes</div>
+    {escape(sr.notes) if sr.notes else ''}
+</div>
+
+<div class="signature-area">
+    <div class="sig-block">Received by: _________________________ &nbsp; Date: ___________</div>
+    <div class="sig-block">Inspected by: _________________________ &nbsp; Date: ___________</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {{
+    document.querySelectorAll('.barcode').forEach(function(svg) {{
+        var code = svg.getAttribute('data-barcode');
+        if (code) {{
+            JsBarcode(svg, code, {{
+                format: 'CODE128',
+                width: 1.2,
+                height: 35,
+                displayValue: false,
+                margin: 2,
+            }});
+        }}
+    }});
+}});
+</script>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)
+
+
+@router.get("/{sr_id}/print-box-labels")
+def print_box_labels(sr_id: str, db: Session = Depends(get_db)):
+    """Printable box barcode labels (sticker format) for sticking on boxes."""
+    from html import escape
+
+    from fastapi.responses import HTMLResponse
+
+    sr = stock_request_service.get_stock_request(db, sr_id)
+    if not sr:
+        raise HTTPException(404, "Stock request not found")
+
+    # Build label cards
+    label_cards = ""
+    total_boxes = 0
+    for item in sr.items:
+        if not item.boxes:
+            continue
+        for box in sorted(item.boxes, key=lambda b: b.sequence):
+            total_boxes += 1
+            label_cards += f"""
+            <div class="label-card">
+                <div class="label-header">{escape(sr.request_number)}</div>
+                <div class="label-sku">{escape(item.sku)}</div>
+                <div class="label-product">{escape(item.product_name)}{(' - ' + escape(item.variant_label)) if item.variant_label else ''}</div>
+                <svg class="barcode" data-barcode="{escape(box.barcode)}"></svg>
+                <div class="label-barcode-text">{escape(box.barcode)}</div>
+                <div class="label-box-info">Box #{box.sequence} of {item.box_count} | Qty: {item.quantity_requested}</div>
+            </div>"""
+
+    if not label_cards:
+        label_cards = '<p style="padding:40px;text-align:center;color:#999">No boxes found. Create stock request items with box_count &gt; 0.</p>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Box Labels — {escape(sr.request_number)}</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+@page {{
+    size: A4;
+    margin: 8mm;
+}}
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
+    font-family: -apple-system, 'Segoe UI', Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 16px;
+}}
+
+.print-bar {{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    z-index: 1000;
+}}
+.print-bar button {{
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    background: #667eea;
+    color: #fff;
+}}
+.print-bar button:hover {{ background: #5a6fd6; }}
+.print-bar span {{ font-size: 13px; }}
+
+.labels-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 50px;
+}}
+
+.label-card {{
+    border: 2px dashed #aaa;
+    border-radius: 6px;
+    padding: 10px 8px;
+    text-align: center;
+    page-break-inside: avoid;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}}
+.label-header {{
+    font-size: 8px;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}}
+.label-sku {{
+    font-size: 14px;
+    font-weight: 700;
+    font-family: monospace;
+    margin-bottom: 1px;
+}}
+.label-product {{
+    font-size: 10px;
+    color: #555;
+    margin-bottom: 4px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}}
+.barcode {{
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: 45px;
+}}
+.label-barcode-text {{
+    font-family: monospace;
+    font-size: 9px;
+    color: #333;
+    margin-top: 1px;
+}}
+.label-box-info {{
+    font-size: 9px;
+    color: #888;
+    margin-top: 3px;
+}}
+
+@media print {{
+    .print-bar {{ display: none !important; }}
+    body {{ padding: 0; }}
+    .labels-grid {{ margin-top: 0; }}
+    .label-card {{ border-color: #666; }}
+}}
+</style>
+</head>
+<body>
+<div class="print-bar">
+    <button onclick="window.print()">Print Box Labels</button>
+    <span>{escape(sr.request_number)} — {total_boxes} box labels</span>
+</div>
+
+<div class="labels-grid">
+    {label_cards}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {{
+    document.querySelectorAll('.barcode').forEach(function(svg) {{
+        var code = svg.getAttribute('data-barcode');
+        if (code) {{
+            JsBarcode(svg, code, {{
+                format: 'CODE128',
+                width: 1.5,
+                height: 40,
+                displayValue: false,
+                margin: 2,
+            }});
+        }}
+    }});
+}});
+</script>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html)

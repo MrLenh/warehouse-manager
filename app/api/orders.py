@@ -523,6 +523,272 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
     return {"created": created, "created_details": created_details, "errors": errors}
 
 
+LABEL_PURCHASED_CSV_COLUMNS = [
+    "order_name", "customer_name", "ship_to_name",
+    "ship_to_street1", "ship_to_street2", "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
+    "carrier", "service",
+    "sku", "item_name", "quantity",
+    "tracking_number", "label_url", "shipping_cost", "notes",
+]
+
+
+@router.get("/import-label-purchased-template")
+def download_label_purchased_template():
+    """Download CSV template for importing orders with label already purchased."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(LABEL_PURCHASED_CSV_COLUMNS)
+    writer.writerow([
+        "Order A", "Nguyen Van A", "Nguyen Van A",
+        "123 Le Loi", "", "Ho Chi Minh", "HCM", "70000", "US",
+        "USPS", "GroundAdvantage",
+        "SP-001", "San pham A", "2",
+        "9400111899223100001", "https://labels.example.com/label1.pdf", "5.50", "",
+    ])
+    writer.writerow([
+        "Order B", "Nguyen Van A", "Tran Thi B",
+        "456 Hai Ba Trung", "Phong 302", "Ha Noi", "HN", "10000", "US",
+        "UPS", "Ground",
+        "SP-002-RED-M", "San pham B", "1",
+        "1Z999AA10123456784", "https://labels.example.com/label2.pdf", "8.50", "Fragile",
+    ])
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=import_label_purchased_template.csv"},
+    )
+
+
+@router.post("/import-label-purchased")
+def import_label_purchased(
+    file: UploadFile,
+    customer_id: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Import orders with label already purchased for a specific customer.
+    All imported orders get status=label_purchased and are linked to the customer."""
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported")
+
+    # Validate customer
+    from app.models.customer import Customer
+    customer = None
+    if customer_id:
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            raise HTTPException(400, f"Customer not found: {customer_id}")
+
+    try:
+        content = file.file.read().decode("utf-8-sig")
+    except Exception as e:
+        raise HTTPException(400, f"Cannot read CSV file: {e}")
+    reader = csv.DictReader(io.StringIO(content))
+
+    order_groups: dict[str, dict] = {}
+    group_order: list[str] = []
+    errors = []
+    auto_counter = 0
+
+    for row_num, row in enumerate(reader, start=2):
+        order_name = (row.get("order_name") or "").strip()
+        customer_name = (row.get("customer_name") or "").strip()
+        ship_to_name = (row.get("ship_to_name") or "").strip()
+        sku = (row.get("sku") or "").strip()
+        tracking_number = (row.get("tracking_number") or "").strip()
+
+        if not sku:
+            errors.append({"row": row_num, "order_name": order_name or "(no name)", "error": "SKU is required"})
+            continue
+
+        if not tracking_number and order_name not in order_groups:
+            errors.append({"row": row_num, "order_name": order_name or "(no name)", "error": "tracking_number is required for label_purchased orders"})
+            continue
+
+        try:
+            quantity = int(row.get("quantity") or 1)
+        except (ValueError, TypeError):
+            errors.append({"row": row_num, "order_name": order_name or "(no name)", "error": f"Invalid quantity '{row.get('quantity')}'"})
+            continue
+        if quantity < 1:
+            quantity = 1
+
+        if not order_name:
+            auto_counter += 1
+            order_name = f"__auto_{auto_counter}_row{row_num}"
+
+        # Use customer name from DB if available, fallback to CSV
+        effective_customer_name = customer.name if customer else customer_name
+        if not effective_customer_name and ship_to_name:
+            effective_customer_name = ship_to_name
+        if not ship_to_name and effective_customer_name:
+            ship_to_name = effective_customer_name
+
+        if order_name not in order_groups:
+            if not effective_customer_name:
+                errors.append({"row": row_num, "order_name": order_name or "(no name)", "error": "customer_name or ship_to_name is required"})
+                continue
+
+            raw_cost = (row.get("shipping_cost") or "").strip()
+            try:
+                shipping_cost = float(raw_cost) if raw_cost else 0.0
+            except ValueError:
+                shipping_cost = 0.0
+
+            order_groups[order_name] = {
+                "customer_name": effective_customer_name,
+                "ship_to_name": ship_to_name or effective_customer_name,
+                "ship_to_street1": (row.get("ship_to_street1") or "").strip(),
+                "ship_to_street2": (row.get("ship_to_street2") or "").strip(),
+                "ship_to_city": (row.get("ship_to_city") or "").strip(),
+                "ship_to_state": (row.get("ship_to_state") or "").strip(),
+                "ship_to_zip": (row.get("ship_to_zip") or "").strip(),
+                "ship_to_country": (row.get("ship_to_country") or "").strip() or "US",
+                "carrier": (row.get("carrier") or "").strip(),
+                "service": (row.get("service") or "").strip(),
+                "notes": (row.get("notes") or "").strip(),
+                "display_order_name": (row.get("order_name") or "").strip(),
+                "shipping_cost": shipping_cost,
+                "tracking_number": tracking_number,
+                "label_url": (row.get("label_url") or "").strip(),
+                "items": [],
+            }
+            group_order.append(order_name)
+
+        item_name = (row.get("item_name") or "").strip()
+        order_groups[order_name]["items"].append({
+            "sku": sku,
+            "item_name": item_name,
+            "quantity": quantity,
+            "row": row_num,
+        })
+
+    # Process each order group
+    from app.models.order import Order
+    from app.services import product_service
+
+    # Pre-check duplicate order_names
+    display_names = [order_groups[k]["display_order_name"] for k in group_order if order_groups[k]["display_order_name"]]
+    if display_names:
+        existing = db.query(Order.order_name).filter(Order.order_name.in_(display_names)).all()
+        existing_names = {o.order_name for o in existing}
+        for dup in existing_names:
+            errors.append({"order_name": dup, "error": f"Order name '{dup}' already exists"})
+        group_order = [k for k in group_order if order_groups[k]["display_order_name"] not in existing_names]
+
+    created = 0
+    created_details = []
+
+    for order_name in group_order:
+        group = order_groups[order_name]
+
+        # Resolve SKUs
+        resolved_items = []
+        has_error = False
+        for item in group["items"]:
+            sku_val = item["sku"]
+            row_num = item["row"]
+
+            variant = product_service.get_variant_by_sku(db, sku_val)
+            if variant:
+                product = product_service.get_product(db, variant.product_id)
+                resolved_items.append({
+                    "product_id": variant.product_id,
+                    "variant_id": variant.id,
+                    "quantity": item["quantity"],
+                    "resolved_name": item["item_name"] or f"{product.name} ({variant.variant_sku})",
+                    "item_name": item["item_name"],
+                    "sku": sku_val,
+                })
+                continue
+
+            product = product_service.get_product_by_sku(db, sku_val)
+            if product:
+                if product.variants and len(product.variants) > 0:
+                    variant_skus = ", ".join(v.variant_sku for v in product.variants[:5])
+                    more = f" ... (+{len(product.variants)-5})" if len(product.variants) > 5 else ""
+                    errors.append({"row": row_num, "order_name": group["display_order_name"] or order_name, "sku": sku_val, "error": f"Product has variants, use variant_sku: {variant_skus}{more}"})
+                    has_error = True
+                    break
+                resolved_items.append({
+                    "product_id": product.id,
+                    "variant_id": "",
+                    "quantity": item["quantity"],
+                    "resolved_name": item["item_name"] or product.name,
+                    "item_name": item["item_name"],
+                    "sku": sku_val,
+                })
+                continue
+
+            errors.append({"row": row_num, "order_name": group["display_order_name"] or order_name, "sku": sku_val, "error": f"SKU '{sku_val}' not found"})
+            has_error = True
+            break
+
+        if has_error or not resolved_items:
+            continue
+
+        from app.schemas.order import AddressInput, OrderCreate, OrderItemCreate
+
+        display_name = group["display_order_name"]
+        order_data = OrderCreate(
+            order_name=display_name,
+            customer_name=group["customer_name"],
+            shop_name="",
+            customer_email="",
+            customer_phone="",
+            ship_to=AddressInput(
+                name=group["ship_to_name"] or group["customer_name"],
+                street1=group["ship_to_street1"],
+                city=group["ship_to_city"],
+                state=group["ship_to_state"],
+                zip=group["ship_to_zip"],
+                country=group["ship_to_country"],
+            ),
+            items=[
+                OrderItemCreate(
+                    product_id=ri["product_id"],
+                    variant_id=ri["variant_id"],
+                    quantity=ri["quantity"],
+                    name="",
+                    item_name=ri["item_name"],
+                )
+                for ri in resolved_items
+            ],
+            carrier=group["carrier"],
+            service=group["service"],
+            notes=group["notes"],
+            status="label_purchased",
+        )
+
+        try:
+            order = order_service.create_order(db, order_data)
+            # Set label/tracking info
+            order.tracking_number = group["tracking_number"]
+            order.label_url = group["label_url"]
+            if group["shipping_cost"]:
+                order.shipping_cost = group["shipping_cost"]
+                order.total_price = order.total_price + group["shipping_cost"]
+            if customer:
+                order.customer_id = customer.id
+            db.commit()
+            db.refresh(order)
+
+            created += 1
+            created_details.append({
+                "order_name": display_name or order_name,
+                "tracking_number": group["tracking_number"],
+                "items": [
+                    {"sku": ri["sku"], "item_name": ri["resolved_name"], "quantity": ri["quantity"]}
+                    for ri in resolved_items
+                ],
+            })
+        except ValueError as e:
+            skus = ", ".join(ri["sku"] for ri in resolved_items)
+            errors.append({"order_name": display_name or order_name, "sku": skus, "error": str(e)})
+
+    return {"created": created, "created_details": created_details, "errors": errors}
+
+
 @router.post("/merge-by-name")
 def merge_orders_by_name(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Merge all orders that share the same order_name into a single order per name."""

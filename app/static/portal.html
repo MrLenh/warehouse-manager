@@ -147,8 +147,8 @@ a.track-link:hover{text-decoration:underline}
           <option value="shipped">Shipped</option><option value="in_transit">In Transit</option>
           <option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
         </select>
-        <a href="/api/v1/portal/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
-        <label class="btn btn-success btn-sm" style="margin:0;cursor:pointer">Import CSV<input type="file" accept=".csv" id="csv-import-file" style="display:none" onchange="importCSV(this)"></label>
+        <button class="btn btn-outline btn-sm" onclick="exportOrders()">Export CSV</button>
+        <button class="btn btn-success btn-sm" onclick="openImportModal()">Import CSV</button>
         <button class="btn btn-primary btn-sm" onclick="openCreateOrderModal()">+ New Order</button>
       </div>
     </div>
@@ -261,6 +261,47 @@ a.track-link:hover{text-decoration:underline}
       <button class="btn btn-outline" onclick="closeModal('sr-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="submitStockRequest()">Create Request</button>
     </div>
+  </div>
+</div>
+
+<!-- Import Config modal -->
+<div class="modal-overlay" id="import-config-modal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <h2>Import Orders from CSV</h2>
+      <button class="modal-close" onclick="closeModal('import-config-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+        Choose the initial status for all imported orders.
+      </p>
+      <label style="font-weight:600;font-size:13px">Initial Order Status</label>
+      <select id="import-status" class="input" style="margin-top:4px;width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px" onchange="onImportStatusChange()">
+        <option value="confirmed" selected>Confirmed (default)</option>
+        <option value="label_purchased">Label Purchased</option>
+      </select>
+      <div id="import-lp-info" style="display:none;margin-top:8px;padding:8px 12px;background:#f5f3ff;border-radius:6px;font-size:12px;color:#7c3aed">
+        CSV must include <strong>tracking_number</strong> column. Optionally include <strong>label_url</strong> and <strong>shipping_cost</strong>.
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:space-between">
+      <a id="import-template-link" href="/api/v1/portal/orders/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
+      <label class="btn btn-primary" id="import-submit-btn" style="margin:0;cursor:pointer">
+        Select CSV &amp; Import
+        <input type="file" accept=".csv" id="csv-import-file" style="display:none" onchange="importCSV(this)">
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- Order Detail modal -->
+<div class="modal-overlay" id="order-detail-modal">
+  <div class="modal" style="width:700px">
+    <div class="modal-header">
+      <h2 id="order-detail-title">Order Detail</h2>
+      <button class="modal-close" onclick="closeModal('order-detail-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="order-detail-body" style="max-height:60vh;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -378,7 +419,7 @@ async function loadOrders() {
       const trackHtml = o.tracking_number
         ? (o.tracking_url ? `<a class="track-link" href="${esc(o.tracking_url)}" target="_blank">${esc(o.tracking_number)}</a>` : esc(o.tracking_number))
         : '<span style="color:#ccc">\u2014</span>';
-      return `<tr>
+      return `<tr onclick="viewOrder('${o.id}')" style="cursor:pointer">
         <td><strong>${esc(o.order_number)}</strong></td>
         <td>${esc(o.order_name)}</td>
         <td>${esc(o.shop_name || '')}</td>
@@ -461,11 +502,31 @@ async function submitOrder() {
 }
 
 // --- CSV Import ---
+function openImportModal() {
+  document.getElementById('import-status').value = 'confirmed';
+  document.getElementById('csv-import-file').value = '';
+  onImportStatusChange();
+  openModal('import-config-modal');
+}
+
+function onImportStatusChange() {
+  const status = document.getElementById('import-status').value;
+  const lpInfo = document.getElementById('import-lp-info');
+  const btn = document.getElementById('import-submit-btn');
+  const isLP = status === 'label_purchased';
+  lpInfo.style.display = isLP ? 'block' : 'none';
+  btn.style.background = isLP ? '#7c3aed' : '';
+  btn.style.borderColor = isLP ? '#7c3aed' : '';
+}
+
 async function importCSV(input) {
   const file = input.files[0];
   if (!file) return;
+  const status = document.getElementById('import-status').value;
   const form = new FormData();
   form.append('file', file);
+  form.append('status', status);
+  closeModal('import-config-modal');
   try {
     const res = await fetch(API + '/orders/import', { method: 'POST', body: form });
     const data = await res.json();
@@ -479,6 +540,89 @@ async function importCSV(input) {
     }
   } catch (err) { toast(err.message, 'error'); }
   input.value = '';
+}
+
+// --- Order Detail ---
+async function viewOrder(orderId) {
+  try {
+    const res = await fetch(API + '/orders/' + orderId);
+    if (!res.ok) { toast('Cannot load order', 'error'); return; }
+    const o = await res.json();
+    document.getElementById('order-detail-title').textContent = o.order_number;
+    const statusLabel = o.status.replace(/_/g, ' ');
+    let html = '';
+
+    // Order info
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">`;
+    html += `<div style="padding:12px;background:#f9fafb;border-radius:8px">`;
+    html += `<h3 style="font-size:13px;color:#6b7280;margin:0 0 8px">Order Info</h3>`;
+    html += `<div style="font-size:13px"><strong>Name:</strong> ${esc(o.order_name) || '—'}</div>`;
+    html += `<div style="font-size:13px"><strong>Shop:</strong> ${esc(o.shop_name) || '—'}</div>`;
+    html += `<div style="font-size:13px"><strong>Status:</strong> <span class="badge badge-${o.status}">${statusLabel}</span></div>`;
+    html += `<div style="font-size:13px"><strong>Customer:</strong> ${esc(o.customer_name) || '—'}</div>`;
+    html += `<div style="font-size:13px"><strong>Date:</strong> ${fmtDate(o.created_at)}</div>`;
+    if (o.notes) html += `<div style="font-size:13px;margin-top:4px"><strong>Notes:</strong> ${esc(o.notes)}</div>`;
+    html += `</div>`;
+
+    // Ship to
+    html += `<div style="padding:12px;background:#f9fafb;border-radius:8px">`;
+    html += `<h3 style="font-size:13px;color:#6b7280;margin:0 0 8px">Ship To</h3>`;
+    html += `<div style="font-size:13px">${esc(o.ship_to_name)}</div>`;
+    if (o.ship_to_street1) html += `<div style="font-size:13px">${esc(o.ship_to_street1)}</div>`;
+    if (o.ship_to_street2) html += `<div style="font-size:13px">${esc(o.ship_to_street2)}</div>`;
+    html += `<div style="font-size:13px">${esc(o.ship_to_city)}, ${esc(o.ship_to_state)} ${esc(o.ship_to_zip)}</div>`;
+    html += `<div style="font-size:13px">${esc(o.ship_to_country)}</div>`;
+    if (o.carrier) html += `<div style="font-size:13px;margin-top:4px"><strong>Carrier:</strong> ${esc(o.carrier)} ${esc(o.service)}</div>`;
+    html += `</div>`;
+    html += `</div>`;
+
+    // Tracking
+    if (o.tracking_number) {
+      html += `<div style="margin-bottom:12px;padding:8px 12px;background:#ecfdf5;border-radius:6px;font-size:13px"><strong>Tracking:</strong> `;
+      html += o.tracking_url ? `<a href="${esc(o.tracking_url)}" target="_blank">${esc(o.tracking_number)}</a>` : esc(o.tracking_number);
+      if (o.label_url) html += ` | <a href="${esc(o.label_url)}" target="_blank">View Label</a>`;
+      html += `</div>`;
+    }
+
+    // Items
+    html += `<h3 style="font-size:14px;margin:12px 0 8px;color:#555">Items</h3>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:13px">`;
+    html += `<thead><tr style="background:#f9fafb">
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">SKU</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Item Name</th>
+      <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb">Product</th>
+      <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb">Qty</th>
+      <th style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">Price</th>
+    </tr></thead><tbody>`;
+    for (const item of o.items) {
+      html += `<tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:6px 8px;font-family:monospace;font-size:12px">${esc(item.sku)}</td>
+        <td style="padding:6px 8px">${esc(item.name) || '—'}</td>
+        <td style="padding:6px 8px">${esc(item.product_name)}${item.variant_label ? ' <span style="color:#888">(' + esc(item.variant_label) + ')</span>' : ''}</td>
+        <td style="padding:6px 8px;text-align:center">${item.quantity}</td>
+        <td style="padding:6px 8px;text-align:right">$${(item.unit_price * item.quantity).toFixed(2)}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+
+    // Totals
+    html += `<div style="margin-top:12px;text-align:right;font-size:14px">`;
+    if (o.shipping_cost) html += `<div>Shipping: $${o.shipping_cost.toFixed(2)}</div>`;
+    if (o.processing_fee) html += `<div>Processing: $${o.processing_fee.toFixed(2)}</div>`;
+    html += `<div style="font-weight:700;font-size:16px;margin-top:4px">Total: $${o.total_price.toFixed(2)}</div>`;
+    html += `</div>`;
+
+    document.getElementById('order-detail-body').innerHTML = html;
+    openModal('order-detail-modal');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+// --- Export Orders ---
+function exportOrders() {
+  const status = document.getElementById('order-status-filter').value;
+  let url = API + '/orders/export';
+  if (status) url += '?status=' + encodeURIComponent(status);
+  window.location.href = url;
 }
 
 function showImportReport(result) {
