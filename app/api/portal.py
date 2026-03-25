@@ -347,16 +347,29 @@ def get_order(order_id: str, user: User = Depends(get_current_user), db: Session
         "order_number": order.order_number,
         "order_name": order.order_name or "",
         "shop_name": order.shop_name or "",
+        "customer_name": order.customer_name or "",
         "status": order.status.value if hasattr(order.status, "value") else str(order.status),
         "tracking_number": order.tracking_number or "",
         "tracking_url": order.tracking_url or "",
+        "label_url": order.label_url or "",
+        "carrier": order.carrier or "",
+        "service": order.service or "",
+        "ship_to_name": order.ship_to_name or "",
+        "ship_to_street1": order.ship_to_street1 or "",
+        "ship_to_street2": order.ship_to_street2 or "",
+        "ship_to_city": order.ship_to_city or "",
+        "ship_to_state": order.ship_to_state or "",
+        "ship_to_zip": order.ship_to_zip or "",
+        "ship_to_country": order.ship_to_country or "",
         "shipping_cost": order.shipping_cost,
         "processing_fee": order.processing_fee,
         "total_price": order.total_price,
+        "notes": order.notes or "",
         "created_at": order.created_at.isoformat() if order.created_at else "",
         "items": [
             {
                 "sku": i.sku,
+                "name": i.name or "",
                 "product_name": i.product_name,
                 "variant_label": i.variant_label or "",
                 "quantity": i.quantity,
@@ -366,6 +379,98 @@ def get_order(order_id: str, user: User = Depends(get_current_user), db: Session
             for i in order.items
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Export orders
+# ---------------------------------------------------------------------------
+
+PORTAL_EXPORT_COLUMNS = [
+    "order_number", "order_name", "status", "shop_name",
+    "customer_name",
+    "ship_to_name", "ship_to_street1", "ship_to_street2",
+    "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
+    "carrier", "service",
+    "sku", "item_name", "product_name", "quantity", "unit_price",
+    "shipping_cost", "processing_fee", "total_price",
+    "tracking_number", "tracking_url", "label_url",
+    "notes", "created_at",
+]
+
+
+@router.get("/orders/export")
+def export_orders(
+    status: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from fastapi.responses import StreamingResponse
+
+    customer = _require_customer(user, db)
+    query = db.query(Order).filter(
+        (Order.customer_id == customer.id)
+        | (sa_func.lower(Order.customer_name) == customer.name.lower().strip())
+    )
+    if status:
+        query = query.filter(Order.status == status)
+    orders = query.order_by(Order.created_at.desc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(PORTAL_EXPORT_COLUMNS)
+
+    for order in orders:
+        status_val = order.status.value if hasattr(order.status, "value") else str(order.status)
+        if not order.items:
+            writer.writerow([
+                order.order_number, order.order_name, status_val, order.shop_name,
+                order.customer_name,
+                order.ship_to_name, order.ship_to_street1, order.ship_to_street2,
+                order.ship_to_city, order.ship_to_state, order.ship_to_zip, order.ship_to_country,
+                order.carrier, order.service,
+                "", "", "", "", "",
+                order.shipping_cost, order.processing_fee, order.total_price,
+                order.tracking_number, order.tracking_url, order.label_url,
+                order.notes, order.created_at.strftime("%Y-%m-%d %H:%M:%S") if order.created_at else "",
+            ])
+        else:
+            for i, item in enumerate(order.items):
+                writer.writerow([
+                    order.order_number if i == 0 else "",
+                    order.order_name if i == 0 else "",
+                    status_val if i == 0 else "",
+                    order.shop_name if i == 0 else "",
+                    order.customer_name if i == 0 else "",
+                    order.ship_to_name if i == 0 else "",
+                    order.ship_to_street1 if i == 0 else "",
+                    order.ship_to_street2 if i == 0 else "",
+                    order.ship_to_city if i == 0 else "",
+                    order.ship_to_state if i == 0 else "",
+                    order.ship_to_zip if i == 0 else "",
+                    order.ship_to_country if i == 0 else "",
+                    order.carrier if i == 0 else "",
+                    order.service if i == 0 else "",
+                    item.sku, item.name, item.product_name, item.quantity, item.unit_price,
+                    order.shipping_cost if i == 0 else "",
+                    order.processing_fee if i == 0 else "",
+                    order.total_price if i == 0 else "",
+                    order.tracking_number if i == 0 else "",
+                    order.tracking_url if i == 0 else "",
+                    order.label_url if i == 0 else "",
+                    order.notes if i == 0 else "",
+                    order.created_at.strftime("%Y-%m-%d %H:%M:%S") if i == 0 and order.created_at else "",
+                ])
+
+    buf.seek(0)
+    filename = "orders_export"
+    if status:
+        filename += f"_{status}"
+    filename += ".csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 # ---------------------------------------------------------------------------
