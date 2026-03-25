@@ -143,7 +143,7 @@ PORTAL_CSV_COLUMNS = [
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
-    "sku", "item_name", "quantity", "notes",
+    "sku", "name", "item_name", "quantity", "notes",
     "tracking_number", "label_url", "shipping_cost",
 ]
 
@@ -261,6 +261,7 @@ def import_orders(
 
         order_groups[order_name]["items"].append({
             "sku": sku,
+            "name": (row.get("name") or "").strip(),
             "item_name": (row.get("item_name") or "").strip(),
             "quantity": quantity,
             "row": row_num,
@@ -318,7 +319,7 @@ def import_orders(
                 zip=group["ship_to_zip"],
                 country=group["ship_to_country"],
             ),
-            items=[OrderItemCreate(product_id=ri["product_id"], variant_id=ri["variant_id"], quantity=ri["quantity"], item_name=ri.get("item_name", "")) for ri in resolved_items],
+            items=[OrderItemCreate(product_id=ri["product_id"], variant_id=ri["variant_id"], quantity=ri["quantity"], name=ri.get("name", ""), item_name=ri.get("item_name", "")) for ri in resolved_items],
             carrier=group["carrier"],
             service=group["service"],
             notes=group["notes"],
