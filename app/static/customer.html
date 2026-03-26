@@ -625,10 +625,14 @@ function renderPreview(p) {
 }
 
 async function createInvoice() {
+  const btn = document.getElementById('btn-create-inv');
+  if (btn.disabled) return;
+  btn.disabled = true;
+
   const custId = document.getElementById('inv-customer').value;
   const dateTo = document.getElementById('inv-date-to').value;
   const name = document.getElementById('inv-name').value.trim();
-  if (!custId || !dateTo || !name) { toast('Fill all required fields', 'error'); return; }
+  if (!custId || !dateTo || !name) { toast('Fill all required fields', 'error'); btn.disabled = false; return; }
 
   const body = {customer_id: custId, date_to: dateTo, invoice_name: name, notes: document.getElementById('inv-notes').value.trim()};
   const sf = document.getElementById('inv-stock-fee').value;
@@ -642,12 +646,12 @@ async function createInvoice() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body),
     });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); btn.disabled = false; return; }
     const inv = await res.json();
     toast('Invoice ' + inv.invoice_number + ' created');
     closeInvModal();
     loadInvoices();
-  } catch (e) { toast(e.message, 'error'); }
+  } catch (e) { toast(e.message, 'error'); btn.disabled = false; }
 }
 
 // ---- Invoice Detail ----
