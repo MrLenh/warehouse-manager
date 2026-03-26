@@ -284,6 +284,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
         <button class="btn btn-outline btn-sm" onclick="exportOrders()">Export CSV</button>
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
+        <button class="btn btn-outline btn-sm" onclick="openUpdateNamesModal()" style="border-color:#7c3aed;color:#7c3aed">Update Item Names</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
         <button class="btn btn-primary btn-sm" id="btn-create-label-batch" onclick="createLabelBatch()" style="display:none">Create Label Batch (<span id="label-batch-count">0</span>)</button>
         <button class="btn btn-sm" id="btn-mark-shipped" onclick="batchMarkShipped()" style="display:none;background:#17a2b8;color:#fff">Mark Shipped (<span id="mark-shipped-count">0</span>)</button>
@@ -1223,6 +1224,30 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
 </div>
 
 
+<!-- UPDATE ITEM NAMES MODAL -->
+<div class="modal-overlay" id="update-names-modal">
+  <div class="modal" style="width:500px">
+    <div class="modal-header">
+      <h2>Update Item Names</h2>
+      <button class="modal-close" onclick="closeModal('update-names-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+        Download the CSV template with current items, update the <strong>name</strong> column, then upload to batch update item names.
+      </p>
+      <div style="margin-bottom:12px">
+        <a id="update-names-template-link" href="/api/v1/orders/update-names-template" class="btn btn-outline btn-sm" download>Download CSV Template</a>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <label class="btn btn-primary" style="margin:0;background:#7c3aed;border-color:#7c3aed;cursor:pointer">
+        Select CSV &amp; Update
+        <input type="file" accept=".csv" id="csv-update-names" style="display:none" onchange="uploadUpdateNames(this)">
+      </label>
+    </div>
+  </div>
+</div>
+
 <!-- QR CODE MODAL -->
 <div class="modal-overlay" id="qr-modal">
   <div class="modal" style="width:900px">
@@ -1692,6 +1717,34 @@ async function startOrderImport(input) {
     showImportReport(result);
     loadOrders();
   } catch(e) { toast('Connection error: ' + e.message, 'error'); }
+  input.value = '';
+}
+
+// --- Update Item Names ---
+function openUpdateNamesModal() {
+  document.getElementById('csv-update-names').value = '';
+  openModal('update-names-modal');
+}
+
+async function uploadUpdateNames(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  closeModal('update-names-modal');
+  try {
+    const res = await fetch(API + '/orders/update-names', { method: 'POST', body: form });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`Updated ${data.updated} item names` + (data.errors.length ? `, ${data.errors.length} errors` : ''));
+      if (data.errors.length) {
+        console.log('Update names errors:', data.errors);
+      }
+      loadOrders();
+    } else {
+      toast(data.detail || 'Update failed', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
   input.value = '';
 }
 
