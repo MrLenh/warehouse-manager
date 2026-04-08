@@ -196,6 +196,52 @@ def delete_variant(db: Session, variant_id: str) -> bool:
     return True
 
 
+def delete_product(db: Session, product_id: str) -> dict:
+    """Delete a product and all related records (variants, batches, logs).
+    Cannot delete if referenced by orders or active stock requests."""
+    from app.models.order import OrderItem
+    from app.models.stock_request import StockRequest, StockRequestItem, StockRequestStatus
+    from app.models.stock_batch import StockBatch
+    from app.models.inventory_log import InventoryLog
+
+    product = get_product(db, product_id)
+    if not product:
+        return {"deleted": False, "error": "Product not found"}
+
+    # Check references in orders
+    order_count = db.query(OrderItem).filter(OrderItem.product_id == product_id).count()
+    if order_count > 0:
+        return {"deleted": False, "error": f"Cannot delete: product is used in {order_count} order item(s)"}
+
+    # Check active stock requests
+    active_sr = (
+        db.query(StockRequestItem)
+        .join(StockRequest)
+        .filter(
+            StockRequestItem.product_id == product_id,
+            StockRequest.status.in_([
+                StockRequestStatus.DRAFT,
+                StockRequestStatus.PENDING,
+                StockRequestStatus.APPROVED,
+                StockRequestStatus.RECEIVING,
+            ]),
+        )
+        .count()
+    )
+    if active_sr > 0:
+        return {"deleted": False, "error": f"Cannot delete: product is in {active_sr} active stock request(s)"}
+
+    # Delete related records
+    db.query(StockBatch).filter(StockBatch.product_id == product_id).delete()
+    db.query(InventoryLog).filter(InventoryLog.product_id == product_id).delete()
+    # Stock request items from completed/cancelled SRs
+    db.query(StockRequestItem).filter(StockRequestItem.product_id == product_id).delete()
+
+    db.delete(product)
+    db.commit()
+    return {"deleted": True, "product_id": product_id}
+
+
 def adjust_variant_inventory(db: Session, variant_id: str, data: VariantInventoryAdjust) -> Variant | None:
     variant = get_variant(db, variant_id)
     if not variant:

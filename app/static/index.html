@@ -1452,6 +1452,7 @@ function renderProducts(list) {
           ${p.qr_code_path
             ? `<button class="btn btn-sm btn-success" onclick="openQrModal('${p.id}')">QR</button>`
             : `<button class="btn btn-sm btn-danger" onclick="generateQr('${p.id}')">Gen QR</button>`}
+          ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}','${esc(p.sku)}')">Delete</button>` : ''}
         </td>
       </tr>`;}).join('');
 }
@@ -1960,6 +1961,20 @@ async function generateQr(productId) {
     const e = await res.json();
     toast(e.detail || 'Error generating QR', 'error');
   }
+}
+
+async function deleteProduct(productId, sku) {
+  if (!confirm(`Delete product "${sku}"? This cannot be undone.\n\nAll inventory logs and stock batches for this product will also be deleted.`)) return;
+  try {
+    const res = await fetch(API + '/products/' + productId, { method: 'DELETE' });
+    if (res.ok) {
+      toast(`Product "${sku}" deleted`);
+      await loadProducts();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Cannot delete product', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 function openQrModal(productId) {

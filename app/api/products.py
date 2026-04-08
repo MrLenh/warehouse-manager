@@ -10,7 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.database import get_db
+from app.models.user import User
 from app.schemas.product import (
     InventoryAdjust,
     ProductCreate,
@@ -286,6 +288,21 @@ def update_product(product_id: str, data: ProductUpdate, db: Session = Depends(g
     if not product:
         raise HTTPException(404, "Product not found")
     return product
+
+
+@router.delete("/{product_id}")
+def delete_product(
+    product_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a product. Super admin only."""
+    if user.role != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    result = product_service.delete_product(db, product_id)
+    if not result["deleted"]:
+        raise HTTPException(400, result.get("error") or "Cannot delete product")
+    return result
 
 
 @router.post("/{product_id}/inventory", response_model=ProductOut)
