@@ -462,6 +462,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
             ship_to=AddressInput(
                 name=group["ship_to_name"] or group["customer_name"],
                 street1=group["ship_to_street1"],
+                street2=group["ship_to_street2"],
                 city=group["ship_to_city"],
                 state=group["ship_to_state"],
                 zip=group["ship_to_zip"],
@@ -743,6 +744,7 @@ def import_label_purchased(
             ship_to=AddressInput(
                 name=group["ship_to_name"] or group["customer_name"],
                 street1=group["ship_to_street1"],
+                street2=group["ship_to_street2"],
                 city=group["ship_to_city"],
                 state=group["ship_to_state"],
                 zip=group["ship_to_zip"],
