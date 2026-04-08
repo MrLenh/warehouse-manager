@@ -74,6 +74,7 @@ class OrderItemOut(BaseModel):
     quantity: int
     unit_price: float
     product_cost: float = 0.0
+    cogs_total: float = 0.0
     image_url: str = ""
 
     model_config = {"from_attributes": True}
