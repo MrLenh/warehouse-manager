@@ -20,10 +20,11 @@ class StockBatch(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     product_id: Mapped[str] = mapped_column(String, ForeignKey("products.id"), nullable=False, index=True)
     variant_id: Mapped[str] = mapped_column(String, default="", index=True)
-    stock_request_id: Mapped[str] = mapped_column(String, ForeignKey("stock_requests.id"), nullable=False)
+    stock_request_id: Mapped[str | None] = mapped_column(String, ForeignKey("stock_requests.id"), nullable=True, default=None)
     unit_cost: Mapped[float] = mapped_column(Float, nullable=False)
     quantity_received: Mapped[int] = mapped_column(Integer, nullable=False)
     quantity_remaining: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String, default="stock_request")  # stock_request | inbound | adjustment
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
