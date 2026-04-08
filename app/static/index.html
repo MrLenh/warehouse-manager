@@ -1009,8 +1009,18 @@ tr:hover{background:#f8f9ff}
       <input type="hidden" id="inv-product-id">
       <input type="hidden" id="inv-variant-id">
       <div id="inv-modal-label" style="font-size:13px;color:#888;margin-bottom:12px"></div>
+      <div class="form-group">
+        <label>Reason</label>
+        <select id="inv-reason" onchange="onInvReasonChange()" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+          <option value="inbound">Inbound (nhập kho — tạo batch mới)</option>
+          <option value="adjustment" selected>Adjustment (điều chỉnh / mất hàng — FIFO consume)</option>
+        </select>
+      </div>
       <div class="form-group"><label>Quantity (+ to add / - to remove)</label><input type="number" id="inv-qty" placeholder="e.g. 10 or -5"></div>
-      <div class="form-group"><label>Reason</label><input type="text" id="inv-reason" placeholder="e.g. restock"></div>
+      <div class="form-group" id="inv-cost-group">
+        <label>Unit Cost ($) <span style="font-size:11px;color:#888" id="inv-cost-hint">(required for inbound)</span></label>
+        <input type="number" id="inv-cost" step="0.01" min="0" placeholder="0.00">
+      </div>
       <div class="form-group"><label>Note</label><input type="text" id="inv-note" placeholder="Details"></div>
     </div>
     <div class="modal-footer">
@@ -1885,7 +1895,7 @@ function renderVariantsTable(variants) {
           <td>${esc(v.location)}</td>
           <td class="actions-cell">
             <button class="btn btn-sm btn-outline" onclick="editVarPrice('${v.id}',${v.price_override || 0})">Price</button>
-            <button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')">Stock</button>
+            ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')">Stock</button>` : ''}
             <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')">Delete</button>
           </td>
         </tr>`;
@@ -2032,20 +2042,34 @@ function openInventoryModal(productId, variantId, label) {
   document.getElementById('inv-product-id').value = productId;
   document.getElementById('inv-variant-id').value = variantId || '';
   document.getElementById('inv-qty').value = '';
-  document.getElementById('inv-reason').value = '';
+  document.getElementById('inv-reason').value = 'adjustment';
+  document.getElementById('inv-cost').value = '';
   document.getElementById('inv-note').value = '';
   document.getElementById('inv-modal-label').textContent = label || '';
+  onInvReasonChange();
   document.getElementById('inventory-modal').classList.add('show');
+}
+
+function onInvReasonChange() {
+  const reason = document.getElementById('inv-reason').value;
+  const hint = document.getElementById('inv-cost-hint');
+  hint.textContent = reason === 'inbound' ? '(required for inbound)' : '(optional — only used when adding stock)';
 }
 
 async function saveInventory() {
   const productId = document.getElementById('inv-product-id').value;
   const variantId = document.getElementById('inv-variant-id').value;
+  const qty = parseInt(document.getElementById('inv-qty').value) || 0;
+  const reason = document.getElementById('inv-reason').value || 'adjustment';
+  const costRaw = document.getElementById('inv-cost').value;
+  if (qty === 0) { toast('Quantity must be non-zero', 'error'); return; }
+  if (reason === 'inbound' && !costRaw) { toast('Unit cost is required for inbound', 'error'); return; }
   const body = {
-    quantity: parseInt(document.getElementById('inv-qty').value) || 0,
-    reason: document.getElementById('inv-reason').value || 'adjustment',
+    quantity: qty,
+    reason: reason,
     note: document.getElementById('inv-note').value,
   };
+  if (costRaw !== '') body.unit_cost = parseFloat(costRaw);
   const url = variantId
     ? API + '/products/variants/' + variantId + '/inventory'
     : API + '/products/' + productId + '/inventory';
@@ -2982,7 +3006,7 @@ function renderInventoryOverview(data) {
         <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
         <td style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
         <td>${esc(r.location)}</td>
-        <td><button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button></td>
+        <td>${(r.variant_id && !(currentUser && currentUser.role === 'super_admin')) ? '' : `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>`}</td>
       </tr>`;
     }).join('');
 }

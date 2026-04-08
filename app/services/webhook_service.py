@@ -53,11 +53,12 @@ AVAILABLE_WEBHOOK_FIELDS = {
     "variant_sku": ("Variant SKU", lambda o, i: i.variant_sku if i else ""),
     "quantity": ("Quantity", lambda o, i: i.quantity if i else 0),
     "unit_price": ("Unit Price", lambda o, i: i.unit_price if i else 0.0),
-    "product_cost": ("Product Cost", lambda o, i: i.product_cost if i else 0.0),
+    "product_cost": ("Product Cost (per unit)", lambda o, i: i.product_cost if i else 0.0),
+    "cogs_total": ("COGS Total (line item)", lambda o, i: i.cogs_total if i else 0.0),
 }
 
 # Fields that require line-item iteration
-ITEM_LEVEL_FIELDS = {"id", "sku", "name", "product_name", "variant_label", "variant_sku", "quantity", "unit_price", "product_cost"}
+ITEM_LEVEL_FIELDS = {"id", "sku", "name", "product_name", "variant_label", "variant_sku", "quantity", "unit_price", "product_cost", "cogs_total"}
 
 # Retry config
 MAX_RETRIES = 3
@@ -121,6 +122,7 @@ def _build_order_data(order: Order) -> dict:
                 "quantity": item.quantity,
                 "unit_price": item.unit_price,
                 "product_cost": item.product_cost,
+                "cogs_total": item.cogs_total,
             })
 
     status_val = order.status if isinstance(order.status, str) else order.status.value

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.inventory_log import InventoryLog
-from app.models.stock_batch import StockBatch
+from app.models.stock_batch import StockBatch, OrderItemBatchConsumption
 from sqlalchemy import func as sa_func
 
 from app.models.customer import Customer
@@ -57,8 +57,18 @@ def _generate_order_number() -> str:
     return f"ORD-{ts}-{short}"
 
 
-def _consume_batches_fifo(db: Session, product_id: str, variant_id: str, quantity: int) -> None:
-    """Consume stock from oldest batches first (FIFO)."""
+def _consume_batches_fifo(
+    db: Session,
+    product_id: str,
+    variant_id: str,
+    quantity: int,
+    order_item_id: str | None = None,
+) -> None:
+    """Consume stock from oldest batches first (FIFO).
+
+    If order_item_id is provided, record each consumption with the snapshot
+    unit_cost so the order's COGS is locked.
+    """
     batches = (
         db.query(StockBatch)
         .filter(
@@ -76,10 +86,47 @@ def _consume_batches_fifo(db: Session, product_id: str, variant_id: str, quantit
         consume = min(batch.quantity_remaining, remaining)
         batch.quantity_remaining -= consume
         remaining -= consume
+        if order_item_id:
+            db.add(OrderItemBatchConsumption(
+                order_item_id=order_item_id,
+                stock_batch_id=batch.id,
+                quantity=consume,
+                unit_cost=batch.unit_cost,
+            ))
 
 
-def _restore_batches_fifo(db: Session, product_id: str, variant_id: str, quantity: int) -> None:
-    """Restore stock to newest batches first (reverse FIFO) on order cancellation."""
+def _restore_batches_fifo(
+    db: Session,
+    product_id: str,
+    variant_id: str,
+    quantity: int,
+    order_item_id: str | None = None,
+) -> None:
+    """Restore stock to original batches if order_item_id provided (using
+    consumption records), otherwise reverse FIFO (newest first).
+    """
+    if order_item_id:
+        # Restore using consumption records — exact reverse of consume
+        consumptions = (
+            db.query(OrderItemBatchConsumption)
+            .filter(OrderItemBatchConsumption.order_item_id == order_item_id)
+            .all()
+        )
+        remaining = quantity
+        for cons in consumptions:
+            if remaining <= 0:
+                break
+            restore = min(cons.quantity, remaining)
+            batch = db.query(StockBatch).filter(StockBatch.id == cons.stock_batch_id).first()
+            if batch:
+                batch.quantity_remaining += restore
+            cons.quantity -= restore
+            remaining -= restore
+            if cons.quantity <= 0:
+                db.delete(cons)
+        return
+
+    # Fallback: reverse FIFO restore
     batches = (
         db.query(StockBatch)
         .filter(
@@ -243,6 +290,7 @@ def create_order(db: Session, data: OrderCreate) -> Order:
             unit_price=unit_price,
         )
         db.add(order_item)
+        db.flush()  # ensure order_item.id is available for FIFO consumption tracking
 
         # Deduct inventory from variant or product
         if variant:
@@ -267,8 +315,8 @@ def create_order(db: Session, data: OrderCreate) -> Order:
             )
         db.add(log)
 
-        # Consume from oldest stock batches (FIFO)
-        _consume_batches_fifo(db, product.id, variant.id if variant else "", item_data.quantity)
+        # Consume from oldest stock batches (FIFO) — locks COGS for this order item
+        _consume_batches_fifo(db, product.id, variant.id if variant else "", item_data.quantity, order_item_id=order_item.id)
         _recalculate_price_from_batches(db, product.id, variant.id if variant else "")
         total_items += item_data.quantity
         items_subtotal += item_data.quantity * unit_price
@@ -462,11 +510,11 @@ def update_order(db: Session, order_id: str, data: OrderUpdate) -> Order | None:
                             balance_after=product.quantity,
                             note=f"Qty changed {order_item.quantity} → {item_update.quantity} for order {order.order_number}",
                         ))
-                # Update FIFO batches
+                # Update FIFO batches (locks COGS to specific batches per order item)
                 if diff > 0:
-                    _consume_batches_fifo(db, order_item.product_id, order_item.variant_id or "", diff)
+                    _consume_batches_fifo(db, order_item.product_id, order_item.variant_id or "", diff, order_item_id=order_item.id)
                 elif diff < 0:
-                    _restore_batches_fifo(db, order_item.product_id, order_item.variant_id or "", -diff)
+                    _restore_batches_fifo(db, order_item.product_id, order_item.variant_id or "", -diff, order_item_id=order_item.id)
                 _recalculate_price_from_batches(db, order_item.product_id, order_item.variant_id or "")
                 order_item.quantity = item_update.quantity
 
@@ -517,8 +565,8 @@ def delete_order(db: Session, order_id: str) -> bool:
                         balance_after=product.quantity,
                         note=f"Restored from deleted order {order.order_number}",
                     ))
-            # Restore FIFO batches and recalculate price
-            _restore_batches_fifo(db, item.product_id, item.variant_id or "", item.quantity)
+            # Restore FIFO batches (using consumption records) and recalculate price
+            _restore_batches_fifo(db, item.product_id, item.variant_id or "", item.quantity, order_item_id=item.id)
             _recalculate_price_from_batches(db, item.product_id, item.variant_id or "")
 
     # Delete related pick_items
@@ -748,8 +796,8 @@ def cancel_order(db: Session, order_id: str) -> Order | None:
                     note=f"Restored from cancelled order {order.order_number}",
                 )
                 db.add(log)
-        # Restore FIFO batches and recalculate price
-        _restore_batches_fifo(db, item.product_id, item.variant_id or "", item.quantity)
+        # Restore FIFO batches (using consumption records) and recalculate price
+        _restore_batches_fifo(db, item.product_id, item.variant_id or "", item.quantity, order_item_id=item.id)
         _recalculate_price_from_batches(db, item.product_id, item.variant_id or "")
 
     # Remove from any active packing list

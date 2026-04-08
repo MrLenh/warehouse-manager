@@ -508,7 +508,15 @@ def delete_variant(variant_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/variants/{variant_id}/inventory", response_model=VariantOut)
-def adjust_variant_inventory(variant_id: str, data: VariantInventoryAdjust, db: Session = Depends(get_db)):
+def adjust_variant_inventory(
+    variant_id: str,
+    data: VariantInventoryAdjust,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Adjust variant inventory. Super admin only."""
+    if user.role != "super_admin":
+        raise HTTPException(403, "Only super admin can adjust variant stock")
     try:
         variant = product_service.adjust_variant_inventory(db, variant_id, data)
     except ValueError as e:
