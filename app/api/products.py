@@ -306,7 +306,15 @@ def delete_product(
 
 
 @router.post("/{product_id}/inventory", response_model=ProductOut)
-def adjust_inventory(product_id: str, data: InventoryAdjust, db: Session = Depends(get_db)):
+def adjust_inventory(
+    product_id: str,
+    data: InventoryAdjust,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Adjust product inventory. Super admin only."""
+    if user.role != "super_admin":
+        raise HTTPException(403, "Only super admin can adjust product stock")
     try:
         product = product_service.adjust_inventory(db, product_id, data)
     except ValueError as e:

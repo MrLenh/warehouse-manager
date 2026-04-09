@@ -1458,7 +1458,7 @@ function renderProducts(list) {
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Edit</button>
           <button class="btn btn-sm btn-primary" onclick="openVariantsModal('${p.id}')">Variants</button>
-          <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Stock</button>
+          ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Stock</button>` : ''}
           ${p.qr_code_path
             ? `<button class="btn btn-sm btn-success" onclick="openQrModal('${p.id}')">QR</button>`
             : `<button class="btn btn-sm btn-danger" onclick="generateQr('${p.id}')">Gen QR</button>`}
@@ -3006,7 +3006,7 @@ function renderInventoryOverview(data) {
         <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
         <td style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
         <td>${esc(r.location)}</td>
-        <td>${(r.variant_id && !(currentUser && currentUser.role === 'super_admin')) ? '' : `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>`}</td>
+        <td>${(currentUser && currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>` : ''}</td>
       </tr>`;
     }).join('');
 }
