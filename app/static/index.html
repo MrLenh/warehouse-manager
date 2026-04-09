@@ -398,6 +398,7 @@ tr:hover{background:#f8f9ff}
             <th style="cursor:pointer" onclick="sortInvLog('balance_after')">Balance <span id="inv-log-sort-balance_after"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('gap')">Adjustment <span id="inv-log-sort-gap"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('reason')">Reason <span id="inv-log-sort-reason"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('adjusted_by')">User <span id="inv-log-sort-adjusted_by"></span></th>
             <th>Reference</th>
             <th>Note</th>
           </tr>
@@ -3436,6 +3437,7 @@ function renderInventoryLog() {
            (r.product_name || '').toLowerCase().includes(q) ||
            (r.note || '').toLowerCase().includes(q) ||
            (r.reason || '').toLowerCase().includes(q) ||
+           (r.adjusted_by || '').toLowerCase().includes(q) ||
            (r.reference_id || '').toLowerCase().includes(q);
   });
 
@@ -3458,7 +3460,7 @@ function renderInventoryLog() {
   document.getElementById('inv-log-count').textContent = `Showing ${filtered.length} of ${invLogTotal} entries`;
 
   document.getElementById('inv-log-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="9" class="empty">No log entries</td></tr>'
+    ? '<tr><td colspan="10" class="empty">No log entries</td></tr>'
     : filtered.map(r => {
       const changeColor = r.change > 0 ? '#28a745' : r.change < 0 ? '#dc3545' : '#666';
       const changePrefix = r.change > 0 ? '+' : '';
@@ -3475,6 +3477,7 @@ function renderInventoryLog() {
         <td style="font-weight:500">${r.balance_after}</td>
         <td style="color:${gapColor};font-weight:${gapVal ? '600' : '400'}">${gapVal ? (gapVal > 0 ? '+' : '') + gapVal : '-'}</td>
         <td>${reasonBadge}</td>
+        <td style="font-size:13px;color:#444">${r.adjusted_by ? esc(r.adjusted_by) : '<span style="color:#ccc">—</span>'}</td>
         <td style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
         <td style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>
       </tr>`;

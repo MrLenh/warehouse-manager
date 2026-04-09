@@ -316,7 +316,7 @@ def adjust_inventory(
     if user.role != "super_admin":
         raise HTTPException(403, "Only super admin can adjust product stock")
     try:
-        product = product_service.adjust_inventory(db, product_id, data)
+        product = product_service.adjust_inventory(db, product_id, data, adjusted_by=user.username)
     except ValueError as e:
         raise HTTPException(400, str(e))
     if not product:
@@ -338,6 +338,8 @@ def inventory_logs(product_id: str, db: Session = Depends(get_db)):
             "reference_id": log.reference_id,
             "balance_after": log.balance_after,
             "gap": getattr(log, "gap", 0) or 0,
+            "cost_amount": getattr(log, "cost_amount", 0.0) or 0.0,
+            "adjusted_by": getattr(log, "adjusted_by", "") or "",
             "note": log.note,
             "created_at": log.created_at,
         }
@@ -526,7 +528,7 @@ def adjust_variant_inventory(
     if user.role != "super_admin":
         raise HTTPException(403, "Only super admin can adjust variant stock")
     try:
-        variant = product_service.adjust_variant_inventory(db, variant_id, data)
+        variant = product_service.adjust_variant_inventory(db, variant_id, data, adjusted_by=user.username)
     except ValueError as e:
         raise HTTPException(400, str(e))
     if not variant:
