@@ -377,12 +377,15 @@ tr:hover{background:#f8f9ff}
     <!-- Inventory Log -->
     <div id="inv-log" class="inv-panel" style="display:none">
       <div class="toolbar" style="flex-wrap:wrap;gap:8px">
-        <input type="text" class="search" id="search-inv-log" placeholder="Search by SKU, name, note..." oninput="renderInventoryLog()">
+        <input type="text" class="search" id="search-inv-log" placeholder="Search by SKU, name, note, user..." oninput="renderInventoryLog()">
         <select id="inv-log-reason" onchange="loadInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
           <option value="">All reasons</option>
           <option value="inbound">Inbound</option>
           <option value="order">Order</option>
           <option value="adjustment">Adjustment</option>
+        </select>
+        <select id="inv-log-user" onchange="renderInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;min-width:140px">
+          <option value="">All users</option>
         </select>
         <input type="number" id="inv-log-limit" value="50" min="10" max="500" step="10" onchange="loadInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:80px" title="Rows per page">
         <button class="btn btn-outline btn-sm" onclick="loadInventoryLog()">Refresh</button>
@@ -3416,7 +3419,18 @@ async function loadInventoryLog() {
   const data = await res.json();
   invLogData = data.items || data;
   invLogTotal = data.total || invLogData.length;
+  _populateInvLogUsers();
   renderInventoryLog();
+}
+
+function _populateInvLogUsers() {
+  const sel = document.getElementById('inv-log-user');
+  if (!sel) return;
+  const current = sel.value;
+  const users = [...new Set(invLogData.map(r => r.adjusted_by).filter(Boolean))].sort();
+  const opts = ['<option value="">All users</option>']
+    .concat(users.map(u => `<option value="${esc(u)}"${u === current ? ' selected' : ''}>${esc(u)}</option>`));
+  sel.innerHTML = opts.join('');
 }
 
 function sortInvLog(field) {
@@ -3431,7 +3445,9 @@ function sortInvLog(field) {
 
 function renderInventoryLog() {
   const q = (document.getElementById('search-inv-log').value || '').toLowerCase();
+  const userFilter = document.getElementById('inv-log-user').value || '';
   let filtered = invLogData.filter(r => {
+    if (userFilter && (r.adjusted_by || '') !== userFilter) return false;
     if (!q) return true;
     return (r.sku || '').toLowerCase().includes(q) ||
            (r.product_name || '').toLowerCase().includes(q) ||
