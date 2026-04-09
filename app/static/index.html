@@ -233,6 +233,7 @@ tr:hover{background:#f8f9ff}
         <a href="/api/v1/products/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <label class="btn btn-success btn-sm" style="margin:0">Import CSV<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-guide-modal').classList.add('show')" title="Import guide">?</button>
+        <button class="btn btn-sm" onclick="openStockAdjustModal()" style="background:#fd7e14;color:#fff">📷 Stock Count</button>
         <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
       </div>
     </div>
@@ -1234,6 +1235,67 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
 </div>
 
 
+<!-- STOCK ADJUST (PHYSICAL COUNT) MODAL -->
+<div class="modal-overlay" id="stock-adjust-modal">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <h2>📷 Stock Count / Adjust</h2>
+      <button class="modal-close" onclick="closeStockAdjustModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: Scan / enter SKU -->
+      <div class="form-group">
+        <label style="font-weight:600;font-size:13px">Step 1 — Scan QR or enter SKU</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <input type="text" id="sa-sku-input" placeholder="Scan or type SKU..." autocomplete="off"
+            style="flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:monospace"
+            onkeydown="if(event.key==='Enter')stockAdjustLookup()">
+          <button class="btn btn-primary" onclick="stockAdjustLookup()">Lookup</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Show in-warehouse stock -->
+      <div id="sa-product-info" style="display:none;padding:14px;background:#f8f9fa;border-radius:8px;margin-bottom:12px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="flex:1">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">Product</div>
+            <div id="sa-product-name" style="font-size:14px;font-weight:600;color:#333"></div>
+            <div id="sa-variant-label" style="font-size:12px;color:#666"></div>
+            <div style="margin-top:6px;font-size:11px;color:#888">SKU: <code id="sa-sku-display"></code></div>
+            <div style="font-size:11px;color:#888">Location: <span id="sa-location"></span></div>
+          </div>
+          <div style="text-align:center;padding:8px 16px;background:#fff;border-radius:8px;border:1px solid #e0e0e0">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">In Warehouse</div>
+            <div id="sa-in-warehouse" style="font-size:28px;font-weight:700;color:#2196F3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Input actual count -->
+      <div id="sa-actual-section" style="display:none">
+        <div class="form-group">
+          <label style="font-weight:600;font-size:13px">Step 2 — Actual physical count</label>
+          <input type="number" id="sa-actual-qty" min="0" placeholder="Enter actual stock counted..."
+            style="width:100%;margin-top:4px;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:600;text-align:center"
+            oninput="updateStockAdjustPreview()">
+        </div>
+        <div id="sa-diff-preview" style="display:none;text-align:center;padding:12px;border-radius:8px;margin-bottom:12px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;opacity:.8">Adjustment</div>
+          <div id="sa-diff-value" style="font-size:24px;font-weight:700"></div>
+        </div>
+        <div class="form-group">
+          <label>Note (optional)</label>
+          <input type="text" id="sa-note" placeholder="Reason / details" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeStockAdjustModal()">Cancel</button>
+      <button class="btn btn-success" id="sa-submit-btn" onclick="submitStockAdjust()" disabled>Apply Adjustment</button>
+    </div>
+  </div>
+</div>
+
 <!-- UPDATE ITEM NAMES MODAL -->
 <div class="modal-overlay" id="update-names-modal">
   <div class="modal" style="width:500px">
@@ -1732,6 +1794,117 @@ async function startOrderImport(input) {
 }
 
 // --- Update Item Names ---
+// --- Stock Adjust (Physical Count) ---
+let _saCurrentInfo = null;
+
+function openStockAdjustModal() {
+  _saCurrentInfo = null;
+  document.getElementById('sa-sku-input').value = '';
+  document.getElementById('sa-actual-qty').value = '';
+  document.getElementById('sa-note').value = '';
+  document.getElementById('sa-product-info').style.display = 'none';
+  document.getElementById('sa-actual-section').style.display = 'none';
+  document.getElementById('sa-diff-preview').style.display = 'none';
+  document.getElementById('sa-submit-btn').disabled = true;
+  openModal('stock-adjust-modal');
+  setTimeout(() => document.getElementById('sa-sku-input').focus(), 100);
+}
+
+function closeStockAdjustModal() {
+  closeModal('stock-adjust-modal');
+}
+
+async function stockAdjustLookup() {
+  const sku = document.getElementById('sa-sku-input').value.trim();
+  if (!sku) { toast('Enter SKU', 'error'); return; }
+  try {
+    const res = await fetch(API + '/products/stock-adjust/lookup?sku=' + encodeURIComponent(sku));
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'SKU not found', 'error');
+      return;
+    }
+    const info = await res.json();
+    if (info.error) { toast(info.error, 'error'); return; }
+    _saCurrentInfo = info;
+    document.getElementById('sa-product-name').textContent = info.product_name;
+    document.getElementById('sa-variant-label').textContent = info.variant_label || '';
+    document.getElementById('sa-sku-display').textContent = info.sku;
+    document.getElementById('sa-location').textContent = info.location || '—';
+    document.getElementById('sa-in-warehouse').textContent = info.in_warehouse_qty;
+    document.getElementById('sa-product-info').style.display = 'block';
+    document.getElementById('sa-actual-section').style.display = 'block';
+    document.getElementById('sa-actual-qty').value = '';
+    document.getElementById('sa-diff-preview').style.display = 'none';
+    document.getElementById('sa-submit-btn').disabled = true;
+    setTimeout(() => document.getElementById('sa-actual-qty').focus(), 50);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function updateStockAdjustPreview() {
+  if (!_saCurrentInfo) return;
+  const raw = document.getElementById('sa-actual-qty').value;
+  if (raw === '') {
+    document.getElementById('sa-diff-preview').style.display = 'none';
+    document.getElementById('sa-submit-btn').disabled = true;
+    return;
+  }
+  const actual = parseInt(raw);
+  if (isNaN(actual) || actual < 0) {
+    document.getElementById('sa-diff-preview').style.display = 'none';
+    document.getElementById('sa-submit-btn').disabled = true;
+    return;
+  }
+  const diff = actual - _saCurrentInfo.in_warehouse_qty;
+  const div = document.getElementById('sa-diff-preview');
+  const val = document.getElementById('sa-diff-value');
+  div.style.display = 'block';
+  if (diff > 0) {
+    div.style.background = '#d4edda';
+    div.style.color = '#155724';
+    val.textContent = '+' + diff;
+  } else if (diff < 0) {
+    div.style.background = '#f8d7da';
+    div.style.color = '#721c24';
+    val.textContent = diff.toString();
+  } else {
+    div.style.background = '#e2e3e5';
+    div.style.color = '#383d41';
+    val.textContent = '0 (no change)';
+  }
+  document.getElementById('sa-submit-btn').disabled = false;
+}
+
+async function submitStockAdjust() {
+  if (!_saCurrentInfo) return;
+  const btn = document.getElementById('sa-submit-btn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const actual = parseInt(document.getElementById('sa-actual-qty').value);
+  const note = document.getElementById('sa-note').value.trim();
+  try {
+    const res = await fetch(API + '/products/stock-adjust', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sku: _saCurrentInfo.sku, actual_qty: actual, note: note}),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+      btn.disabled = false;
+      return;
+    }
+    const data = await res.json();
+    const sign = data.adjust_amount > 0 ? '+' : '';
+    toast(`Adjusted ${data.sku}: ${sign}${data.adjust_amount}`);
+    closeStockAdjustModal();
+    loadProducts();
+  } catch (e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
 function openUpdateNamesModal() {
   document.getElementById('csv-update-names').value = '';
   openModal('update-names-modal');

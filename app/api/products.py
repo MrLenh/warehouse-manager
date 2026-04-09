@@ -532,3 +532,93 @@ def adjust_variant_inventory(
     if not variant:
         raise HTTPException(404, "Variant not found")
     return variant
+
+
+# ---------------------------------------------------------------------------
+# Stock Adjust Request (manual physical count workflow)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/stock-adjust/lookup")
+def stock_adjust_lookup(
+    sku: str = Query(..., description="Product or variant SKU from QR scan"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Step 1: scan QR code → return current in-warehouse stock."""
+    from app.services import stock_adjust_service
+    info = stock_adjust_service.lookup_for_adjust(db, sku)
+    if not info:
+        raise HTTPException(404, f"SKU '{sku}' not found")
+    return info
+
+
+@router.post("/stock-adjust")
+def stock_adjust_create(
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Step 2: submit actual stock count → create adjust request and apply.
+
+    Body: { sku: str, actual_qty: int, note: str }
+    """
+    from app.services import stock_adjust_service
+    sku = (body.get("sku") or "").strip()
+    note = (body.get("note") or "").strip()
+    try:
+        actual_qty = int(body.get("actual_qty"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "actual_qty must be an integer")
+    if actual_qty < 0:
+        raise HTTPException(400, "actual_qty cannot be negative")
+    if not sku:
+        raise HTTPException(400, "sku is required")
+    try:
+        req = stock_adjust_service.create_stock_adjust_request(
+            db, sku=sku, actual_qty=actual_qty, note=note,
+            adjusted_by=user.username,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {
+        "id": req.id,
+        "sku": req.sku,
+        "product_name": req.product_name,
+        "variant_label": req.variant_label,
+        "in_warehouse_qty": req.in_warehouse_qty,
+        "actual_qty": req.actual_qty,
+        "adjust_amount": req.adjust_amount,
+        "cost_amount": req.cost_amount,
+        "adjusted_by": req.adjusted_by,
+        "note": req.note,
+        "created_at": req.created_at.isoformat() if req.created_at else "",
+    }
+
+
+@router.get("/stock-adjust/list")
+def stock_adjust_list(
+    skip: int = 0,
+    limit: int = 100,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List stock adjust requests (audit log)."""
+    from app.services import stock_adjust_service
+    items = stock_adjust_service.list_stock_adjust_requests(db, skip=skip, limit=limit)
+    return [
+        {
+            "id": r.id,
+            "sku": r.sku,
+            "product_name": r.product_name,
+            "variant_label": r.variant_label,
+            "in_warehouse_qty": r.in_warehouse_qty,
+            "actual_qty": r.actual_qty,
+            "adjust_amount": r.adjust_amount,
+            "cost_amount": r.cost_amount,
+            "adjusted_by": r.adjusted_by,
+            "note": r.note,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        }
+        for r in items
+    ]
