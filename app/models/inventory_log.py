@@ -20,5 +20,6 @@ class InventoryLog(Base):
     balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
     gap: Mapped[int] = mapped_column(Integer, default=0)  # in-warehouse change delta on adjustment
     cost_amount: Mapped[float] = mapped_column(Float, default=0.0)  # total cost: inbound = qty*unit_cost; loss = FIFO consumed cost
+    adjusted_by: Mapped[str] = mapped_column(String, default="")  # username who made the change
     note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

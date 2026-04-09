@@ -86,9 +86,9 @@ def create_stock_adjust_request(
             )
         )
         if info["type"] == "variant":
-            product_service.adjust_variant_inventory(db, info["variant_id"], adjust_data)
+            product_service.adjust_variant_inventory(db, info["variant_id"], adjust_data, adjusted_by=adjusted_by)
         else:
-            product_service.adjust_inventory(db, info["product_id"], adjust_data)
+            product_service.adjust_inventory(db, info["product_id"], adjust_data, adjusted_by=adjusted_by)
         # Read back the cost from the most recent inventory log
         from app.models.inventory_log import InventoryLog
         last_log = (

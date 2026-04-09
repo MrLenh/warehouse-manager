@@ -154,7 +154,7 @@ def update_product(db: Session, product_id: str, data: ProductUpdate) -> Product
     return product
 
 
-def adjust_inventory(db: Session, product_id: str, data: InventoryAdjust) -> Product | None:
+def adjust_inventory(db: Session, product_id: str, data: InventoryAdjust, adjusted_by: str = "") -> Product | None:
     """Adjust inventory with proper FIFO batch tracking.
 
     - reason='inbound': creates a new StockBatch with provided unit_cost (or current price)
@@ -204,6 +204,7 @@ def adjust_inventory(db: Session, product_id: str, data: InventoryAdjust) -> Pro
         balance_after=new_qty,
         gap=gap,
         cost_amount=cost_amount,
+        adjusted_by=adjusted_by,
         note=data.note,
     )
     db.add(log)
@@ -332,7 +333,7 @@ def delete_product(db: Session, product_id: str) -> dict:
     return {"deleted": True, "product_id": product_id}
 
 
-def adjust_variant_inventory(db: Session, variant_id: str, data: VariantInventoryAdjust) -> Variant | None:
+def adjust_variant_inventory(db: Session, variant_id: str, data: VariantInventoryAdjust, adjusted_by: str = "") -> Variant | None:
     """Adjust variant inventory with proper FIFO batch tracking. See adjust_inventory."""
     variant = get_variant(db, variant_id)
     if not variant:
@@ -374,6 +375,7 @@ def adjust_variant_inventory(db: Session, variant_id: str, data: VariantInventor
         balance_after=new_qty,
         gap=gap,
         cost_amount=cost_amount,
+        adjusted_by=adjusted_by,
         note=f"[Variant {variant.variant_sku}] {data.note}",
     )
     db.add(log)

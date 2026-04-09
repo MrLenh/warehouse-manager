@@ -178,7 +178,7 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE stock_requests ADD COLUMN {col_name} {col_type}"))
 
-    # Inventory logs: gap, cost_amount columns
+    # Inventory logs: gap, cost_amount, adjusted_by columns
     if "inventory_logs" in tables:
         existing = {col["name"] for col in inspector.get_columns("inventory_logs")}
         with engine.begin() as conn:
@@ -186,6 +186,8 @@ def _migrate_add_columns():
                 conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN gap INTEGER DEFAULT 0"))
             if "cost_amount" not in existing:
                 conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN cost_amount FLOAT DEFAULT 0.0"))
+            if "adjusted_by" not in existing:
+                conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN adjusted_by VARCHAR DEFAULT ''"))
 
     # Stock batches: source column + nullable stock_request_id
     if "stock_batches" in tables:
