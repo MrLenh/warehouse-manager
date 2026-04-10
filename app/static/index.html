@@ -105,6 +105,11 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
   td[data-label="Price"]{display:inline;font-size:12px;color:#555}
   td[data-label="Request #"]{display:inline;font-weight:700;font-size:12px}
   td[data-label="Supplier"]{display:inline;color:#555;font-size:12px}
+  td[data-label="In Warehouse"]{display:inline;font-size:12px}
+  td[data-label="Available"]{display:inline;font-size:12px}
+  td[data-label="Time"]{display:inline;font-size:11px;color:#888}
+  td[data-label="Change"]{display:inline;font-size:12px}
+  td[data-label="Reason"]{display:inline}
   /* Checkbox */
   td:first-child:has(input[type="checkbox"]){display:block;position:absolute;top:10px;right:10px}
   /* Expand arrow */
@@ -3466,17 +3471,17 @@ function renderInventoryOverview(data) {
       const label = r.variant_sku ? (r.variant_sku + ' - ' + r.name + (r.variant_label ? ' (' + r.variant_label + ')' : '')) : (r.sku + ' - ' + r.name);
       const inWh = r.in_warehouse || ((r.available || r.current_stock || 0) + (r.on_hold || 0));
       return `<tr>
-        <td><strong>${esc(r.variant_sku || r.sku)}</strong></td>
-        <td>${esc(r.name)}</td>
-        <td>${r.variant_label ? esc(r.variant_label) : '-'}</td>
-        <td style="color:#1565C0;font-weight:600">${inWh}</td>
-        <td style="color:#856404;font-weight:${r.on_hold ? '600' : '400'}">${r.on_hold || 0}</td>
-        <td class="${r.available <= 5 ? 'stock-low' : 'stock-ok'}">${r.available != null ? r.available : r.current_stock}</td>
-        <td style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
-        <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
-        <td style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
-        <td>${esc(r.location)}</td>
-        <td>${(currentUser && currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>` : ''}</td>
+        <td data-label="SKU"><strong>${esc(r.variant_sku || r.sku)}</strong></td>
+        <td data-label="Name">${esc(r.name)}</td>
+        <td data-label="Variant">${r.variant_label ? esc(r.variant_label) : '-'}</td>
+        <td data-label="In Warehouse" style="color:#1565C0;font-weight:600">${inWh}</td>
+        <td data-label="On Hold" style="color:#856404;font-weight:${r.on_hold ? '600' : '400'}">${r.on_hold || 0}</td>
+        <td data-label="Available" class="${r.available <= 5 ? 'stock-low' : 'stock-ok'}">${r.available != null ? r.available : r.current_stock}</td>
+        <td data-label="In Production" style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
+        <td data-label="Shipped" style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
+        <td data-label="Pending" style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
+        <td data-label="Location">${esc(r.location)}</td>
+        <td class="actions-cell">${(currentUser && currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>` : ''}</td>
       </tr>`;
     }).join('');
 }
@@ -3789,16 +3794,16 @@ function renderInventoryLog() {
       const dt = r.created_at ? new Date(r.created_at) : null;
       const timeStr = dt ? dt.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '-';
       return `<tr>
-        <td style="font-size:13px;color:#666;white-space:nowrap">${timeStr}</td>
-        <td><strong>${esc(r.sku || '')}</strong></td>
-        <td>${esc(r.product_name || '')}</td>
-        <td style="color:${changeColor};font-weight:700;font-size:15px">${changePrefix}${r.change}</td>
-        <td style="font-weight:500">${r.balance_after}</td>
-        <td style="color:${gapColor};font-weight:${gapVal ? '600' : '400'}">${gapVal ? (gapVal > 0 ? '+' : '') + gapVal : '-'}</td>
-        <td>${reasonBadge}</td>
-        <td style="font-size:13px;color:#444">${r.adjusted_by ? esc(r.adjusted_by) : '<span style="color:#ccc">—</span>'}</td>
-        <td style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
-        <td style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>
+        <td data-label="Time" style="font-size:13px;color:#666;white-space:nowrap">${timeStr}</td>
+        <td data-label="SKU"><strong>${esc(r.sku || '')}</strong></td>
+        <td data-label="Product">${esc(r.product_name || '')}</td>
+        <td data-label="Change" style="color:${changeColor};font-weight:700;font-size:15px">${changePrefix}${r.change}</td>
+        <td data-label="Balance" style="font-weight:500">${r.balance_after}</td>
+        <td data-label="Adjustment" style="color:${gapColor};font-weight:${gapVal ? '600' : '400'}">${gapVal ? (gapVal > 0 ? '+' : '') + gapVal : '-'}</td>
+        <td data-label="Reason">${reasonBadge}</td>
+        <td data-label="User" style="font-size:13px;color:#444">${r.adjusted_by ? esc(r.adjusted_by) : '<span style="color:#ccc">—</span>'}</td>
+        <td data-label="Reference" style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
+        <td data-label="Note" style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>
       </tr>`;
     }).join('');
 
@@ -3836,14 +3841,14 @@ function renderStockRequests(list) {
       const totalRcv = sr.items.reduce((s, i) => s + i.quantity_received, 0);
       const totalBoxes = sr.items.reduce((s, i) => s + (i.box_count || 0), 0);
       return `<tr>
-        <td><strong>${esc(sr.request_number)}</strong></td>
-        <td>${esc(sr.supplier) || '-'}</td>
-        <td>${sr.items.length}</td>
-        <td>${totalReq}</td>
-        <td>${totalRcv}</td>
-        <td>${totalBoxes || '-'}</td>
-        <td><span class="badge badge-${sr.status}">${sr.status}</span></td>
-        <td>${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
+        <td data-label="Request #"><strong>${esc(sr.request_number)}</strong></td>
+        <td data-label="Supplier">${esc(sr.supplier) || '-'}</td>
+        <td data-label="SKUs">${sr.items.length}</td>
+        <td data-label="Requested">${totalReq}</td>
+        <td data-label="Received">${totalRcv}</td>
+        <td data-label="Boxes">${totalBoxes || '-'}</td>
+        <td data-label="Status"><span class="badge badge-${sr.status}">${sr.status}</span></td>
+        <td data-label="Date">${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
           ${['approved','receiving'].includes(sr.status) ? `<button class="btn btn-sm btn-outline" onclick="showSrQrCode('${sr.id}','${esc(sr.request_number)}')" title="QR for mobile receiving">QR</button>` : ''}
