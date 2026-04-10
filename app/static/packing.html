@@ -117,9 +117,13 @@ tr:hover{background:#f8f9ff}
 .modal-close:hover{color:#333}
 .modal-body{padding:24px}
 .modal-footer{padding:16px 24px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:10px}
+/* Hide header when embedded in iframe */
+body.in-iframe .header{display:none}
+body.in-iframe .container{padding-top:8px}
 </style>
 </head>
 <body>
+<script>if(window.self!==window.top)document.body.classList.add('in-iframe');</script>
 
 <div class="header">
   <h1>Packing Station</h1>

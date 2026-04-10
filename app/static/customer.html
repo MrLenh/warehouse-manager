@@ -79,9 +79,13 @@ tr:hover{background:#f8f9ff}
 .inv-orders-table{width:100%;font-size:13px;margin-top:12px}
 .inv-orders-table th{padding:8px 10px;font-size:12px}
 .inv-orders-table td{padding:8px 10px;font-size:13px}
+/* Hide header when embedded in iframe */
+body.in-iframe .header{display:none}
+body.in-iframe .content{padding-top:8px}
 </style>
 </head>
 <body>
+<script>if(window.self!==window.top)document.body.classList.add('in-iframe');</script>
 
 <div class="header">
   <div style="display:flex;align-items:center;gap:16px">
