@@ -69,19 +69,77 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
 
 /* --- Responsive --- */
 @media(max-width:768px){
-  .sidebar{width:240px;transform:translateX(-100%);z-index:200}
+  .sidebar{width:260px;transform:translateX(-100%);z-index:200}
   .sidebar.mobile-open{transform:translateX(0)}
-  .sidebar.collapsed{width:240px;transform:translateX(-100%)}
+  .sidebar.collapsed{width:260px;transform:translateX(-100%)}
   .sidebar.collapsed.mobile-open{transform:translateX(0)}
   .main-content{margin-left:0!important}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199}
   .sidebar-overlay.show{display:block}
   .hamburger{display:block}
-  .topbar .scan-input{width:140px}
+  .topbar{padding:0 12px;gap:8px}
+  .topbar .scan-input{width:120px;font-size:14px;padding:8px 12px}
   .topbar .stats-bar{display:none}
-  .content{padding:12px}
-  table{font-size:12px}
-  td,th{padding:8px 10px}
+  .content{padding:10px}
+
+  /* Larger text for mobile */
+  body{font-size:15px}
+  h2,h3{font-size:16px}
+
+  /* Tables: horizontal scroll wrapper */
+  table{font-size:13px;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
+  thead{display:table;width:100%;table-layout:auto}
+  tbody{display:table;width:100%;table-layout:auto}
+  td,th{padding:10px 12px;font-size:13px}
+
+  /* Toolbar stacking */
+  .toolbar{flex-direction:column;align-items:stretch;gap:8px}
+  .toolbar>*{width:100%}
+  .toolbar .search{width:100%;font-size:15px;padding:12px 16px}
+  .toolbar select{font-size:14px;padding:10px 12px}
+  .toolbar .btn,.toolbar .btn-sm{font-size:13px;padding:10px 14px;justify-content:center}
+
+  /* Buttons */
+  .btn{font-size:14px;padding:10px 16px}
+  .btn-sm{font-size:13px;padding:8px 12px}
+
+  /* Cards and grids */
+  .form-row,.form-row-3{grid-template-columns:1fr!important}
+  .detail-grid{grid-template-columns:1fr!important}
+  #inv-breakdown-cards{grid-template-columns:1fr 1fr!important}
+
+  /* Modals */
+  .modal{width:98vw!important;max-width:98vw!important;margin:4px;border-radius:12px}
+  .modal-header{padding:14px 16px}
+  .modal-header h2{font-size:16px}
+  .modal-body{padding:14px 16px}
+  .modal-footer{padding:12px 16px;flex-wrap:wrap}
+
+  /* Actions column */
+  .actions-cell{white-space:nowrap}
+  .actions-cell .btn{padding:6px 8px;font-size:11px}
+
+  /* Badge */
+  .badge{font-size:10px;padding:3px 8px}
+
+  /* Inventory sub-tabs */
+  .inv-tab{padding:8px 12px!important;font-size:13px!important}
+
+  /* Order overview cards */
+  #orders-overview{flex-direction:column}
+
+  /* Inventory iframe panels */
+  #packing-iframe,#customers-iframe{min-height:calc(100vh - 60px)}
+}
+
+@media(max-width:480px){
+  .content{padding:6px}
+  body{font-size:14px}
+  .topbar .scan-input{width:100px;font-size:13px}
+  #inv-breakdown-cards{grid-template-columns:1fr!important}
+  td,th{padding:8px 6px;font-size:12px}
+  .btn{font-size:13px;padding:8px 12px}
+  .btn-sm{font-size:12px;padding:6px 10px}
 }
 
 /* --- Existing styles (unchanged) --- */
@@ -221,8 +279,9 @@ tr:hover{background:#f8f9ff}
 .img-zoom-overlay img{max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
 .scan-cam-btn{background:none;border:none;cursor:pointer;padding:4px;display:none;align-items:center;justify-content:center;border-radius:50%;transition:.2s}
 .scan-cam-btn:hover{background:rgba(255,255,255,.2)}
-@media(max-width:768px){.scan-cam-btn{display:inline-flex}#inv-breakdown-cards{grid-template-columns:repeat(2,1fr)!important}}
+@media(max-width:768px){.scan-cam-btn{display:inline-flex}}
 @media(max-width:1200px){#inv-breakdown-cards{grid-template-columns:repeat(3,1fr)!important}}
+@media(min-width:769px){#inv-breakdown-cards{grid-template-columns:repeat(4,1fr)!important}}
 .scan-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
 .scan-modal-overlay.show{display:flex}
 .scan-modal-box{background:#fff;border-radius:16px;width:95vw;max-width:420px;overflow:hidden}
