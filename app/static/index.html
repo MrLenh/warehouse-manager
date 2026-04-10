@@ -81,27 +81,35 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
   .topbar{padding:0 12px;gap:8px}
   .topbar .scan-input{width:120px;font-size:14px;padding:8px 12px}
   .topbar .stats-bar{display:none}
-  .content{padding:10px}
+  .content{padding:8px}
 
-  /* Larger text for mobile */
-  body{font-size:15px}
+  /* Base text */
+  body{font-size:15px;-webkit-text-size-adjust:100%}
   h2,h3{font-size:16px}
 
-  /* Tables: horizontal scroll wrapper */
-  table{font-size:13px;display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
-  thead{display:table;width:100%;table-layout:auto}
-  tbody{display:table;width:100%;table-layout:auto}
-  td,th{padding:10px 12px;font-size:13px}
+  /* Tables: card-style stacking on mobile */
+  table{display:block;width:100%!important;border:none;box-shadow:none;background:transparent}
+  thead{display:none!important}
+  tbody{display:block;width:100%}
+  tr{display:block;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:8px;padding:12px;position:relative}
+  tr:hover{background:#fff}
+  td{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border:none;font-size:14px;white-space:normal;word-break:break-word}
+  td::before{content:attr(data-label);font-weight:600;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.3px;margin-right:12px;flex-shrink:0;min-width:80px}
+  td:first-child{padding-top:0}
+  td:last-child{padding-bottom:0}
+  td:empty{display:none}
+  /* Hide checkbox column on mobile */
+  td:first-child:has(input[type="checkbox"]){justify-content:flex-start}
 
-  /* Toolbar stacking */
+  /* Toolbar */
   .toolbar{flex-direction:column;align-items:stretch;gap:8px}
-  .toolbar>*{width:100%}
-  .toolbar .search{width:100%;font-size:15px;padding:12px 16px}
-  .toolbar select{font-size:14px;padding:10px 12px}
-  .toolbar .btn,.toolbar .btn-sm{font-size:13px;padding:10px 14px;justify-content:center}
+  .toolbar>div{display:flex;flex-wrap:wrap;gap:6px}
+  .toolbar .search{width:100%;font-size:15px;padding:12px 16px;border-radius:10px}
+  .toolbar select{font-size:14px;padding:10px 12px;flex:1;min-width:0}
+  .toolbar .btn,.toolbar .btn-sm{font-size:13px;padding:10px 14px;justify-content:center;flex:1;min-width:0}
 
   /* Buttons */
-  .btn{font-size:14px;padding:10px 16px}
+  .btn{font-size:14px;padding:10px 16px;border-radius:10px}
   .btn-sm{font-size:13px;padding:8px 12px}
 
   /* Cards and grids */
@@ -110,34 +118,36 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
   #inv-breakdown-cards{grid-template-columns:1fr 1fr!important}
 
   /* Modals */
-  .modal{width:98vw!important;max-width:98vw!important;margin:4px;border-radius:12px}
+  .modal{width:100vw!important;max-width:100vw!important;margin:0;border-radius:16px 16px 0 0;max-height:95vh;position:fixed;bottom:0}
   .modal-header{padding:14px 16px}
   .modal-header h2{font-size:16px}
   .modal-body{padding:14px 16px}
   .modal-footer{padding:12px 16px;flex-wrap:wrap}
 
-  /* Actions column */
-  .actions-cell{white-space:nowrap}
-  .actions-cell .btn{padding:6px 8px;font-size:11px}
+  /* Actions */
+  .actions-cell{display:flex!important;gap:6px;justify-content:flex-end!important;padding-top:8px!important;border-top:1px solid #f0f0f0!important}
+  .actions-cell::before{display:none!important}
+  .actions-cell .btn{padding:8px 12px;font-size:12px}
 
   /* Badge */
-  .badge{font-size:10px;padding:3px 8px}
+  .badge{font-size:11px;padding:4px 10px}
 
   /* Inventory sub-tabs */
   .inv-tab{padding:8px 12px!important;font-size:13px!important}
 
   /* Order overview cards */
-  #orders-overview{flex-direction:column}
+  #orders-overview{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}
+  #orders-overview>div{min-width:0!important;padding:10px!important;border-radius:8px!important}
 
-  /* Embedded iframe panels — full screen on mobile */
+  /* Embedded iframe panels */
   #panel-packing.active,#panel-customers.active{left:0!important}
 }
 
 @media(max-width:480px){
-  .content{padding:6px}
-  body{font-size:14px}
-  .topbar .scan-input{width:100px;font-size:13px}
+  .content{padding:4px}
   #inv-breakdown-cards{grid-template-columns:1fr!important}
+  #orders-overview{grid-template-columns:1fr!important}
+}
   td,th{padding:8px 6px;font-size:12px}
   .btn{font-size:13px;padding:8px 12px}
   .btn-sm{font-size:12px;padding:6px 10px}
@@ -1746,13 +1756,13 @@ function renderProducts(list) {
         const imgThumb = p.image_url ? `<img src="${esc(p.image_url)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><div style="display:none;width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>` : '<div style="width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>';
         return `<tr>
         <td>${imgThumb}</td>
-        <td><strong>${esc(p.sku)}</strong></td>
-        <td>${esc(p.name)}</td>
-        <td>${esc(p.category)}</td>
-        <td>$${p.price.toFixed(2)}</td>
-        <td>${variantInfo}</td>
-        <td class="${totalQty <= 5 ? 'stock-low' : 'stock-ok'}">${totalQty}</td>
-        <td>${esc(p.location)}</td>
+        <td data-label="SKU"><strong>${esc(p.sku)}</strong></td>
+        <td data-label="Name">${esc(p.name)}</td>
+        <td data-label="Category">${esc(p.category)}</td>
+        <td data-label="Price">$${p.price.toFixed(2)}</td>
+        <td data-label="Variants">${variantInfo}</td>
+        <td data-label="Stock" class="${totalQty <= 5 ? 'stock-low' : 'stock-ok'}">${totalQty}</td>
+        <td data-label="Location">${esc(p.location)}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Edit</button>
           <button class="btn btn-sm btn-primary" onclick="openVariantsModal('${p.id}')">Variants</button>
@@ -2587,17 +2597,17 @@ function renderOrders(list) {
     ? '<tr><td colspan="13" class="empty">No orders found</td></tr>'
     : pageItems.map(o => `<tr>
         <td><input type="checkbox" class="order-check" value="${o.id}" onchange="updateSelectedCount()"></td>
-        <td><strong>${esc(o.order_number)}</strong></td>
-        <td>${esc(o.order_name || '-')}</td>
-        <td>${esc(o.shop_name || '-')}</td>
-        <td>${esc(o.customer_name)}</td>
-        <td>${o.items.length} items</td>
-        <td>$${o.total_price.toFixed(2)}</td>
-        <td>${priorityBadge(o.priority)}</td>
-        <td><span class="badge badge-${o.status}">${o.status}</span></td>
-        <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? '<br><span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px;margin-top:2px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
-        <td>${new Date(o.created_at).toLocaleDateString('en-US')}</td>
-        <td>${o.updated_at ? new Date(o.updated_at).toLocaleDateString('en-US') + ' ' + new Date(o.updated_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+        <td data-label="Order #"><strong>${esc(o.order_number)}</strong></td>
+        <td data-label="Name">${esc(o.order_name || '-')}</td>
+        <td data-label="Shop">${esc(o.shop_name || '-')}</td>
+        <td data-label="Customer">${esc(o.customer_name)}</td>
+        <td data-label="Items">${o.items.length} items</td>
+        <td data-label="Total">$${o.total_price.toFixed(2)}</td>
+        <td data-label="Priority">${priorityBadge(o.priority)}</td>
+        <td data-label="Status"><span class="badge badge-${o.status}">${o.status}</span></td>
+        <td data-label="Tracking">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? '<br><span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px;margin-top:2px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
+        <td data-label="Created">${new Date(o.created_at).toLocaleDateString('en-US')}</td>
+        <td data-label="Updated">${o.updated_at ? new Date(o.updated_at).toLocaleDateString('en-US') + ' ' + new Date(o.updated_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) : '-'}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
           ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
