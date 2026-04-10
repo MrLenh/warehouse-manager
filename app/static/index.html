@@ -3577,6 +3577,7 @@ function renderStockRequests(list) {
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
           ${['approved','receiving'].includes(sr.status) ? `<button class="btn btn-sm btn-outline" onclick="showSrQrCode('${sr.id}','${esc(sr.request_number)}')" title="QR for mobile receiving">QR</button>` : ''}
+          ${['cancelled','pending'].includes(sr.status) ? `<button class="btn btn-sm btn-danger" onclick="deleteStockRequest('${sr.id}','${esc(sr.request_number)}')">Delete</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -3584,6 +3585,20 @@ function renderStockRequests(list) {
 
 document.getElementById('search-sr').addEventListener('input', () => renderStockRequests(allStockRequests));
 document.getElementById('filter-sr-status').addEventListener('change', loadStockRequests);
+
+async function deleteStockRequest(id, name) {
+  if (!confirm(`Delete stock request "${name}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(API + '/stock-requests/' + id, { method: 'DELETE' });
+    if (res.ok || res.status === 204) {
+      toast('Stock request deleted');
+      loadStockRequests();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error deleting', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
+}
 
 function openStockRequestModal() {
   document.getElementById('sr-supplier').value = '';
