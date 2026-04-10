@@ -3577,7 +3577,7 @@ function renderStockRequests(list) {
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
           ${['approved','receiving'].includes(sr.status) ? `<button class="btn btn-sm btn-outline" onclick="showSrQrCode('${sr.id}','${esc(sr.request_number)}')" title="QR for mobile receiving">QR</button>` : ''}
-          ${['cancelled','pending'].includes(sr.status) ? `<button class="btn btn-sm btn-danger" onclick="deleteStockRequest('${sr.id}','${esc(sr.request_number)}')">Delete</button>` : ''}
+          ${['cancelled','pending'].includes(sr.status) && currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteStockRequest('${sr.id}','${esc(sr.request_number)}')">Delete</button>` : ''}
         </td>
       </tr>`;
     }).join('');
