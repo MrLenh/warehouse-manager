@@ -87,34 +87,39 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
   body{font-size:15px;-webkit-text-size-adjust:100%}
   h2,h3{font-size:16px}
 
-  /* Tables: collapsible card rows on mobile */
+  /* Tables: collapsible single-line rows on mobile */
   table{display:block;width:100%!important;border:none;box-shadow:none;background:transparent}
   thead{display:none!important}
   tbody{display:block;width:100%}
-  tr{display:block;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:6px;padding:10px 12px;position:relative;cursor:pointer}
-  tr:hover{background:#fff}
-  /* All td hidden by default, show only summary fields */
-  td{display:none;justify-content:space-between;align-items:center;padding:3px 0;border:none;font-size:14px;white-space:normal;word-break:break-word}
-  td::before{content:attr(data-label);font-weight:600;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.3px;margin-right:8px;flex-shrink:0;min-width:70px}
-  /* Summary fields always visible */
-  td[data-label="Order #"],td[data-label="Name"],td[data-label="Status"],
-  td[data-label="SKU"],td[data-label="Stock"],td[data-label="Price"],
-  td[data-label="Request #"],td[data-label="Supplier"]{display:flex}
-  /* Checkbox always visible */
-  td:first-child:has(input[type="checkbox"]){display:block;position:absolute;top:12px;right:12px}
-  td:first-child:has(input[type="checkbox"])::before{display:none}
-  /* Expanded state */
-  tr.m-expanded td{display:flex}
+  tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:4px;padding:10px 12px;position:relative;cursor:pointer}
+  tr:hover{background:#fafafa}
+  /* All td hidden by default */
+  td{display:none;border:none;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0}
+  td::before{display:none}
+  /* Summary fields: inline on one line, no labels */
+  td[data-label="Order #"]{display:inline;font-weight:700;font-size:13px;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+  td[data-label="Name"]{display:inline;color:#555;font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+  td[data-label="Status"]{display:inline}
+  td[data-label="SKU"]{display:inline;font-weight:700;font-family:monospace;font-size:12px}
+  td[data-label="Stock"]{display:inline;font-size:12px}
+  td[data-label="Price"]{display:inline;font-size:12px;color:#555}
+  td[data-label="Request #"]{display:inline;font-weight:700;font-size:12px}
+  td[data-label="Supplier"]{display:inline;color:#555;font-size:12px}
+  /* Checkbox */
+  td:first-child:has(input[type="checkbox"]){display:block;position:absolute;top:10px;right:10px}
+  /* Expand arrow */
+  tr::after{content:'▸';position:absolute;right:12px;bottom:8px;font-size:10px;color:#ccc}
+  tr.m-expanded::after{content:'▾';color:#667eea}
+  /* Expanded: show all fields stacked */
+  tr.m-expanded{flex-direction:column;align-items:stretch;gap:0}
+  tr.m-expanded td{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:14px;white-space:normal;word-break:break-word;max-width:none;overflow:visible}
+  tr.m-expanded td::before{display:block;content:attr(data-label);font-weight:600;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.3px;margin-right:8px;flex-shrink:0;min-width:70px}
   tr.m-expanded td:empty{display:none}
   /* Actions hidden by default, show on expand */
   .actions-cell{display:none!important;gap:6px;justify-content:flex-end;padding-top:6px;border-top:1px solid #f0f0f0}
   .actions-cell::before{display:none!important}
   .actions-cell .btn{padding:6px 10px;font-size:12px}
   tr.m-expanded .actions-cell{display:flex!important}
-  /* Expand indicator */
-  tr::after{content:'';position:absolute;right:12px;bottom:6px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid #ccc}
-  tr:first-child:has(input[type="checkbox"])::after{right:40px}
-  tr.m-expanded::after{border-top:none;border-bottom:5px solid #667eea}
 
   /* Toolbar */
   .toolbar{flex-direction:column;align-items:stretch;gap:8px}
