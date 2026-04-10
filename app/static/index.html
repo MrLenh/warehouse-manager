@@ -87,19 +87,33 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
   body{font-size:15px;-webkit-text-size-adjust:100%}
   h2,h3{font-size:16px}
 
-  /* Tables: card-style stacking on mobile */
+  /* Tables: collapsible card rows on mobile */
   table{display:block;width:100%!important;border:none;box-shadow:none;background:transparent}
   thead{display:none!important}
   tbody{display:block;width:100%}
-  tr{display:block;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:8px;padding:12px;position:relative}
+  tr{display:block;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:6px;padding:10px 12px;position:relative;cursor:pointer}
   tr:hover{background:#fff}
-  td{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border:none;font-size:14px;white-space:normal;word-break:break-word}
-  td::before{content:attr(data-label);font-weight:600;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.3px;margin-right:12px;flex-shrink:0;min-width:80px}
-  td:first-child{padding-top:0}
-  td:last-child{padding-bottom:0}
-  td:empty{display:none}
-  /* Hide checkbox column on mobile */
-  td:first-child:has(input[type="checkbox"]){justify-content:flex-start}
+  /* All td hidden by default, show only summary fields */
+  td{display:none;justify-content:space-between;align-items:center;padding:3px 0;border:none;font-size:14px;white-space:normal;word-break:break-word}
+  td::before{content:attr(data-label);font-weight:600;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.3px;margin-right:8px;flex-shrink:0;min-width:70px}
+  /* Summary fields always visible */
+  td[data-label="Order #"],td[data-label="Name"],td[data-label="Status"],
+  td[data-label="SKU"],td[data-label="Stock"],td[data-label="Price"],
+  td[data-label="Request #"],td[data-label="Supplier"]{display:flex}
+  /* Checkbox always visible */
+  td:first-child:has(input[type="checkbox"]){display:block;position:absolute;top:12px;right:12px}
+  td:first-child:has(input[type="checkbox"])::before{display:none}
+  /* Expanded state */
+  tr.m-expanded td{display:flex}
+  tr.m-expanded td:empty{display:none}
+  /* Actions always visible */
+  .actions-cell{display:flex!important;gap:6px;justify-content:flex-end!important;padding-top:6px!important;border-top:1px solid #f0f0f0!important}
+  .actions-cell::before{display:none!important}
+  .actions-cell .btn{padding:6px 10px;font-size:12px}
+  /* Expand indicator */
+  tr::after{content:'';position:absolute;right:12px;bottom:6px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid #ccc}
+  tr:first-child:has(input[type="checkbox"])::after{right:40px}
+  tr.m-expanded::after{border-top:none;border-bottom:5px solid #667eea}
 
   /* Toolbar */
   .toolbar{flex-direction:column;align-items:stretch;gap:8px}
@@ -3532,6 +3546,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   const badge = document.getElementById('inv-daily-sku-badge');
   if (badge) badge.addEventListener('click', () => setDailySkuFilter(''));
+});
+
+// Mobile: tap row to expand/collapse card
+document.addEventListener('click', function(e) {
+  if (window.innerWidth > 768) return;
+  const tr = e.target.closest('tbody tr');
+  if (!tr) return;
+  // Don't toggle if clicking a button, link, input, or select
+  if (e.target.closest('button,a,input,select,.btn')) return;
+  tr.classList.toggle('m-expanded');
 });
 
 function toggleMetricDropdown() {
