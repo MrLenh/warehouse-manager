@@ -233,7 +233,6 @@ tr:hover{background:#f8f9ff}
         <a href="/api/v1/products/import-template" class="btn btn-outline btn-sm" download>CSV Template</a>
         <label class="btn btn-success btn-sm" style="margin:0">Import CSV<input type="file" accept=".csv" id="csv-import" style="display:none" onchange="importCSV(this)"></label>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-guide-modal').classList.add('show')" title="Import guide">?</button>
-        <button class="btn btn-sm" onclick="openStockAdjustModal()" style="background:#fd7e14;color:#fff">📷 Stock Count</button>
         <button class="btn btn-primary" onclick="openProductModal()">+ Add Product</button>
       </div>
     </div>
@@ -367,6 +366,7 @@ tr:hover{background:#f8f9ff}
           <option value="in">In stock</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
+        <button class="btn btn-sm" onclick="openStockAdjustModal()" style="background:#fd7e14;color:#fff;margin-left:auto">Stock Count</button>
       </div>
       <table>
         <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>In Warehouse</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Pending</th><th>Location</th><th></th></tr></thead>
@@ -1037,21 +1037,18 @@ tr:hover{background:#f8f9ff}
 
 <!-- VARIANTS MODAL -->
 <div class="modal-overlay" id="variants-modal">
-  <div class="modal" style="width:800px">
+  <div class="modal" style="width:900px;max-height:90vh">
     <div class="modal-header">
       <h2 id="variants-modal-title">Variants</h2>
       <button class="modal-close" onclick="closeModal('variants-modal')">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto">
       <div id="variants-product-info" style="margin-bottom:12px;font-size:13px;color:#888"></div>
       <div style="margin-bottom:12px">
         <strong style="font-size:13px">Option types:</strong>
         <span id="variants-option-types" style="font-size:13px;color:#667eea"></span>
       </div>
-      <table>
-        <thead><tr><th>Variant SKU</th><th>Attributes</th><th>Price</th><th>Wt (oz)</th><th>Dims (LxWxH)</th><th>Stock</th><th>Location</th><th>Actions</th></tr></thead>
-        <tbody id="variants-body"></tbody>
-      </table>
+      <div id="variants-body"></div>
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8e8e8">
         <h3 style="font-size:14px;margin-bottom:10px">Add New Variant</h3>
         <input type="hidden" id="v-product-id">
@@ -2054,29 +2051,87 @@ function getVariantAttrs() {
 }
 
 function renderVariantsTable(variants) {
-  document.getElementById('variants-body').innerHTML = variants.length === 0
-    ? '<tr><td colspan="8" class="empty">No variants yet</td></tr>'
-    : variants.map(v => {
-        const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
-        const attrStr = Object.entries(attrs).map(([k,val]) => `${k}: ${val}`).join(', ');
-        const wt = v.weight_oz_override > 0 ? v.weight_oz_override + ' oz' : 'Parent';
-        const dims = (v.length_in_override > 0 || v.width_in_override > 0 || v.height_in_override > 0)
-          ? `${v.length_in_override}x${v.width_in_override}x${v.height_in_override}` : 'Parent';
-        return `<tr>
-          <td><strong>${esc(v.variant_sku)}</strong></td>
-          <td>${esc(attrStr)}</td>
-          <td id="vp-${v.id}">${v.price_override > 0 ? '$'+v.price_override.toFixed(2) : 'Parent'}</td>
-          <td>${wt}</td>
-          <td>${dims}</td>
-          <td class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${v.quantity}</td>
-          <td>${esc(v.location)}</td>
-          <td class="actions-cell">
-            <button class="btn btn-sm btn-outline" onclick="editVarPrice('${v.id}',${v.price_override || 0})">Price</button>
-            ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')">Stock</button>` : ''}
-            <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')">Delete</button>
-          </td>
-        </tr>`;
-      }).join('');
+  const container = document.getElementById('variants-body');
+  if (variants.length === 0) {
+    container.innerHTML = '<div class="empty" style="padding:20px">No variants yet</div>';
+    return;
+  }
+  container.innerHTML = variants.map(v => {
+    const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
+    const attrStr = Object.entries(attrs).map(([k,val]) => `<span style="background:#eef2ff;color:#667eea;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${esc(k)}: ${esc(val)}</span>`).join(' ');
+    return `<div style="border:1px solid #e8e8e8;border-radius:10px;padding:14px;margin-bottom:10px;background:#fff" id="vc-${v.id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <strong style="font-size:14px;font-family:monospace">${esc(v.variant_sku)}</strong>
+          <span style="margin-left:8px">${attrStr}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}" style="font-weight:700;font-size:15px">${v.quantity} units</span>
+          ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')" style="padding:2px 8px;font-size:11px">Adjust</button>` : ''}
+          <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')" style="padding:2px 8px;font-size:11px">Delete</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Price ($)</label>
+          <input type="number" step="0.01" min="0" value="${(v.price_override || 0).toFixed(2)}" class="ve-input" data-vid="${v.id}" data-field="price_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Weight (oz)</label>
+          <input type="number" step="0.1" min="0" value="${v.weight_oz_override || 0}" class="ve-input" data-vid="${v.id}" data-field="weight_oz_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Length (in)</label>
+          <input type="number" step="0.1" min="0" value="${v.length_in_override || 0}" class="ve-input" data-vid="${v.id}" data-field="length_in_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Width (in)</label>
+          <input type="number" step="0.1" min="0" value="${v.width_in_override || 0}" class="ve-input" data-vid="${v.id}" data-field="width_in_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Height (in)</label>
+          <input type="number" step="0.1" min="0" value="${v.height_in_override || 0}" class="ve-input" data-vid="${v.id}" data-field="height_in_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Location</label>
+          <input type="text" value="${esc(v.location || '')}" class="ve-input" data-vid="${v.id}" data-field="location"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="e.g. A-1-B">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function saveVariantField(input) {
+  const vid = input.dataset.vid;
+  const field = input.dataset.field;
+  let value = input.value;
+  if (field !== 'location') value = parseFloat(value) || 0;
+  const body = {};
+  body[field] = value;
+  input.style.borderColor = '#667eea';
+  try {
+    const res = await fetch(API + '/products/variants/' + vid, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      input.style.borderColor = '#28a745';
+      setTimeout(() => { input.style.borderColor = '#ddd'; }, 1500);
+      await loadProducts();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+      input.style.borderColor = '#dc3545';
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+    input.style.borderColor = '#dc3545';
+  }
 }
 
 async function saveVariant() {
@@ -2102,28 +2157,6 @@ async function deleteVariant(variantId) {
   const res = await fetch(API + '/products/variants/' + variantId, { method: 'DELETE' });
   if (res.ok) { toast('Variant deleted'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
   else { toast('Error deleting variant', 'error'); }
-}
-
-function editVarPrice(variantId, currentPrice) {
-  const cell = document.getElementById('vp-' + variantId);
-  if (!cell) return;
-  cell.innerHTML = '<div style="display:flex;gap:4px;align-items:center">' +
-    '<input type="number" step="0.01" min="0" value="' + (currentPrice || 0).toFixed(2) + '" id="vpi-' + variantId + '" style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:13px">' +
-    '<button class="btn btn-sm btn-primary" onclick="saveVarPrice(\'' + variantId + '\')">OK</button>' +
-    '</div>';
-  document.getElementById('vpi-' + variantId).focus();
-}
-
-async function saveVarPrice(variantId) {
-  const input = document.getElementById('vpi-' + variantId);
-  if (!input) return;
-  const price = parseFloat(input.value) || 0;
-  const res = await fetch(API + '/products/variants/' + variantId, {
-    method: 'PATCH', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ price_override: price }),
-  });
-  if (res.ok) { toast('Variant price updated'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
-  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
 }
 
 async function adjustVariantStock(variantId) {
