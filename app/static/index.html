@@ -52,9 +52,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
 .hamburger svg{width:24px;height:24px;stroke:#555;stroke-width:2}
 
 /* --- Main Content --- */
-.main-content{flex:1;margin-left:240px;transition:margin-left .2s ease}
+.main-content{flex:1;margin-left:240px;transition:margin-left .2s ease;overflow-x:hidden;min-width:0}
 body.sidebar-collapsed .main-content{margin-left:60px}
-.content{max-width:100%;margin:0 auto;padding:16px}
+.content{padding:16px;overflow-x:auto}
 
 /* --- Panels (keep existing) --- */
 .panel{display:none}
@@ -68,19 +68,18 @@ body.sidebar-collapsed #panel-packing.active,
 body.sidebar-collapsed #panel-customers.active{left:60px}
 #packing-iframe,#customers-iframe{width:100%;height:100%;border:none;display:block}
 
-/* Desktop tables: ensure normal display + horizontal scroll if needed */
+/* Desktop tables: ensure normal display */
 @media(min-width:769px){
-  table{display:table!important;width:100%!important;table-layout:auto}
+  table{display:table!important;width:100%!important}
   thead{display:table-header-group!important}
   tbody{display:table-row-group!important}
   tr{display:table-row!important;background:initial;border-radius:0;box-shadow:none;margin:0;padding:0;cursor:default}
   tr:hover{background:#f8f9ff}
-  td{display:table-cell!important;padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+  td{display:table-cell!important;padding:8px 10px;border-bottom:1px solid #f0f0f0;font-size:13px;white-space:nowrap}
+  th{padding:8px 10px;font-size:12px}
   td::before{display:none!important}
   tr::after{display:none!important}
-  .actions-cell{display:flex!important;white-space:nowrap;max-width:none}
-  /* Scrollable table wrapper */
-  .panel{overflow-x:auto}
+  .actions-cell{display:flex!important;white-space:nowrap}
 }
 
 /* --- Responsive --- */
@@ -525,10 +524,12 @@ tr:hover{background:#f8f9ff}
       </div>
     </div>
     <div id="orders-overview" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
     <table>
-      <thead><tr><th style="width:32px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th style="min-width:100px">Order #</th><th>Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Priority</th><th>Status</th><th>Tracking</th><th>Created</th><th>Updated</th><th>Actions</th></tr></thead>
+      <thead><tr><th style="width:32px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Priority</th><th>Status</th><th>Tracking</th><th>Created</th><th>Updated</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
+    </div>
     <div id="orders-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap"></div>
   </div>
 
