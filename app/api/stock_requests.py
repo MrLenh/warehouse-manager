@@ -87,6 +87,19 @@ def cancel_stock_request(sr_id: str, db: Session = Depends(get_db)):
     return sr
 
 
+@router.delete("/{sr_id}", status_code=204)
+def delete_stock_request(sr_id: str, db: Session = Depends(get_db)):
+    """Delete a stock request. Only cancelled or pending requests can be deleted."""
+    sr = stock_request_service.get_stock_request(db, sr_id)
+    if not sr:
+        raise HTTPException(404, "Stock request not found")
+    allowed = {StockRequestStatus.CANCELLED, StockRequestStatus.PENDING}
+    if sr.status not in allowed:
+        raise HTTPException(400, f"Can only delete cancelled or pending requests (current: {sr.status})")
+    db.delete(sr)
+    db.commit()
+
+
 @router.patch("/{sr_id}/tracking", response_model=StockRequestOut)
 def update_tracking(sr_id: str, data: StockRequestTrackingUpdate, db: Session = Depends(get_db)):
     """Update tracking ID and carrier for a stock request shipment."""
