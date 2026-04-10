@@ -2,8 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.database import get_db
 from app.models.stock_request import StockRequestStatus
+from app.models.user import User
 from app.schemas.stock_request import (
     BoxScanResult,
     StockRequestCreate,
@@ -88,8 +90,10 @@ def cancel_stock_request(sr_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{sr_id}", status_code=204)
-def delete_stock_request(sr_id: str, db: Session = Depends(get_db)):
-    """Delete a stock request. Only cancelled or pending requests can be deleted."""
+def delete_stock_request(sr_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Delete a stock request. Super admin only. Only cancelled or pending."""
+    if user.role != "super_admin":
+        raise HTTPException(403, "Super admin only")
     sr = stock_request_service.get_stock_request(db, sr_id)
     if not sr:
         raise HTTPException(404, "Stock request not found")
