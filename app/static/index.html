@@ -63,9 +63,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
 /* Hide old tabs */
 .tabs{display:none!important}
 /* Embedded iframe panels */
-#panel-packing,#panel-customers{padding:0}
-#panel-packing.active,#panel-customers.active{display:block}
-#packing-iframe,#customers-iframe{width:100%;border:none;min-height:calc(100vh - 60px)}
+#panel-packing.active,#panel-customers.active{display:block;padding:0;margin:-20px}
+#packing-iframe,#customers-iframe{width:100%;height:calc(100vh - 56px);border:none;display:block}
 
 /* --- Responsive --- */
 @media(max-width:768px){
@@ -128,8 +127,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2
   /* Order overview cards */
   #orders-overview{flex-direction:column}
 
-  /* Inventory iframe panels */
-  #packing-iframe,#customers-iframe{min-height:calc(100vh - 60px)}
+  /* Embedded iframe panels */
+  #panel-packing.active,#panel-customers.active{margin:-10px}
+  #packing-iframe,#customers-iframe{height:calc(100vh - 56px)}
 }
 
 @media(max-width:480px){
@@ -1063,13 +1063,13 @@ tr:hover{background:#f8f9ff}
 </div>
 
   <!-- PACKING STATION PANEL (embedded) -->
-  <div class="panel" id="panel-packing">
-    <iframe id="packing-iframe" style="width:100%;border:none;min-height:calc(100vh - 80px)" onload="this.style.height=this.contentDocument.body.scrollHeight+'px'"></iframe>
+  <div class="panel" id="panel-packing" style="padding:0;margin:0">
+    <iframe id="packing-iframe" src="about:blank" style="width:100%;height:calc(100vh - 56px);border:none;display:block"></iframe>
   </div>
 
   <!-- CUSTOMERS PANEL (embedded) -->
-  <div class="panel" id="panel-customers">
-    <iframe id="customers-iframe" style="width:100%;border:none;min-height:calc(100vh - 80px)" onload="this.style.height=this.contentDocument.body.scrollHeight+'px'"></iframe>
+  <div class="panel" id="panel-customers" style="padding:0;margin:0">
+    <iframe id="customers-iframe" src="about:blank" style="width:100%;height:calc(100vh - 56px);border:none;display:block"></iframe>
   </div>
 
 <!-- PRODUCT MODAL -->
