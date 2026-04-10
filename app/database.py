@@ -178,12 +178,29 @@ def _migrate_add_columns():
                 if col_name not in existing:
                     conn.execute(text(f"ALTER TABLE stock_requests ADD COLUMN {col_name} {col_type}"))
 
-    # Inventory logs: gap column
+    # Inventory logs: gap, cost_amount, adjusted_by columns
     if "inventory_logs" in tables:
         existing = {col["name"] for col in inspector.get_columns("inventory_logs")}
-        if "gap" not in existing:
-            with engine.begin() as conn:
+        with engine.begin() as conn:
+            if "gap" not in existing:
                 conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN gap INTEGER DEFAULT 0"))
+            if "cost_amount" not in existing:
+                conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN cost_amount FLOAT DEFAULT 0.0"))
+            if "adjusted_by" not in existing:
+                conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN adjusted_by VARCHAR DEFAULT ''"))
+
+    # Stock batches: source column + nullable stock_request_id
+    if "stock_batches" in tables:
+        existing = {col["name"] for col in inspector.get_columns("stock_batches")}
+        with engine.begin() as conn:
+            if "source" not in existing:
+                conn.execute(text("ALTER TABLE stock_batches ADD COLUMN source VARCHAR DEFAULT 'stock_request'"))
+            # Make stock_request_id nullable (for batches created via manual inbound/adjustment)
+            if settings.DATABASE_URL.startswith("postgresql"):
+                try:
+                    conn.execute(text("ALTER TABLE stock_batches ALTER COLUMN stock_request_id DROP NOT NULL"))
+                except Exception:
+                    pass
 
     # Stock request items: box_count
     if "stock_request_items" in tables:
@@ -225,6 +242,7 @@ def init_db():
     import app.models.inventory_log  # noqa: F401
     import app.models.stock_request  # noqa: F401
     import app.models.stock_batch  # noqa: F401
+    import app.models.stock_adjust_request  # noqa: F401
     import app.models.picking  # noqa: F401
     import app.models.user  # noqa: F401
     import app.models.customer  # noqa: F401

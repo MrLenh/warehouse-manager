@@ -57,6 +57,7 @@ class VariantInventoryAdjust(BaseModel):
     quantity: int
     reason: str = "adjustment"
     note: str = ""
+    unit_cost: float | None = None  # required for inbound; optional for adjustment
 
 
 # --- Product schemas ---
@@ -127,5 +128,6 @@ class ProductOut(BaseModel):
 
 class InventoryAdjust(BaseModel):
     quantity: int  # positive to add, negative to remove
-    reason: str = "adjustment"
+    reason: str = "adjustment"  # inbound | adjustment
     note: str = ""
+    unit_cost: float | None = None  # required for inbound; optional for adjustment

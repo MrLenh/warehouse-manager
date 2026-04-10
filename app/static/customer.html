@@ -352,6 +352,13 @@ tr:hover{background:#f8f9ff}
       </div>
 
       <div class="form-group" style="margin-top:12px">
+        <label style="font-weight:600;font-size:13px">Test with Order</label>
+        <select id="wh-order-select" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px" onchange="whLoadOrderPreview()">
+          <option value="">-- Sample data (no order) --</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-top:12px">
         <label style="display:flex;align-items:center;gap:8px">
           Payload Preview
           <span style="font-size:11px;color:#888;font-weight:normal">(editable — chỉnh JSON trước khi test)</span>
@@ -618,10 +625,14 @@ function renderPreview(p) {
 }
 
 async function createInvoice() {
+  const btn = document.getElementById('btn-create-inv');
+  if (btn.disabled) return;
+  btn.disabled = true;
+
   const custId = document.getElementById('inv-customer').value;
   const dateTo = document.getElementById('inv-date-to').value;
   const name = document.getElementById('inv-name').value.trim();
-  if (!custId || !dateTo || !name) { toast('Fill all required fields', 'error'); return; }
+  if (!custId || !dateTo || !name) { toast('Fill all required fields', 'error'); btn.disabled = false; return; }
 
   const body = {customer_id: custId, date_to: dateTo, invoice_name: name, notes: document.getElementById('inv-notes').value.trim()};
   const sf = document.getElementById('inv-stock-fee').value;
@@ -635,12 +646,12 @@ async function createInvoice() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body),
     });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); return; }
+    if (!res.ok) { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); btn.disabled = false; return; }
     const inv = await res.json();
     toast('Invoice ' + inv.invoice_number + ' created');
     closeInvModal();
     loadInvoices();
-  } catch (e) { toast(e.message, 'error'); }
+  } catch (e) { toast(e.message, 'error'); btn.disabled = false; }
 }
 
 // ---- Invoice Detail ----
@@ -768,16 +779,18 @@ const WH_AVAILABLE_FIELDS = {
   base_cost: {label: 'Base Cost (Processing Fee)', group: 'Pricing'},
   total_price: {label: 'Total Price', group: 'Pricing'},
   sku: {label: 'SKU', group: 'Item'},
+  name: {label: 'Item Name', group: 'Item'},
   product_name: {label: 'Product Name', group: 'Item'},
   variant_label: {label: 'Variant', group: 'Item'},
   variant_sku: {label: 'Variant SKU', group: 'Item'},
   quantity: {label: 'Quantity', group: 'Item'},
   unit_price: {label: 'Unit Price', group: 'Item'},
+  product_cost: {label: 'Product Cost', group: 'Pricing'},
 };
 
 const WH_SAMPLE_VALUES = {
   id: 'ITEM-001',
-  order_number: '#FLWSP283971',
+  order_number: 'ORD-20260306083523-AA3001',
   order_name: '#FLWSP283971',
   status: 'shipped',
   customer_name: 'UOYMedia',
@@ -792,11 +805,13 @@ const WH_SAMPLE_VALUES = {
   base_cost: 0,
   total_price: 7.70,
   sku: 'EMBGFUS250',
+  name: 'Sample Item',
   product_name: 'Grommet Flag MLN-1786-TTH',
   variant_label: '5x8ft',
   variant_sku: '',
   quantity: 1,
   unit_price: 0.00,
+  product_cost: 0.00,
 };
 
 async function loadWebhooks() {
@@ -907,9 +922,25 @@ function whUpdatePreview() {
   whValidateJson();
 }
 
-function whResetPreview() {
-  whUpdatePreview();
+async function whResetPreview() {
   document.getElementById('wh-json-error').style.display = 'none';
+  const custId = document.getElementById('wh-edit-id').value;
+  const orderId = document.getElementById('wh-order-select').value;
+  try {
+    const url = API + '/customers/' + custId + '/webhook/preview' + (orderId ? '?order_id=' + encodeURIComponent(orderId) : '');
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('wh-payload-preview').value = JSON.stringify(data.payload, null, 2);
+      return;
+    }
+  } catch {}
+  // Fallback to local preview
+  whUpdatePreview();
+}
+
+async function whLoadOrderPreview() {
+  await whResetPreview();
 }
 
 function whValidateJson() {
@@ -935,7 +966,7 @@ function whGetEditedPayload() {
   }
 }
 
-function openWhModal(custId) {
+async function openWhModal(custId) {
   const c = whCustomers.find(x => x.id === custId);
   if (!c) return;
   document.getElementById('wh-edit-id').value = c.id;
@@ -946,7 +977,24 @@ function openWhModal(custId) {
 
   const selectedFields = _parseFields(c);
   _renderFieldsGrid(selectedFields);
-  whUpdatePreview();
+
+  // Load orders for selector
+  const sel = document.getElementById('wh-order-select');
+  while (sel.options.length > 1) sel.remove(1);
+  try {
+    const res = await fetch(API + '/customers/' + custId + '/webhook/preview');
+    if (res.ok) {
+      const data = await res.json();
+      (data.orders || []).forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = o.order_number + (o.order_name ? ' - ' + o.order_name : '') + ' [' + o.status + ']';
+        sel.appendChild(opt);
+      });
+      // Show default payload from API
+      document.getElementById('wh-payload-preview').value = JSON.stringify(data.payload, null, 2);
+    }
+  } catch {}
 
   document.getElementById('wh-modal').classList.add('show');
 }

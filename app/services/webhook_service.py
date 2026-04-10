@@ -32,7 +32,7 @@ EVENT_TRACKING_UPDATED = "tracking.updated"
 # Item may be None for order-level-only payloads.
 AVAILABLE_WEBHOOK_FIELDS = {
     "id": ("Line Item ID", lambda o, i: i.id[1:] if i and i.id and i.id.startswith("N") else (i.id if i else "")),
-    "order_number": ("Order Number", lambda o, i: o.order_name or ""),
+    "order_number": ("Order Number", lambda o, i: o.order_number or ""),
     "order_name": ("Order Name", lambda o, i: o.order_name or ""),
     "status": ("Order Status", lambda o, i: o.status if isinstance(o.status, str) else o.status.value),
     "customer_name": ("Customer Name", lambda o, i: o.customer_name),
@@ -47,15 +47,18 @@ AVAILABLE_WEBHOOK_FIELDS = {
     "base_cost": ("Base Cost (Processing Fee)", lambda o, i: o.processing_fee),
     "total_price": ("Total Price", lambda o, i: o.total_price),
     "sku": ("SKU", lambda o, i: i.sku if i else ""),
+    "name": ("Item Name", lambda o, i: i.name if i else ""),
     "product_name": ("Product Name", lambda o, i: i.product_name if i else ""),
     "variant_label": ("Variant", lambda o, i: i.variant_label if i else ""),
     "variant_sku": ("Variant SKU", lambda o, i: i.variant_sku if i else ""),
     "quantity": ("Quantity", lambda o, i: i.quantity if i else 0),
     "unit_price": ("Unit Price", lambda o, i: i.unit_price if i else 0.0),
+    "product_cost": ("Product Cost (per unit)", lambda o, i: i.product_cost if i else 0.0),
+    "cogs_total": ("COGS Total (line item)", lambda o, i: i.cogs_total if i else 0.0),
 }
 
 # Fields that require line-item iteration
-ITEM_LEVEL_FIELDS = {"id", "sku", "product_name", "variant_label", "variant_sku", "quantity", "unit_price"}
+ITEM_LEVEL_FIELDS = {"id", "sku", "name", "product_name", "variant_label", "variant_sku", "quantity", "unit_price", "product_cost", "cogs_total"}
 
 # Retry config
 MAX_RETRIES = 3
@@ -114,9 +117,12 @@ def _build_order_data(order: Order) -> dict:
                 "sku": item.sku,
                 "variant_sku": item.variant_sku or "",
                 "variant_label": item.variant_label or "",
+                "name": item.name or "",
                 "product_name": item.product_name or "",
                 "quantity": item.quantity,
                 "unit_price": item.unit_price,
+                "product_cost": item.product_cost,
+                "cogs_total": item.cogs_total,
             })
 
     status_val = order.status if isinstance(order.status, str) else order.status.value
@@ -192,7 +198,10 @@ def _build_custom_payloads(order: Order, fields: list[str], event_type: str = EV
         data[field] = resolver(order, None)
 
     # Build items array if item-level fields are selected
+    # Always include 'name' in items when any item field is selected
     if has_item_fields and hasattr(order, "items") and order.items:
+        if "name" not in item_level_fields:
+            item_level_fields.append("name")
         items_list = []
         for item in order.items:
             item_data = {}

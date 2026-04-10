@@ -120,6 +120,43 @@ class OrderItem(Base):
     def image_url(self) -> str:
         return self.product.image_url if self.product else ""
 
+    @property
+    def cogs_total(self) -> float:
+        """Locked COGS from FIFO consumption records (sum of qty * snapshot unit_cost).
+        Falls back to qty * current product/variant price if no consumption records exist
+        (e.g. for orders created before COGS tracking was added)."""
+        from app.models.stock_batch import OrderItemBatchConsumption
+        from sqlalchemy.orm import object_session
+
+        session = object_session(self)
+        if session is None:
+            return 0.0
+        consumptions = (
+            session.query(OrderItemBatchConsumption)
+            .filter(OrderItemBatchConsumption.order_item_id == self.id)
+            .all()
+        )
+        if consumptions:
+            return round(sum(c.quantity * c.unit_cost for c in consumptions), 2)
+        # Fallback: weighted-average snapshot from current product price
+        return round(self.quantity * self._current_avg_price(), 2)
+
+    def _current_avg_price(self) -> float:
+        if not self.product:
+            return 0.0
+        if self.variant_id:
+            for v in self.product.variants:
+                if v.id == self.variant_id:
+                    return v.effective_price
+        return self.product.price
+
+    @property
+    def product_cost(self) -> float:
+        """Per-unit COGS — locked at order creation time via FIFO consumption."""
+        if self.quantity <= 0:
+            return 0.0
+        return round(self.cogs_total / self.quantity, 4)
+
 
 # Avoid circular import
 from app.models.invoice import Invoice  # noqa: E402, F401

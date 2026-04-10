@@ -462,6 +462,7 @@ def import_orders(file: UploadFile, status: str = Form(""), db: Session = Depend
             ship_to=AddressInput(
                 name=group["ship_to_name"] or group["customer_name"],
                 street1=group["ship_to_street1"],
+                street2=group["ship_to_street2"],
                 city=group["ship_to_city"],
                 state=group["ship_to_state"],
                 zip=group["ship_to_zip"],
@@ -527,7 +528,7 @@ LABEL_PURCHASED_CSV_COLUMNS = [
     "order_name", "customer_name", "ship_to_name",
     "ship_to_street1", "ship_to_street2", "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
-    "sku", "item_name", "quantity",
+    "sku", "name", "item_name", "quantity",
     "tracking_number", "label_url", "shipping_cost", "notes",
 ]
 
@@ -656,8 +657,10 @@ def import_label_purchased(
             group_order.append(order_name)
 
         item_name = (row.get("item_name") or "").strip()
+        item_display_name = (row.get("name") or "").strip()
         order_groups[order_name]["items"].append({
             "sku": sku,
+            "name": item_display_name,
             "item_name": item_name,
             "quantity": quantity,
             "row": row_num,
@@ -698,6 +701,7 @@ def import_label_purchased(
                     "quantity": item["quantity"],
                     "resolved_name": item["item_name"] or f"{product.name} ({variant.variant_sku})",
                     "item_name": item["item_name"],
+                    "name": item.get("name", ""),
                     "sku": sku_val,
                 })
                 continue
@@ -716,6 +720,7 @@ def import_label_purchased(
                     "quantity": item["quantity"],
                     "resolved_name": item["item_name"] or product.name,
                     "item_name": item["item_name"],
+                    "name": item.get("name", ""),
                     "sku": sku_val,
                 })
                 continue
@@ -739,6 +744,7 @@ def import_label_purchased(
             ship_to=AddressInput(
                 name=group["ship_to_name"] or group["customer_name"],
                 street1=group["ship_to_street1"],
+                street2=group["ship_to_street2"],
                 city=group["ship_to_city"],
                 state=group["ship_to_state"],
                 zip=group["ship_to_zip"],
@@ -749,7 +755,7 @@ def import_label_purchased(
                     product_id=ri["product_id"],
                     variant_id=ri["variant_id"],
                     quantity=ri["quantity"],
-                    name="",
+                    name=ri.get("name", ""),
                     item_name=ri["item_name"],
                 )
                 for ri in resolved_items
@@ -787,6 +793,93 @@ def import_label_purchased(
             errors.append({"order_name": display_name or order_name, "sku": skus, "error": str(e)})
 
     return {"created": created, "created_details": created_details, "errors": errors}
+
+
+@router.get("/update-names-template")
+def download_update_names_template(
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Download CSV template for updating item names. Optionally filter by order status."""
+    from app.models.order import Order, OrderItem
+    query = db.query(Order)
+    if status:
+        if "," in status:
+            query = query.filter(Order.status.in_([s.strip() for s in status.split(",")]))
+        else:
+            query = query.filter(Order.status == status)
+    orders = query.order_by(Order.created_at.desc()).limit(500).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["order_number", "order_name", "sku", "variant_sku", "product_name", "name"])
+    for o in orders:
+        for item in o.items:
+            writer.writerow([
+                o.order_number,
+                o.order_name or "",
+                item.sku,
+                item.variant_sku or "",
+                item.product_name or "",
+                item.name or "",
+            ])
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=update_item_names.csv"},
+    )
+
+
+@router.post("/update-names")
+def update_item_names(
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update item names from CSV. CSV must have columns: order_number, sku, name."""
+    from app.models.order import Order, OrderItem
+
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(400, "Only CSV files are supported")
+
+    try:
+        content = file.file.read().decode("utf-8-sig")
+    except Exception as e:
+        raise HTTPException(400, f"Cannot read CSV: {e}")
+
+    reader = csv.DictReader(io.StringIO(content))
+    updated = 0
+    errors = []
+
+    for row_num, row in enumerate(reader, start=2):
+        order_number = (row.get("order_number") or "").strip()
+        sku = (row.get("sku") or "").strip()
+        name = (row.get("name") or "").strip()
+
+        if not order_number or not sku:
+            continue
+        if not name:
+            continue
+
+        order = db.query(Order).filter(Order.order_number == order_number).first()
+        if not order:
+            errors.append({"row": row_num, "error": f"Order '{order_number}' not found"})
+            continue
+
+        matched = False
+        for item in order.items:
+            if item.sku == sku or item.variant_sku == sku:
+                item.name = name
+                matched = True
+                updated += 1
+                break
+
+        if not matched:
+            errors.append({"row": row_num, "error": f"SKU '{sku}' not found in order '{order_number}'"})
+
+    db.commit()
+    return {"updated": updated, "errors": errors}
 
 
 @router.post("/merge-by-name")

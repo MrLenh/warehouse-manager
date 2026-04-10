@@ -22,17 +22,6 @@ from app.services import auth_service, order_service, product_service, stock_req
 router = APIRouter(prefix="/portal", tags=["customer-portal"])
 
 
-def _get_product_cost(item) -> float:
-    """Get product cost from catalog for an order item."""
-    if not item.product:
-        return 0.0
-    if item.variant_id:
-        for v in item.product.variants:
-            if v.id == item.variant_id:
-                return v.effective_price
-    return item.product.price
-
-
 def _require_customer(user: User, db: Session) -> Customer:
     """Ensure user is a customer and return their Customer record."""
     if user.role != "customer" or not user.customer_id:
@@ -154,7 +143,7 @@ PORTAL_CSV_COLUMNS = [
     "ship_to_name", "ship_to_street1", "ship_to_street2",
     "ship_to_city", "ship_to_state", "ship_to_zip", "ship_to_country",
     "carrier", "service",
-    "sku", "item_name", "quantity", "notes",
+    "sku", "name", "item_name", "quantity", "notes",
     "tracking_number", "label_url", "shipping_cost",
 ]
 
@@ -272,6 +261,7 @@ def import_orders(
 
         order_groups[order_name]["items"].append({
             "sku": sku,
+            "name": (row.get("name") or "").strip(),
             "item_name": (row.get("item_name") or "").strip(),
             "quantity": quantity,
             "row": row_num,
@@ -324,12 +314,13 @@ def import_orders(
             ship_to=AddressInput(
                 name=group["ship_to_name"],
                 street1=group["ship_to_street1"],
+                street2=group["ship_to_street2"],
                 city=group["ship_to_city"],
                 state=group["ship_to_state"],
                 zip=group["ship_to_zip"],
                 country=group["ship_to_country"],
             ),
-            items=[OrderItemCreate(product_id=ri["product_id"], variant_id=ri["variant_id"], quantity=ri["quantity"], item_name=ri.get("item_name", "")) for ri in resolved_items],
+            items=[OrderItemCreate(product_id=ri["product_id"], variant_id=ri["variant_id"], quantity=ri["quantity"], name=ri.get("name", ""), item_name=ri.get("item_name", "")) for ri in resolved_items],
             carrier=group["carrier"],
             service=group["service"],
             notes=group["notes"],
@@ -486,7 +477,7 @@ def get_order(order_id: str, user: User = Depends(get_current_user), db: Session
                 "variant_label": i.variant_label or "",
                 "quantity": i.quantity,
                 "unit_price": i.unit_price,
-                "product_cost": _get_product_cost(i),
+                "product_cost": i.product_cost,
                 "image_url": i.image_url,
             }
             for i in order.items

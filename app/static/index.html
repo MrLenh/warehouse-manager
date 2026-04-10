@@ -284,6 +284,7 @@ tr:hover{background:#f8f9ff}
         <button class="btn btn-outline btn-sm" onclick="loadOrders()">Refresh</button>
         <button class="btn btn-outline btn-sm" onclick="exportOrders()">Export CSV</button>
         <button class="btn btn-success btn-sm" onclick="openImportOrderModal()">Import Orders</button>
+        <button class="btn btn-outline btn-sm" onclick="openUpdateNamesModal()" style="border-color:#7c3aed;color:#7c3aed">Update Item Names</button>
         <button class="btn btn-warning btn-sm" id="btn-create-picking" onclick="createPickingList()" style="display:none">Create Picking List (<span id="selected-count">0</span>)</button>
         <button class="btn btn-primary btn-sm" id="btn-create-label-batch" onclick="createLabelBatch()" style="display:none">Create Label Batch (<span id="label-batch-count">0</span>)</button>
         <button class="btn btn-sm" id="btn-mark-shipped" onclick="batchMarkShipped()" style="display:none;background:#17a2b8;color:#fff">Mark Shipped (<span id="mark-shipped-count">0</span>)</button>
@@ -365,6 +366,7 @@ tr:hover{background:#f8f9ff}
           <option value="in">In stock</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadInventoryOverview()">Refresh</button>
+        <button class="btn btn-sm" onclick="openStockAdjustModal()" style="background:#fd7e14;color:#fff;margin-left:auto">Stock Count</button>
       </div>
       <table>
         <thead><tr><th>SKU</th><th>Name</th><th>Variant</th><th>In Warehouse</th><th>On Hold</th><th>Available</th><th>In Production</th><th>Shipped</th><th>Pending</th><th>Location</th><th></th></tr></thead>
@@ -375,12 +377,15 @@ tr:hover{background:#f8f9ff}
     <!-- Inventory Log -->
     <div id="inv-log" class="inv-panel" style="display:none">
       <div class="toolbar" style="flex-wrap:wrap;gap:8px">
-        <input type="text" class="search" id="search-inv-log" placeholder="Search by SKU, name, note..." oninput="renderInventoryLog()">
+        <input type="text" class="search" id="search-inv-log" placeholder="Search by SKU, name, note, user..." oninput="renderInventoryLog()">
         <select id="inv-log-reason" onchange="loadInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
           <option value="">All reasons</option>
           <option value="inbound">Inbound</option>
           <option value="order">Order</option>
           <option value="adjustment">Adjustment</option>
+        </select>
+        <select id="inv-log-user" onchange="renderInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;min-width:140px">
+          <option value="">All users</option>
         </select>
         <input type="number" id="inv-log-limit" value="50" min="10" max="500" step="10" onchange="loadInventoryLog()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;width:80px" title="Rows per page">
         <button class="btn btn-outline btn-sm" onclick="loadInventoryLog()">Refresh</button>
@@ -396,6 +401,7 @@ tr:hover{background:#f8f9ff}
             <th style="cursor:pointer" onclick="sortInvLog('balance_after')">Balance <span id="inv-log-sort-balance_after"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('gap')">Adjustment <span id="inv-log-sort-gap"></span></th>
             <th style="cursor:pointer" onclick="sortInvLog('reason')">Reason <span id="inv-log-sort-reason"></span></th>
+            <th style="cursor:pointer" onclick="sortInvLog('adjusted_by')">User <span id="inv-log-sort-adjusted_by"></span></th>
             <th>Reference</th>
             <th>Note</th>
           </tr>
@@ -1008,8 +1014,18 @@ tr:hover{background:#f8f9ff}
       <input type="hidden" id="inv-product-id">
       <input type="hidden" id="inv-variant-id">
       <div id="inv-modal-label" style="font-size:13px;color:#888;margin-bottom:12px"></div>
+      <div class="form-group">
+        <label>Reason</label>
+        <select id="inv-reason" onchange="onInvReasonChange()" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+          <option value="inbound">Inbound (nhập kho — tạo batch mới)</option>
+          <option value="adjustment" selected>Adjustment (điều chỉnh / mất hàng — FIFO consume)</option>
+        </select>
+      </div>
       <div class="form-group"><label>Quantity (+ to add / - to remove)</label><input type="number" id="inv-qty" placeholder="e.g. 10 or -5"></div>
-      <div class="form-group"><label>Reason</label><input type="text" id="inv-reason" placeholder="e.g. restock"></div>
+      <div class="form-group" id="inv-cost-group">
+        <label>Unit Cost ($) <span style="font-size:11px;color:#888" id="inv-cost-hint">(required for inbound)</span></label>
+        <input type="number" id="inv-cost" step="0.01" min="0" placeholder="0.00">
+      </div>
       <div class="form-group"><label>Note</label><input type="text" id="inv-note" placeholder="Details"></div>
     </div>
     <div class="modal-footer">
@@ -1021,21 +1037,18 @@ tr:hover{background:#f8f9ff}
 
 <!-- VARIANTS MODAL -->
 <div class="modal-overlay" id="variants-modal">
-  <div class="modal" style="width:800px">
+  <div class="modal" style="width:900px;max-height:90vh">
     <div class="modal-header">
       <h2 id="variants-modal-title">Variants</h2>
       <button class="modal-close" onclick="closeModal('variants-modal')">&times;</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto">
       <div id="variants-product-info" style="margin-bottom:12px;font-size:13px;color:#888"></div>
       <div style="margin-bottom:12px">
         <strong style="font-size:13px">Option types:</strong>
         <span id="variants-option-types" style="font-size:13px;color:#667eea"></span>
       </div>
-      <table>
-        <thead><tr><th>Variant SKU</th><th>Attributes</th><th>Price</th><th>Wt (oz)</th><th>Dims (LxWxH)</th><th>Stock</th><th>Location</th><th>Actions</th></tr></thead>
-        <tbody id="variants-body"></tbody>
-      </table>
+      <div id="variants-body"></div>
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e8e8e8">
         <h3 style="font-size:14px;margin-bottom:10px">Add New Variant</h3>
         <input type="hidden" id="v-product-id">
@@ -1222,6 +1235,91 @@ SP-002,,,,...,SP-002-BLUE-M,"{""color"":""Blue""}",0,...   &larr; Variant (paren
   </div>
 </div>
 
+
+<!-- STOCK ADJUST (PHYSICAL COUNT) MODAL -->
+<div class="modal-overlay" id="stock-adjust-modal">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <h2>📷 Stock Count / Adjust</h2>
+      <button class="modal-close" onclick="closeStockAdjustModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Step 1: Scan / enter SKU -->
+      <div class="form-group">
+        <label style="font-weight:600;font-size:13px">Step 1 — Scan QR or enter SKU</label>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <input type="text" id="sa-sku-input" placeholder="Scan or type SKU..." autocomplete="off"
+            style="flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:monospace"
+            onkeydown="if(event.key==='Enter')stockAdjustLookup()">
+          <button class="btn btn-primary" onclick="stockAdjustLookup()">Lookup</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Show in-warehouse stock -->
+      <div id="sa-product-info" style="display:none;padding:14px;background:#f8f9fa;border-radius:8px;margin-bottom:12px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="flex:1">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">Product</div>
+            <div id="sa-product-name" style="font-size:14px;font-weight:600;color:#333"></div>
+            <div id="sa-variant-label" style="font-size:12px;color:#666"></div>
+            <div style="margin-top:6px;font-size:11px;color:#888">SKU: <code id="sa-sku-display"></code></div>
+            <div style="font-size:11px;color:#888">Location: <span id="sa-location"></span></div>
+          </div>
+          <div style="text-align:center;padding:8px 16px;background:#fff;border-radius:8px;border:1px solid #e0e0e0">
+            <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">In Warehouse</div>
+            <div id="sa-in-warehouse" style="font-size:28px;font-weight:700;color:#2196F3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Input actual count -->
+      <div id="sa-actual-section" style="display:none">
+        <div class="form-group">
+          <label style="font-weight:600;font-size:13px">Step 2 — Actual physical count</label>
+          <input type="number" id="sa-actual-qty" min="0" placeholder="Enter actual stock counted..."
+            style="width:100%;margin-top:4px;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-weight:600;text-align:center"
+            oninput="updateStockAdjustPreview()">
+        </div>
+        <div id="sa-diff-preview" style="display:none;text-align:center;padding:12px;border-radius:8px;margin-bottom:12px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;opacity:.8">Adjustment</div>
+          <div id="sa-diff-value" style="font-size:24px;font-weight:700"></div>
+        </div>
+        <div class="form-group">
+          <label>Note (optional)</label>
+          <input type="text" id="sa-note" placeholder="Reason / details" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeStockAdjustModal()">Cancel</button>
+      <button class="btn btn-success" id="sa-submit-btn" onclick="submitStockAdjust()" disabled>Apply Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<!-- UPDATE ITEM NAMES MODAL -->
+<div class="modal-overlay" id="update-names-modal">
+  <div class="modal" style="width:500px">
+    <div class="modal-header">
+      <h2>Update Item Names</h2>
+      <button class="modal-close" onclick="closeModal('update-names-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:12px">
+        Download the CSV template with current items, update the <strong>name</strong> column, then upload to batch update item names.
+      </p>
+      <div style="margin-bottom:12px">
+        <a id="update-names-template-link" href="/api/v1/orders/update-names-template" class="btn btn-outline btn-sm" download>Download CSV Template</a>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <label class="btn btn-primary" style="margin:0;background:#7c3aed;border-color:#7c3aed;cursor:pointer">
+        Select CSV &amp; Update
+        <input type="file" accept=".csv" id="csv-update-names" style="display:none" onchange="uploadUpdateNames(this)">
+      </label>
+    </div>
+  </div>
+</div>
 
 <!-- QR CODE MODAL -->
 <div class="modal-overlay" id="qr-modal">
@@ -1423,10 +1521,11 @@ function renderProducts(list) {
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Edit</button>
           <button class="btn btn-sm btn-primary" onclick="openVariantsModal('${p.id}')">Variants</button>
-          <button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Stock</button>
+          ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${p.id}')">Stock</button>` : ''}
           ${p.qr_code_path
             ? `<button class="btn btn-sm btn-success" onclick="openQrModal('${p.id}')">QR</button>`
             : `<button class="btn btn-sm btn-danger" onclick="generateQr('${p.id}')">Gen QR</button>`}
+          ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}','${esc(p.sku)}')">Delete</button>` : ''}
         </td>
       </tr>`;}).join('');
 }
@@ -1695,6 +1794,145 @@ async function startOrderImport(input) {
   input.value = '';
 }
 
+// --- Update Item Names ---
+// --- Stock Adjust (Physical Count) ---
+let _saCurrentInfo = null;
+
+function openStockAdjustModal() {
+  _saCurrentInfo = null;
+  document.getElementById('sa-sku-input').value = '';
+  document.getElementById('sa-actual-qty').value = '';
+  document.getElementById('sa-note').value = '';
+  document.getElementById('sa-product-info').style.display = 'none';
+  document.getElementById('sa-actual-section').style.display = 'none';
+  document.getElementById('sa-diff-preview').style.display = 'none';
+  document.getElementById('sa-submit-btn').disabled = true;
+  openModal('stock-adjust-modal');
+  setTimeout(() => document.getElementById('sa-sku-input').focus(), 100);
+}
+
+function closeStockAdjustModal() {
+  closeModal('stock-adjust-modal');
+}
+
+async function stockAdjustLookup() {
+  const sku = document.getElementById('sa-sku-input').value.trim();
+  if (!sku) { toast('Enter SKU', 'error'); return; }
+  try {
+    const res = await fetch(API + '/products/stock-adjust/lookup?sku=' + encodeURIComponent(sku));
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'SKU not found', 'error');
+      return;
+    }
+    const info = await res.json();
+    if (info.error) { toast(info.error, 'error'); return; }
+    _saCurrentInfo = info;
+    document.getElementById('sa-product-name').textContent = info.product_name;
+    document.getElementById('sa-variant-label').textContent = info.variant_label || '';
+    document.getElementById('sa-sku-display').textContent = info.sku;
+    document.getElementById('sa-location').textContent = info.location || '—';
+    document.getElementById('sa-in-warehouse').textContent = info.in_warehouse_qty;
+    document.getElementById('sa-product-info').style.display = 'block';
+    document.getElementById('sa-actual-section').style.display = 'block';
+    document.getElementById('sa-actual-qty').value = '';
+    document.getElementById('sa-diff-preview').style.display = 'none';
+    document.getElementById('sa-submit-btn').disabled = true;
+    setTimeout(() => document.getElementById('sa-actual-qty').focus(), 50);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function updateStockAdjustPreview() {
+  if (!_saCurrentInfo) return;
+  const raw = document.getElementById('sa-actual-qty').value;
+  if (raw === '') {
+    document.getElementById('sa-diff-preview').style.display = 'none';
+    document.getElementById('sa-submit-btn').disabled = true;
+    return;
+  }
+  const actual = parseInt(raw);
+  if (isNaN(actual) || actual < 0) {
+    document.getElementById('sa-diff-preview').style.display = 'none';
+    document.getElementById('sa-submit-btn').disabled = true;
+    return;
+  }
+  const diff = actual - _saCurrentInfo.in_warehouse_qty;
+  const div = document.getElementById('sa-diff-preview');
+  const val = document.getElementById('sa-diff-value');
+  div.style.display = 'block';
+  if (diff > 0) {
+    div.style.background = '#d4edda';
+    div.style.color = '#155724';
+    val.textContent = '+' + diff;
+  } else if (diff < 0) {
+    div.style.background = '#f8d7da';
+    div.style.color = '#721c24';
+    val.textContent = diff.toString();
+  } else {
+    div.style.background = '#e2e3e5';
+    div.style.color = '#383d41';
+    val.textContent = '0 (no change)';
+  }
+  document.getElementById('sa-submit-btn').disabled = false;
+}
+
+async function submitStockAdjust() {
+  if (!_saCurrentInfo) return;
+  const btn = document.getElementById('sa-submit-btn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const actual = parseInt(document.getElementById('sa-actual-qty').value);
+  const note = document.getElementById('sa-note').value.trim();
+  try {
+    const res = await fetch(API + '/products/stock-adjust', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sku: _saCurrentInfo.sku, actual_qty: actual, note: note}),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+      btn.disabled = false;
+      return;
+    }
+    const data = await res.json();
+    const sign = data.adjust_amount > 0 ? '+' : '';
+    toast(`Adjusted ${data.sku}: ${sign}${data.adjust_amount}`);
+    closeStockAdjustModal();
+    loadProducts();
+  } catch (e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+function openUpdateNamesModal() {
+  document.getElementById('csv-update-names').value = '';
+  openModal('update-names-modal');
+}
+
+async function uploadUpdateNames(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  closeModal('update-names-modal');
+  try {
+    const res = await fetch(API + '/orders/update-names', { method: 'POST', body: form });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`Updated ${data.updated} item names` + (data.errors.length ? `, ${data.errors.length} errors` : ''));
+      if (data.errors.length) {
+        console.log('Update names errors:', data.errors);
+      }
+      loadOrders();
+    } else {
+      toast(data.detail || 'Update failed', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
+  input.value = '';
+}
+
 function showImportReport(result) {
   const details = result.created_details || [];
   const errors = result.errors || [];
@@ -1813,29 +2051,87 @@ function getVariantAttrs() {
 }
 
 function renderVariantsTable(variants) {
-  document.getElementById('variants-body').innerHTML = variants.length === 0
-    ? '<tr><td colspan="8" class="empty">No variants yet</td></tr>'
-    : variants.map(v => {
-        const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
-        const attrStr = Object.entries(attrs).map(([k,val]) => `${k}: ${val}`).join(', ');
-        const wt = v.weight_oz_override > 0 ? v.weight_oz_override + ' oz' : 'Parent';
-        const dims = (v.length_in_override > 0 || v.width_in_override > 0 || v.height_in_override > 0)
-          ? `${v.length_in_override}x${v.width_in_override}x${v.height_in_override}` : 'Parent';
-        return `<tr>
-          <td><strong>${esc(v.variant_sku)}</strong></td>
-          <td>${esc(attrStr)}</td>
-          <td id="vp-${v.id}">${v.price_override > 0 ? '$'+v.price_override.toFixed(2) : 'Parent'}</td>
-          <td>${wt}</td>
-          <td>${dims}</td>
-          <td class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}">${v.quantity}</td>
-          <td>${esc(v.location)}</td>
-          <td class="actions-cell">
-            <button class="btn btn-sm btn-outline" onclick="editVarPrice('${v.id}',${v.price_override || 0})">Price</button>
-            <button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')">Stock</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')">Delete</button>
-          </td>
-        </tr>`;
-      }).join('');
+  const container = document.getElementById('variants-body');
+  if (variants.length === 0) {
+    container.innerHTML = '<div class="empty" style="padding:20px">No variants yet</div>';
+    return;
+  }
+  container.innerHTML = variants.map(v => {
+    const attrs = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : (v.attributes || {});
+    const attrStr = Object.entries(attrs).map(([k,val]) => `<span style="background:#eef2ff;color:#667eea;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${esc(k)}: ${esc(val)}</span>`).join(' ');
+    return `<div style="border:1px solid #e8e8e8;border-radius:10px;padding:14px;margin-bottom:10px;background:#fff" id="vc-${v.id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <strong style="font-size:14px;font-family:monospace">${esc(v.variant_sku)}</strong>
+          <span style="margin-left:8px">${attrStr}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="${v.quantity <= 5 ? 'stock-low' : 'stock-ok'}" style="font-weight:700;font-size:15px">${v.quantity} units</span>
+          ${currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-warning" onclick="adjustVariantStock('${v.id}')" style="padding:2px 8px;font-size:11px">Adjust</button>` : ''}
+          <button class="btn btn-sm btn-danger" onclick="deleteVariant('${v.id}')" style="padding:2px 8px;font-size:11px">Delete</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Price ($)</label>
+          <input type="number" step="0.01" min="0" value="${(v.price_override || 0).toFixed(2)}" class="ve-input" data-vid="${v.id}" data-field="price_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Weight (oz)</label>
+          <input type="number" step="0.1" min="0" value="${v.weight_oz_override || 0}" class="ve-input" data-vid="${v.id}" data-field="weight_oz_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Length (in)</label>
+          <input type="number" step="0.1" min="0" value="${v.length_in_override || 0}" class="ve-input" data-vid="${v.id}" data-field="length_in_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Width (in)</label>
+          <input type="number" step="0.1" min="0" value="${v.width_in_override || 0}" class="ve-input" data-vid="${v.id}" data-field="width_in_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Height (in)</label>
+          <input type="number" step="0.1" min="0" value="${v.height_in_override || 0}" class="ve-input" data-vid="${v.id}" data-field="height_in_override"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="0 = parent">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px;display:block">Location</label>
+          <input type="text" value="${esc(v.location || '')}" class="ve-input" data-vid="${v.id}" data-field="location"
+            style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="saveVariantField(this)" placeholder="e.g. A-1-B">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function saveVariantField(input) {
+  const vid = input.dataset.vid;
+  const field = input.dataset.field;
+  let value = input.value;
+  if (field !== 'location') value = parseFloat(value) || 0;
+  const body = {};
+  body[field] = value;
+  input.style.borderColor = '#667eea';
+  try {
+    const res = await fetch(API + '/products/variants/' + vid, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      input.style.borderColor = '#28a745';
+      setTimeout(() => { input.style.borderColor = '#ddd'; }, 1500);
+      await loadProducts();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+      input.style.borderColor = '#dc3545';
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+    input.style.borderColor = '#dc3545';
+  }
 }
 
 async function saveVariant() {
@@ -1863,28 +2159,6 @@ async function deleteVariant(variantId) {
   else { toast('Error deleting variant', 'error'); }
 }
 
-function editVarPrice(variantId, currentPrice) {
-  const cell = document.getElementById('vp-' + variantId);
-  if (!cell) return;
-  cell.innerHTML = '<div style="display:flex;gap:4px;align-items:center">' +
-    '<input type="number" step="0.01" min="0" value="' + (currentPrice || 0).toFixed(2) + '" id="vpi-' + variantId + '" style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:13px">' +
-    '<button class="btn btn-sm btn-primary" onclick="saveVarPrice(\'' + variantId + '\')">OK</button>' +
-    '</div>';
-  document.getElementById('vpi-' + variantId).focus();
-}
-
-async function saveVarPrice(variantId) {
-  const input = document.getElementById('vpi-' + variantId);
-  if (!input) return;
-  const price = parseFloat(input.value) || 0;
-  const res = await fetch(API + '/products/variants/' + variantId, {
-    method: 'PATCH', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ price_override: price }),
-  });
-  if (res.ok) { toast('Variant price updated'); await loadProducts(); openVariantsModal(currentVariantsProductId); }
-  else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
-}
-
 async function adjustVariantStock(variantId) {
   const qty = prompt('Enter quantity (+ to add, - to remove):');
   if (qty === null) return;
@@ -1907,6 +2181,20 @@ async function generateQr(productId) {
     const e = await res.json();
     toast(e.detail || 'Error generating QR', 'error');
   }
+}
+
+async function deleteProduct(productId, sku) {
+  if (!confirm(`Delete product "${sku}"? This cannot be undone.\n\nAll inventory logs and stock batches for this product will also be deleted.`)) return;
+  try {
+    const res = await fetch(API + '/products/' + productId, { method: 'DELETE' });
+    if (res.ok) {
+      toast(`Product "${sku}" deleted`);
+      await loadProducts();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Cannot delete product', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 function openQrModal(productId) {
@@ -1964,20 +2252,34 @@ function openInventoryModal(productId, variantId, label) {
   document.getElementById('inv-product-id').value = productId;
   document.getElementById('inv-variant-id').value = variantId || '';
   document.getElementById('inv-qty').value = '';
-  document.getElementById('inv-reason').value = '';
+  document.getElementById('inv-reason').value = 'adjustment';
+  document.getElementById('inv-cost').value = '';
   document.getElementById('inv-note').value = '';
   document.getElementById('inv-modal-label').textContent = label || '';
+  onInvReasonChange();
   document.getElementById('inventory-modal').classList.add('show');
+}
+
+function onInvReasonChange() {
+  const reason = document.getElementById('inv-reason').value;
+  const hint = document.getElementById('inv-cost-hint');
+  hint.textContent = reason === 'inbound' ? '(required for inbound)' : '(optional — only used when adding stock)';
 }
 
 async function saveInventory() {
   const productId = document.getElementById('inv-product-id').value;
   const variantId = document.getElementById('inv-variant-id').value;
+  const qty = parseInt(document.getElementById('inv-qty').value) || 0;
+  const reason = document.getElementById('inv-reason').value || 'adjustment';
+  const costRaw = document.getElementById('inv-cost').value;
+  if (qty === 0) { toast('Quantity must be non-zero', 'error'); return; }
+  if (reason === 'inbound' && !costRaw) { toast('Unit cost is required for inbound', 'error'); return; }
   const body = {
-    quantity: parseInt(document.getElementById('inv-qty').value) || 0,
-    reason: document.getElementById('inv-reason').value || 'adjustment',
+    quantity: qty,
+    reason: reason,
     note: document.getElementById('inv-note').value,
   };
+  if (costRaw !== '') body.unit_cost = parseFloat(costRaw);
   const url = variantId
     ? API + '/products/variants/' + variantId + '/inventory'
     : API + '/products/' + productId + '/inventory';
@@ -2488,9 +2790,13 @@ async function viewOrder(id) {
     </div>
     <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
     <table>
-      <thead><tr><th></th><th>SKU</th><th>Name</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
-      <tbody>${o.items.map(i => `<tr><td style="width:64px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;transition:transform .15s" onclick="openImageZoom(this.src)" onmouseenter="this.style.transform=\'scale(1.1)\'" onmouseleave="this.style.transform=\'scale(1)\'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\'"><span style="display:none;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>' : '<span style="display:inline-block;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
+      <thead><tr><th></th><th>SKU</th><th>Item Name</th><th>Product</th><th>Variant</th><th>Qty</th><th>Product Cost</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
+      <tbody>${o.items.map(i => `<tr><td style="width:64px">${i.image_url ? '<img src="'+esc(i.image_url)+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;cursor:pointer;transition:transform .15s" onclick="openImageZoom(this.src)" onmouseenter="this.style.transform=\'scale(1.1)\'" onmouseleave="this.style.transform=\'scale(1)\'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\'"><span style="display:none;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>' : '<span style="display:inline-block;width:60px;height:60px;background:#f0f0f0;border-radius:6px;text-align:center;line-height:60px;color:#ccc;font-size:22px">&#128230;</span>'}</td><td>${esc(i.sku)}</td><td>${i.name ? esc(i.name) : '<span style="color:#ccc">—</span>'}</td><td>${esc(i.product_name)}</td><td>${i.variant_label ? esc(i.variant_label) : '-'}</td><td>${i.quantity}</td><td style="color:#6b7280">$${(i.product_cost||0).toFixed(2)}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody>
     </table>
+    <div style="margin-top:8px;display:flex;justify-content:flex-end;gap:16px;font-size:14px">
+      <span>Processing Fee: <strong>$${o.processing_fee.toFixed(2)}</strong></span>
+      <span>Shipping: <strong>$${o.shipping_cost.toFixed(2)}</strong></span>
+    </div>
     ${o.label_url ? '<div style="margin-top:12px"><a href="'+esc(o.label_url)+'" target="_blank" class="btn btn-sm btn-outline">View Shipping Label</a></div>' : ''}
     ${o.label_url && currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') && o.status !== 'cancelled' && o.status !== 'delivered' ? `
     <div id="rebuy-label-section" style="margin-top:12px;padding:12px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">
@@ -2910,7 +3216,7 @@ function renderInventoryOverview(data) {
         <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
         <td style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
         <td>${esc(r.location)}</td>
-        <td><button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button></td>
+        <td>${(currentUser && currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>` : ''}</td>
       </tr>`;
     }).join('');
 }
@@ -3146,7 +3452,18 @@ async function loadInventoryLog() {
   const data = await res.json();
   invLogData = data.items || data;
   invLogTotal = data.total || invLogData.length;
+  _populateInvLogUsers();
   renderInventoryLog();
+}
+
+function _populateInvLogUsers() {
+  const sel = document.getElementById('inv-log-user');
+  if (!sel) return;
+  const current = sel.value;
+  const users = [...new Set(invLogData.map(r => r.adjusted_by).filter(Boolean))].sort();
+  const opts = ['<option value="">All users</option>']
+    .concat(users.map(u => `<option value="${esc(u)}"${u === current ? ' selected' : ''}>${esc(u)}</option>`));
+  sel.innerHTML = opts.join('');
 }
 
 function sortInvLog(field) {
@@ -3161,12 +3478,15 @@ function sortInvLog(field) {
 
 function renderInventoryLog() {
   const q = (document.getElementById('search-inv-log').value || '').toLowerCase();
+  const userFilter = document.getElementById('inv-log-user').value || '';
   let filtered = invLogData.filter(r => {
+    if (userFilter && (r.adjusted_by || '') !== userFilter) return false;
     if (!q) return true;
     return (r.sku || '').toLowerCase().includes(q) ||
            (r.product_name || '').toLowerCase().includes(q) ||
            (r.note || '').toLowerCase().includes(q) ||
            (r.reason || '').toLowerCase().includes(q) ||
+           (r.adjusted_by || '').toLowerCase().includes(q) ||
            (r.reference_id || '').toLowerCase().includes(q);
   });
 
@@ -3189,7 +3509,7 @@ function renderInventoryLog() {
   document.getElementById('inv-log-count').textContent = `Showing ${filtered.length} of ${invLogTotal} entries`;
 
   document.getElementById('inv-log-body').innerHTML = filtered.length === 0
-    ? '<tr><td colspan="9" class="empty">No log entries</td></tr>'
+    ? '<tr><td colspan="10" class="empty">No log entries</td></tr>'
     : filtered.map(r => {
       const changeColor = r.change > 0 ? '#28a745' : r.change < 0 ? '#dc3545' : '#666';
       const changePrefix = r.change > 0 ? '+' : '';
@@ -3206,6 +3526,7 @@ function renderInventoryLog() {
         <td style="font-weight:500">${r.balance_after}</td>
         <td style="color:${gapColor};font-weight:${gapVal ? '600' : '400'}">${gapVal ? (gapVal > 0 ? '+' : '') + gapVal : '-'}</td>
         <td>${reasonBadge}</td>
+        <td style="font-size:13px;color:#444">${r.adjusted_by ? esc(r.adjusted_by) : '<span style="color:#ccc">—</span>'}</td>
         <td style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
         <td style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>
       </tr>`;
@@ -3256,6 +3577,7 @@ function renderStockRequests(list) {
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
           ${['approved','receiving'].includes(sr.status) ? `<button class="btn btn-sm btn-outline" onclick="showSrQrCode('${sr.id}','${esc(sr.request_number)}')" title="QR for mobile receiving">QR</button>` : ''}
+          ${['cancelled','pending'].includes(sr.status) ? `<button class="btn btn-sm btn-danger" onclick="deleteStockRequest('${sr.id}','${esc(sr.request_number)}')">Delete</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -3263,6 +3585,20 @@ function renderStockRequests(list) {
 
 document.getElementById('search-sr').addEventListener('input', () => renderStockRequests(allStockRequests));
 document.getElementById('filter-sr-status').addEventListener('change', loadStockRequests);
+
+async function deleteStockRequest(id, name) {
+  if (!confirm(`Delete stock request "${name}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(API + '/stock-requests/' + id, { method: 'DELETE' });
+    if (res.ok || res.status === 204) {
+      toast('Stock request deleted');
+      loadStockRequests();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error deleting', 'error');
+    }
+  } catch (err) { toast(err.message, 'error'); }
+}
 
 function openStockRequestModal() {
   document.getElementById('sr-supplier').value = '';

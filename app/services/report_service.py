@@ -1262,6 +1262,8 @@ def inventory_movement(
             "reference_id": log.reference_id,
             "balance_after": log.balance_after,
             "gap": getattr(log, "gap", 0) or 0,
+            "cost_amount": getattr(log, "cost_amount", 0.0) or 0.0,
+            "adjusted_by": getattr(log, "adjusted_by", "") or "",
             "note": log.note,
             "created_at": log.created_at.isoformat() if log.created_at else None,
         })
