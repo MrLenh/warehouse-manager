@@ -195,6 +195,12 @@ def _migrate_add_columns():
         with engine.begin() as conn:
             if "source" not in existing:
                 conn.execute(text("ALTER TABLE stock_batches ADD COLUMN source VARCHAR DEFAULT 'stock_request'"))
+            # Make stock_request_id nullable (for batches created via manual inbound/adjustment)
+            if settings.DATABASE_URL.startswith("postgresql"):
+                try:
+                    conn.execute(text("ALTER TABLE stock_batches ALTER COLUMN stock_request_id DROP NOT NULL"))
+                except Exception:
+                    pass
 
     # Stock request items: box_count
     if "stock_request_items" in tables:
