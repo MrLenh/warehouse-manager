@@ -2634,17 +2634,17 @@ function renderOrders(list) {
     ? '<tr><td colspan="13" class="empty">No orders found</td></tr>'
     : pageItems.map(o => `<tr>
         <td><input type="checkbox" class="order-check" value="${o.id}" onchange="updateSelectedCount()"></td>
-        <td data-label="Order #"><strong>${esc(o.order_number)}</strong></td>
-        <td data-label="Name">${esc(o.order_name || '-')}</td>
+        <td data-label="Order #"><strong style="font-size:11px">${esc(o.order_number)}</strong></td>
+        <td data-label="Name" style="max-width:100px;overflow:hidden;text-overflow:ellipsis">${esc(o.order_name || '-')}</td>
         <td data-label="Shop">${esc(o.shop_name || '-')}</td>
-        <td data-label="Customer">${esc(o.customer_name)}</td>
-        <td data-label="Items">${o.items.length} items</td>
+        <td data-label="Customer" style="max-width:100px;overflow:hidden;text-overflow:ellipsis">${esc(o.customer_name)}</td>
+        <td data-label="Items">${o.items.length}</td>
         <td data-label="Total">$${o.total_price.toFixed(2)}</td>
         <td data-label="Priority">${priorityBadge(o.priority)}</td>
         <td data-label="Status"><span class="badge badge-${o.status}">${o.status}</span></td>
-        <td data-label="Tracking">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? '<br><span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px;margin-top:2px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
-        <td data-label="Created">${new Date(o.created_at).toLocaleDateString('en-US')}</td>
-        <td data-label="Updated">${o.updated_at ? new Date(o.updated_at).toLocaleDateString('en-US') + ' ' + new Date(o.updated_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+        <td data-label="Tracking" style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? ' <span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
+        <td data-label="Created" style="font-size:11px">${new Date(o.created_at).toLocaleDateString('en-US')}</td>
+        <td data-label="Updated" style="font-size:11px">${o.updated_at ? new Date(o.updated_at).toLocaleDateString('en-US') : '-'}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
           ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
