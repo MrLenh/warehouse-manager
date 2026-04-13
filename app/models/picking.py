@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -30,6 +30,8 @@ class PickingList(Base):
     status: Mapped[str] = mapped_column(String, default=PickingListStatus.ACTIVE)
     priority: Mapped[str] = mapped_column(String, default=PickingListPriority.NORMAL)
     assigned_to: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
+    manifest_data: Mapped[str] = mapped_column(Text, default="")  # base64-encoded PDF
+    manifest_filename: Mapped[str] = mapped_column(String, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

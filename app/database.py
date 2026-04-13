@@ -202,6 +202,15 @@ def _migrate_add_columns():
                 except Exception:
                     pass
 
+    # Picking lists: manifest columns
+    if "picking_lists" in tables:
+        existing = {col["name"] for col in inspector.get_columns("picking_lists")}
+        with engine.begin() as conn:
+            if "manifest_data" not in existing:
+                conn.execute(text("ALTER TABLE picking_lists ADD COLUMN manifest_data TEXT DEFAULT ''"))
+            if "manifest_filename" not in existing:
+                conn.execute(text("ALTER TABLE picking_lists ADD COLUMN manifest_filename VARCHAR DEFAULT ''"))
+
     # Stock request items: box_count
     if "stock_request_items" in tables:
         existing = {col["name"] for col in inspector.get_columns("stock_request_items")}
