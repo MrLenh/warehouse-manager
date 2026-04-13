@@ -378,10 +378,10 @@ def list_order_skus(db: Session, status: OrderStatus | None = None, statuses: li
 
 
 def list_orders(
-    db: Session, skip: int = 0, limit: int = 0, status: OrderStatus | None = None,
+    db: Session, skip: int = 0, limit: int = 50, status: OrderStatus | None = None,
     search: str | None = None, statuses: list[OrderStatus] | None = None,
     sku: str | None = None, priority: OrderPriority | None = None,
-) -> list[Order]:
+) -> dict:
     q = db.query(Order)
     if statuses:
         q = q.filter(Order.status.in_(statuses))
@@ -403,10 +403,11 @@ def list_orders(
                 (OrderItem.sku == sku) | (OrderItem.variant_sku == sku)
             )
         )
+    total = q.count()
     q = q.order_by(Order.created_at.desc()).offset(skip)
     if limit > 0:
         q = q.limit(limit)
-    return q.all()
+    return {"total": total, "orders": q.all()}
 
 
 def update_order_status(db: Session, order_id: str, data: OrderStatusUpdate) -> Order | None:

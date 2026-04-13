@@ -430,6 +430,7 @@ function renderPickingLists() {
         <div class="progress-fill" style="width:${pct}%;${pct >= 100 ? 'background:#28a745' : ''}">${pct}%</div>
       </div>
       <div class="meta" style="margin-top:4px">${pl.picked_items}/${pl.total_items} picked | <span class="badge badge-${pl.status}">${pl.status}</span>${pl.assigned_to ? ` | ${esc(pl.assigned_to)}` : ''}</div>
+      <div class="meta" style="margin-top:2px">${pl.created_at ? new Date(pl.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' ' + new Date(pl.created_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) : ''}</div>
     </div>`;
   }).join('');
 }

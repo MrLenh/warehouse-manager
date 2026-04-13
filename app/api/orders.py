@@ -86,15 +86,19 @@ def create_order(data: OrderCreate, request: Request, background_tasks: Backgrou
     return order
 
 
-@router.get("", response_model=list[OrderOut])
-def list_orders(skip: int = 0, limit: int = 0, status: str | None = None, search: str | None = None, sku: str | None = None, priority: str | None = None, db: Session = Depends(get_db)):
-    # Support comma-separated statuses, e.g. ?status=pending,confirmed,processing
+@router.get("")
+def list_orders(skip: int = 0, limit: int = 50, status: str | None = None, search: str | None = None, sku: str | None = None, priority: str | None = None, db: Session = Depends(get_db)):
     parsed_priority = OrderPriority(priority) if priority else None
     if status and "," in status:
         statuses_list = [OrderStatus(s.strip()) for s in status.split(",") if s.strip()]
-        return order_service.list_orders(db, skip=skip, limit=limit, statuses=statuses_list, search=search, sku=sku, priority=parsed_priority)
-    single_status = OrderStatus(status) if status else None
-    return order_service.list_orders(db, skip=skip, limit=limit, status=single_status, search=search, sku=sku, priority=parsed_priority)
+        result = order_service.list_orders(db, skip=skip, limit=limit, statuses=statuses_list, search=search, sku=sku, priority=parsed_priority)
+    else:
+        single_status = OrderStatus(status) if status else None
+        result = order_service.list_orders(db, skip=skip, limit=limit, status=single_status, search=search, sku=sku, priority=parsed_priority)
+    return {
+        "total": result["total"],
+        "orders": [OrderOut.model_validate(o).model_dump() for o in result["orders"]],
+    }
 
 
 @router.get("/skus")
@@ -138,7 +142,7 @@ def export_orders(
         parsed_statuses = [OrderStatus(s) for s in raw_list]
 
     single_status = OrderStatus(status) if status and "," not in status else None
-    orders = order_service.list_orders(db, skip=0, limit=0, status=single_status, search=search, statuses=parsed_statuses)
+    orders = order_service.list_orders(db, skip=0, limit=0, status=single_status, search=search, statuses=parsed_statuses)["orders"]
 
     # Additional filters
     if shop_name:
