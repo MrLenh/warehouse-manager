@@ -2595,36 +2595,37 @@ async function loadSkuOptions() {
   } catch(e) { /* ignore */ }
 }
 
+let ordersPerPage = 50;
+let currentOrderPage = 1;
+let ordersTotalCount = 0;
+let _searchDebounce = null;
+
 async function loadOrders() {
   const status = getStatusParam();
   const sku = document.getElementById('filter-sku').value;
   const priority = document.getElementById('filter-priority').value;
+  const search = document.getElementById('search-orders').value.trim();
+  const skip = (currentOrderPage - 1) * ordersPerPage;
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   if (sku) params.set('sku', sku);
   if (priority) params.set('priority', priority);
-  const qs = params.toString();
-  const url = API + '/orders' + (qs ? '?' + qs : '');
+  if (search) params.set('search', search);
+  params.set('limit', ordersPerPage);
+  params.set('skip', skip);
+  const url = API + '/orders?' + params.toString();
   try {
     const res = await fetch(url);
     if (!res.ok) { const txt = await res.text(); toast(txt.slice(0,100) || 'Error loading orders', 'error'); return; }
-    allOrders = await res.json();
+    const data = await res.json();
+    allOrders = data.orders || data;
+    ordersTotalCount = data.total || allOrders.length;
     renderOrders(allOrders);
-    document.getElementById('stat-orders').textContent = allOrders.length + ' Orders';
+    document.getElementById('stat-orders').textContent = ordersTotalCount + ' Orders';
   } catch(e) { toast('Server connection error: ' + e.message, 'error'); }
 }
 
-let ordersPerPage = 50;
-let currentOrderPage = 1;
-
-function renderOrders(list) {
-  const q = document.getElementById('search-orders').value.toLowerCase();
-  const filtered = list.filter(o => !q || o.order_number.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q) || (o.order_name || '').toLowerCase().includes(q) || (o.shop_name || '').toLowerCase().includes(q) || (o.tracking_number || '').toLowerCase().includes(q));
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ordersPerPage));
-  if (currentOrderPage > totalPages) currentOrderPage = totalPages;
-  const start = (currentOrderPage - 1) * ordersPerPage;
-  const pageItems = filtered.slice(start, start + ordersPerPage);
+function renderOrders(pageItems) {
 
   const priorityBadge = (p) => {
     const colors = {urgent:'#dc3545',high:'#fd7e14',normal:'#6c757d',low:'#adb5bd'};
@@ -2649,10 +2650,12 @@ function renderOrders(list) {
         </td>
       </tr>`).join('');
 
-  // Pagination controls
+  // Pagination controls (server-side)
+  const totalPages = Math.max(1, Math.ceil(ordersTotalCount / ordersPerPage));
+  const start = (currentOrderPage - 1) * ordersPerPage;
   let pagHtml = '';
-  if (filtered.length > 0) {
-    pagHtml += `<span style="font-size:13px;color:#666">Showing ${start + 1}-${Math.min(start + ordersPerPage, filtered.length)} of ${filtered.length}</span>`;
+  if (ordersTotalCount > 0) {
+    pagHtml += `<span style="font-size:13px;color:#666">Showing ${start + 1}-${Math.min(start + ordersPerPage, ordersTotalCount)} of ${ordersTotalCount}</span>`;
     pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(1)" ${currentOrderPage === 1 ? 'disabled' : ''}>&laquo;</button>`;
     pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(${currentOrderPage - 1})" ${currentOrderPage === 1 ? 'disabled' : ''}>&lsaquo;</button>`;
     const maxBtns = 5;
@@ -2664,7 +2667,7 @@ function renderOrders(list) {
     }
     pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(${currentOrderPage + 1})" ${currentOrderPage === totalPages ? 'disabled' : ''}>&rsaquo;</button>`;
     pagHtml += `<button class="btn btn-sm btn-outline" onclick="goOrderPage(${totalPages})" ${currentOrderPage === totalPages ? 'disabled' : ''}>&raquo;</button>`;
-    pagHtml += `<select style="padding:4px 8px;border-radius:4px;border:1px solid #ddd;font-size:13px" onchange="ordersPerPage=+this.value;currentOrderPage=1;renderOrders(allOrders)">`;
+    pagHtml += `<select style="padding:4px 8px;border-radius:4px;border:1px solid #ddd;font-size:13px" onchange="ordersPerPage=+this.value;currentOrderPage=1;loadOrders()">`;
     [50, 100, 200, 500].forEach(n => { pagHtml += `<option value="${n}" ${ordersPerPage === n ? 'selected' : ''}>${n} / page</option>`; });
     pagHtml += `</select>`;
   }
@@ -2672,9 +2675,9 @@ function renderOrders(list) {
 
   // Overview stats
   const counts = {};
-  filtered.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
+  pageItems.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
   const stats = [
-    { label: 'Total', value: filtered.length, bg: '#f0f2f5', color: '#333' },
+    { label: 'Total', value: ordersTotalCount, bg: '#f0f2f5', color: '#333' },
     { label: 'Pending', value: counts['pending'] || 0, bg: '#fff3cd', color: '#856404' },
     { label: 'Processing', value: counts['processing'] || 0, bg: '#cce5ff', color: '#004085' },
     { label: 'Packing', value: counts['packing'] || 0, bg: '#e8daef', color: '#6c3483' },
@@ -2691,7 +2694,7 @@ function renderOrders(list) {
 
 function goOrderPage(page) {
   currentOrderPage = page;
-  renderOrders(allOrders);
+  loadOrders();
 }
 
 function toggleAllOrders(master) {
@@ -2811,7 +2814,10 @@ async function batchMarkShipped() {
   loadOrders();
 }
 
-document.getElementById('search-orders').addEventListener('input', () => { currentOrderPage = 1; renderOrders(allOrders); });
+document.getElementById('search-orders').addEventListener('input', () => {
+  clearTimeout(_searchDebounce);
+  _searchDebounce = setTimeout(() => { currentOrderPage = 1; loadOrders(); }, 400);
+});
 document.getElementById('filter-sku').addEventListener('change', loadOrders);
 document.getElementById('filter-priority').addEventListener('change', loadOrders);
 
