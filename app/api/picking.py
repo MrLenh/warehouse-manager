@@ -1,8 +1,9 @@
+import base64
 import io
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -710,3 +711,63 @@ body {{ padding-top: 52px; }}
 </html>"""
 
     return HTMLResponse(content=html)
+
+
+@router.post("/{picking_list_id}/manifest")
+def upload_manifest(
+    picking_list_id: str,
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload or replace a manifest PDF for a picking list (batch)."""
+    from app.models.picking import PickingList
+
+    pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files are supported")
+
+    content = file.file.read()
+    pl.manifest_data = base64.b64encode(content).decode("ascii")
+    pl.manifest_filename = file.filename
+    db.commit()
+    return {"message": "Manifest uploaded", "filename": file.filename}
+
+
+@router.get("/{picking_list_id}/manifest")
+def download_manifest(picking_list_id: str, db: Session = Depends(get_db)):
+    """Download the manifest PDF for a picking list."""
+    from app.models.picking import PickingList
+
+    pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+    if not pl.manifest_data:
+        raise HTTPException(404, "No manifest uploaded for this batch")
+
+    pdf_bytes = base64.b64decode(pl.manifest_data)
+    filename = pl.manifest_filename or f"manifest-{pl.picking_number}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={filename}"},
+    )
+
+
+@router.delete("/{picking_list_id}/manifest", status_code=204)
+def delete_manifest(
+    picking_list_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove the manifest PDF from a picking list."""
+    from app.models.picking import PickingList
+
+    pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
+    if not pl:
+        raise HTTPException(404, "Picking list not found")
+    pl.manifest_data = ""
+    pl.manifest_filename = ""
+    db.commit()

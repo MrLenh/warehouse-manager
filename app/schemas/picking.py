@@ -30,6 +30,7 @@ class PickingListOut(BaseModel):
     status: str
     priority: str = "normal"
     assigned_to: str | None = None
+    manifest_filename: str = ""
     created_at: datetime
     updated_at: datetime
     items: list[PickItemOut] = []

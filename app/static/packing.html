@@ -241,6 +241,17 @@ body.in-iframe .container{padding-top:8px}
       <div style="font-size:13px;color:#888;margin-top:4px">
         <span id="progress-text">0 / 0 items picked</span>
       </div>
+      <!-- Manifest -->
+      <div id="manifest-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600;color:#555">Manifest:</span>
+        <span id="manifest-info" style="font-size:13px;color:#888">No manifest</span>
+        <a id="manifest-view-btn" href="#" target="_blank" class="btn btn-outline btn-sm" style="display:none;padding:4px 10px;font-size:11px">View PDF</a>
+        <label class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:11px;cursor:pointer;margin:0">
+          Upload PDF
+          <input type="file" accept=".pdf" id="manifest-upload" style="display:none" onchange="uploadManifest(this)">
+        </label>
+        <button class="btn btn-sm" id="manifest-delete-btn" onclick="deleteManifest()" style="display:none;padding:4px 8px;font-size:11px;background:none;color:#dc3545;border:1px solid #dc3545">Remove</button>
+      </div>
     </div>
 
     <!-- Orders Progress -->
@@ -434,6 +445,7 @@ async function selectPickingList(plId) {
   document.getElementById('header-info').textContent = currentPL.picking_number;
   document.getElementById('packing-session').style.display = '';
   document.getElementById('unpack-batch-btn').style.display = currentPL.status === 'active' ? '' : 'none';
+  updateManifestUI();
   document.getElementById('scan-input').focus();
 
   // Highlight selected card
@@ -444,6 +456,48 @@ async function selectPickingList(plId) {
 
   await refreshProgress();
   startAutoRefresh();
+}
+
+function updateManifestUI() {
+  if (!currentPL) return;
+  const hasManifest = currentPL.manifest_filename;
+  document.getElementById('manifest-info').textContent = hasManifest ? currentPL.manifest_filename : 'No manifest';
+  const viewBtn = document.getElementById('manifest-view-btn');
+  viewBtn.style.display = hasManifest ? '' : 'none';
+  viewBtn.href = hasManifest ? API + '/picking-lists/' + currentPL.id + '/manifest' : '#';
+  document.getElementById('manifest-delete-btn').style.display = hasManifest ? '' : 'none';
+}
+
+async function uploadManifest(input) {
+  const file = input.files[0];
+  if (!file || !currentPL) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id + '/manifest', { method: 'POST', body: form });
+    if (res.ok) {
+      toast('Manifest uploaded');
+      currentPL.manifest_filename = file.name;
+      updateManifestUI();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Upload failed', 'error');
+    }
+  } catch (e) { toast(e.message, 'error'); }
+  input.value = '';
+}
+
+async function deleteManifest() {
+  if (!currentPL || !confirm('Remove manifest?')) return;
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id + '/manifest', { method: 'DELETE' });
+    if (res.ok || res.status === 204) {
+      toast('Manifest removed');
+      currentPL.manifest_filename = '';
+      currentPL.manifest_data = '';
+      updateManifestUI();
+    }
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function refreshProgress() {
