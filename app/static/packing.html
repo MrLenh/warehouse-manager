@@ -117,9 +117,48 @@ tr:hover{background:#f8f9ff}
 .modal-close:hover{color:#333}
 .modal-body{padding:24px}
 .modal-footer{padding:16px 24px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;gap:10px}
+/* Hide header when embedded in iframe */
+body.in-iframe .header{display:none}
+body.in-iframe .container{padding-top:8px}
+
+/* Mobile responsive */
+@media(max-width:768px){
+  .container{padding:8px}
+  .card{padding:12px;border-radius:10px}
+  .card h3{font-size:14px}
+  table{display:block;width:100%!important;border:none;box-shadow:none;background:transparent}
+  thead{display:none!important}
+  tbody{display:block}
+  tr{display:flex;flex-wrap:wrap;gap:6px;background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:4px;padding:10px 12px;cursor:pointer}
+  tr:hover{background:#fafafa}
+  td{display:none;border:none;font-size:13px;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  td::before{display:none}
+  td:nth-child(1){display:inline;font-weight:600}
+  td:nth-child(2){display:inline;color:#555;font-size:12px}
+  td:nth-child(3){display:inline}
+  tr.m-expanded{flex-direction:column;align-items:stretch;gap:0}
+  tr.m-expanded td{display:flex;justify-content:space-between;padding:3px 0;font-size:14px;white-space:normal;word-break:break-word;max-width:none;overflow:visible}
+  tr.m-expanded td::before{display:block;content:attr(data-label);font-weight:600;font-size:11px;color:#999;text-transform:uppercase;margin-right:8px;flex-shrink:0;min-width:70px}
+  .actions-cell{display:none!important}
+  tr.m-expanded .actions-cell{display:flex!important;gap:6px;justify-content:flex-end;padding-top:6px;border-top:1px solid #f0f0f0}
+  .actions-cell::before{display:none!important}
+  tr::after{content:'▸';position:absolute;right:12px;font-size:10px;color:#ccc}
+  tr.m-expanded::after{content:'▾';color:#667eea}
+  .btn{font-size:14px;padding:10px 16px;border-radius:10px}
+  .btn-sm{font-size:13px;padding:8px 12px}
+  .btn-lg{padding:12px 20px;font-size:15px}
+  .modal{width:100vw!important;max-width:100vw!important;margin:0;border-radius:16px 16px 0 0;max-height:95vh;position:fixed;bottom:0}
+  .modal-header{padding:14px 16px}
+  .modal-body{padding:14px 16px}
+  .modal-footer{padding:12px 16px;flex-wrap:wrap}
+  #pl-selector{padding:12px!important}
+  .pl-card{padding:10px!important}
+  #scan-input{font-size:18px!important;padding:14px 16px!important}
+}
 </style>
 </head>
 <body>
+<script>if(window.self!==window.top)document.body.classList.add('in-iframe');</script>
 
 <div class="header">
   <h1>Packing Station</h1>
@@ -202,6 +241,17 @@ tr:hover{background:#f8f9ff}
       <div style="font-size:13px;color:#888;margin-top:4px">
         <span id="progress-text">0 / 0 items picked</span>
       </div>
+      <!-- Manifest -->
+      <div id="manifest-section" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600;color:#555">Manifest:</span>
+        <span id="manifest-info" style="font-size:13px;color:#888">No manifest</span>
+        <a id="manifest-view-btn" href="#" target="_blank" class="btn btn-outline btn-sm" style="display:none;padding:4px 10px;font-size:11px">View PDF</a>
+        <label class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:11px;cursor:pointer;margin:0">
+          Upload PDF
+          <input type="file" accept=".pdf" id="manifest-upload" style="display:none" onchange="uploadManifest(this)">
+        </label>
+        <button class="btn btn-sm" id="manifest-delete-btn" onclick="deleteManifest()" style="display:none;padding:4px 8px;font-size:11px;background:none;color:#dc3545;border:1px solid #dc3545">Remove</button>
+      </div>
     </div>
 
     <!-- Orders Progress -->
@@ -267,6 +317,14 @@ tr:hover{background:#f8f9ff}
 
 <script>
 const API = '/api/v1';
+// Mobile tap to expand
+document.addEventListener('click', function(e) {
+  if (window.innerWidth > 768) return;
+  const tr = e.target.closest('tbody tr');
+  if (!tr) return;
+  if (e.target.closest('button,a,input,select,.btn')) return;
+  tr.classList.toggle('m-expanded');
+});
 let currentPL = null; // current picking list
 let progressData = []; // per-order progress
 let activeOrderId = null; // order currently being packed
@@ -387,6 +445,7 @@ async function selectPickingList(plId) {
   document.getElementById('header-info').textContent = currentPL.picking_number;
   document.getElementById('packing-session').style.display = '';
   document.getElementById('unpack-batch-btn').style.display = currentPL.status === 'active' ? '' : 'none';
+  updateManifestUI();
   document.getElementById('scan-input').focus();
 
   // Highlight selected card
@@ -397,6 +456,48 @@ async function selectPickingList(plId) {
 
   await refreshProgress();
   startAutoRefresh();
+}
+
+function updateManifestUI() {
+  if (!currentPL) return;
+  const hasManifest = currentPL.manifest_filename;
+  document.getElementById('manifest-info').textContent = hasManifest ? currentPL.manifest_filename : 'No manifest';
+  const viewBtn = document.getElementById('manifest-view-btn');
+  viewBtn.style.display = hasManifest ? '' : 'none';
+  viewBtn.href = hasManifest ? API + '/picking-lists/' + currentPL.id + '/manifest' : '#';
+  document.getElementById('manifest-delete-btn').style.display = hasManifest ? '' : 'none';
+}
+
+async function uploadManifest(input) {
+  const file = input.files[0];
+  if (!file || !currentPL) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id + '/manifest', { method: 'POST', body: form });
+    if (res.ok) {
+      toast('Manifest uploaded');
+      currentPL.manifest_filename = file.name;
+      updateManifestUI();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Upload failed', 'error');
+    }
+  } catch (e) { toast(e.message, 'error'); }
+  input.value = '';
+}
+
+async function deleteManifest() {
+  if (!currentPL || !confirm('Remove manifest?')) return;
+  try {
+    const res = await fetch(API + '/picking-lists/' + currentPL.id + '/manifest', { method: 'DELETE' });
+    if (res.ok || res.status === 204) {
+      toast('Manifest removed');
+      currentPL.manifest_filename = '';
+      currentPL.manifest_data = '';
+      updateManifestUI();
+    }
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function refreshProgress() {

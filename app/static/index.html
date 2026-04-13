@@ -8,17 +8,186 @@
 *{margin:0;padding:0;box-sizing:border-box}
 .status-opt:hover{background:#f0f2f5}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e}
-.header{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
-.header h1{font-size:20px;font-weight:600}
-.header .stats{display:flex;gap:20px;font-size:13px}
-.header .stats span{background:rgba(255,255,255,.2);padding:4px 12px;border-radius:20px}
-.tabs{display:flex;background:#fff;border-bottom:2px solid #e8e8e8;padding:0 24px;gap:0}
-.tab{padding:14px 24px;cursor:pointer;font-weight:500;color:#666;border-bottom:3px solid transparent;transition:.2s}
-.tab:hover{color:#667eea}
-.tab.active{color:#667eea;border-bottom-color:#667eea}
-.content{max-width:1400px;margin:0 auto;padding:20px}
+
+/* --- Layout --- */
+.app-layout{display:flex;min-height:100vh}
+
+/* --- Sidebar --- */
+.sidebar{width:240px;background:#1a1a2e;color:#c0c4cc;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:150;transition:width .2s ease;overflow:hidden}
+.sidebar.collapsed{width:60px}
+.sidebar-header{padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.08);min-height:56px}
+.sidebar-header h1{font-size:16px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden}
+.sidebar.collapsed .sidebar-header h1{display:none}
+.sidebar-toggle{background:none;border:none;color:#888;cursor:pointer;padding:4px;border-radius:4px;flex-shrink:0}
+.sidebar-toggle:hover{color:#fff;background:rgba(255,255,255,.1)}
+.sidebar-nav{flex:1;overflow-y:auto;padding:8px 0}
+.sidebar-nav::-webkit-scrollbar{width:4px}
+.sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+.nav-item{display:flex;align-items:center;padding:10px 16px;cursor:pointer;color:#a0a4b0;font-size:13px;font-weight:500;gap:12px;transition:.15s;white-space:nowrap;text-decoration:none;border-left:3px solid transparent}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#e0e0e0}
+.nav-item.active{background:rgba(102,126,234,.15);color:#667eea;border-left-color:#667eea}
+.nav-item svg{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2}
+.nav-item .nav-label{overflow:hidden;text-overflow:ellipsis}
+.sidebar.collapsed .nav-label{display:none}
+.nav-group-title{padding:12px 16px 4px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#555;font-weight:600}
+.sidebar.collapsed .nav-group-title{display:none}
+.nav-sub{padding-left:14px;border-left:1px solid rgba(255,255,255,.06);margin-left:28px;display:none}
+.nav-sub.open{display:block}
+.nav-sub .nav-item{padding:7px 12px;font-size:12px;border-left:none}
+.sidebar.collapsed .nav-sub{display:none!important}
+.nav-parent .nav-arrow{margin-left:auto;transition:transform .2s;font-size:10px}
+.nav-parent.open .nav-arrow{transform:rotate(90deg)}
+.sidebar-footer{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px}
+.sidebar-footer .user-info{display:flex;align-items:center;gap:8px;color:#a0a4b0;cursor:pointer;padding:6px 0}
+.sidebar-footer .user-info:hover{color:#fff}
+.sidebar.collapsed .sidebar-footer .nav-label{display:none}
+
+/* --- Topbar --- */
+.topbar{height:56px;background:#fff;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.topbar .scan-input{padding:8px 14px;border:1px solid #e0e0e0;border-radius:20px;font-size:13px;width:220px;outline:none;transition:.2s}
+.topbar .scan-input:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.12)}
+.topbar .stats-bar{display:flex;gap:12px;margin-left:auto;font-size:12px;color:#888}
+.topbar .stats-bar span{background:#f8f9fa;padding:4px 10px;border-radius:16px}
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:6px}
+.hamburger svg{width:24px;height:24px;stroke:#555;stroke-width:2}
+
+/* --- Main Content --- */
+.main-content{flex:1;margin-left:240px;transition:margin-left .2s ease;overflow-x:hidden;min-width:0}
+body.sidebar-collapsed .main-content{margin-left:60px}
+.content{padding:16px;overflow-x:auto}
+
+/* --- Panels (keep existing) --- */
 .panel{display:none}
 .panel.active{display:block}
+
+/* Hide old tabs */
+.tabs{display:none!important}
+/* Embedded iframe panels — break out of .content wrapper */
+#panel-packing.active,#panel-customers.active{display:block;position:fixed;top:56px;left:240px;right:0;bottom:0;z-index:50;padding:0;margin:0;background:#f0f2f5}
+body.sidebar-collapsed #panel-packing.active,
+body.sidebar-collapsed #panel-customers.active{left:60px}
+#packing-iframe,#customers-iframe{width:100%;height:100%;border:none;display:block}
+
+/* Desktop tables: ensure normal display */
+@media(min-width:769px){
+  table{display:table!important;width:100%!important}
+  thead{display:table-header-group!important}
+  tbody{display:table-row-group!important}
+  tr{display:table-row!important;background:initial;border-radius:0;box-shadow:none;margin:0;padding:0;cursor:default}
+  tr:hover{background:#f8f9ff}
+  td{display:table-cell!important;padding:8px 10px;border-bottom:1px solid #f0f0f0;font-size:13px;white-space:nowrap}
+  th{padding:8px 10px;font-size:12px}
+  td::before{display:none!important}
+  tr::after{display:none!important}
+  .actions-cell{display:flex!important;white-space:nowrap}
+}
+
+/* --- Responsive --- */
+@media(max-width:768px){
+  .sidebar{width:260px;transform:translateX(-100%);z-index:200}
+  .sidebar.mobile-open{transform:translateX(0)}
+  .sidebar.collapsed{width:260px;transform:translateX(-100%)}
+  .sidebar.collapsed.mobile-open{transform:translateX(0)}
+  .main-content{margin-left:0!important}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199}
+  .sidebar-overlay.show{display:block}
+  .hamburger{display:block}
+  .topbar{padding:0 12px;gap:8px}
+  .topbar .scan-input{width:120px;font-size:14px;padding:8px 12px}
+  .topbar .stats-bar{display:none}
+  .content{padding:8px}
+
+  /* Base text */
+  body{font-size:15px;-webkit-text-size-adjust:100%}
+  h2,h3{font-size:16px}
+
+  /* Tables: collapsible single-line rows on mobile */
+  table{display:block;width:100%!important;border:none;box-shadow:none;background:transparent}
+  thead{display:none!important}
+  tbody{display:block;width:100%}
+  tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:4px;padding:10px 12px;position:relative;cursor:pointer}
+  tr:hover{background:#fafafa}
+  /* All td hidden by default */
+  td{display:none;border:none;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0}
+  td::before{display:none}
+  /* Summary fields: inline on one line, no labels */
+  td[data-label="Order #"]{display:inline;font-weight:700;font-size:13px;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+  td[data-label="Name"]{display:inline;color:#555;font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+  td[data-label="Status"]{display:inline}
+  td[data-label="SKU"]{display:inline;font-weight:700;font-family:monospace;font-size:12px}
+  td[data-label="Stock"]{display:inline;font-size:12px}
+  td[data-label="Price"]{display:inline;font-size:12px;color:#555}
+  td[data-label="Request #"]{display:inline;font-weight:700;font-size:12px}
+  td[data-label="Supplier"]{display:inline;color:#555;font-size:12px}
+  td[data-label="In Warehouse"]{display:inline;font-size:12px}
+  td[data-label="Available"]{display:inline;font-size:12px}
+  td[data-label="Time"]{display:inline;font-size:11px;color:#888}
+  td[data-label="Change"]{display:inline;font-size:12px}
+  td[data-label="Reason"]{display:inline}
+  /* Checkbox */
+  td:first-child:has(input[type="checkbox"]){display:block;position:absolute;top:10px;right:10px}
+  /* Expand arrow */
+  tr::after{content:'▸';position:absolute;right:12px;bottom:8px;font-size:10px;color:#ccc}
+  tr.m-expanded::after{content:'▾';color:#667eea}
+  /* Expanded: show all fields stacked */
+  tr.m-expanded{flex-direction:column;align-items:stretch;gap:0}
+  tr.m-expanded td{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:14px;white-space:normal;word-break:break-word;max-width:none;overflow:visible}
+  tr.m-expanded td::before{display:block;content:attr(data-label);font-weight:600;font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.3px;margin-right:8px;flex-shrink:0;min-width:70px}
+  tr.m-expanded td:empty{display:none}
+  /* Actions hidden by default, show on expand */
+  .actions-cell{display:none!important;gap:6px;justify-content:flex-end;padding-top:6px;border-top:1px solid #f0f0f0}
+  .actions-cell::before{display:none!important}
+  .actions-cell .btn{padding:6px 10px;font-size:12px}
+  tr.m-expanded .actions-cell{display:flex!important}
+
+  /* Toolbar */
+  .toolbar{flex-direction:column;align-items:stretch;gap:8px}
+  .toolbar>div{display:flex;flex-wrap:wrap;gap:6px}
+  .toolbar .search{width:100%;font-size:15px;padding:12px 16px;border-radius:10px}
+  .toolbar select{font-size:14px;padding:10px 12px;flex:1;min-width:0}
+  .toolbar .btn,.toolbar .btn-sm{font-size:13px;padding:10px 14px;justify-content:center;flex:1;min-width:0}
+
+  /* Buttons */
+  .btn{font-size:14px;padding:10px 16px;border-radius:10px}
+  .btn-sm{font-size:13px;padding:8px 12px}
+
+  /* Cards and grids */
+  .form-row,.form-row-3{grid-template-columns:1fr!important}
+  .detail-grid{grid-template-columns:1fr!important}
+  #inv-breakdown-cards{grid-template-columns:1fr 1fr!important}
+
+  /* Modals */
+  .modal{width:100vw!important;max-width:100vw!important;margin:0;border-radius:16px 16px 0 0;max-height:95vh;position:fixed;bottom:0}
+  .modal-header{padding:14px 16px}
+  .modal-header h2{font-size:16px}
+  .modal-body{padding:14px 16px}
+  .modal-footer{padding:12px 16px;flex-wrap:wrap}
+
+  /* Badge */
+  .badge{font-size:11px;padding:4px 10px}
+
+  /* Inventory sub-tabs */
+  .inv-tab{padding:8px 12px!important;font-size:13px!important}
+
+  /* Order overview cards */
+  #orders-overview{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}
+  #orders-overview>div{min-width:0!important;padding:10px!important;border-radius:8px!important}
+
+  /* Embedded iframe panels */
+  #panel-packing.active,#panel-customers.active{left:0!important}
+}
+
+@media(max-width:480px){
+  .content{padding:4px}
+  #inv-breakdown-cards{grid-template-columns:1fr!important}
+  #orders-overview{grid-template-columns:1fr!important}
+}
+  td,th{padding:8px 6px;font-size:12px}
+  .btn{font-size:13px;padding:8px 12px}
+  .btn-sm{font-size:12px;padding:6px 10px}
+}
+
+/* --- Existing styles (unchanged) --- */
 .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap}
 .search{padding:10px 16px;border:1px solid #ddd;border-radius:8px;width:300px;font-size:14px;outline:none;transition:.2s}
 .search:focus{border-color:#667eea;box-shadow:0 0 0 3px rgba(102,126,234,.15)}
@@ -155,8 +324,9 @@ tr:hover{background:#f8f9ff}
 .img-zoom-overlay img{max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.5);object-fit:contain}
 .scan-cam-btn{background:none;border:none;cursor:pointer;padding:4px;display:none;align-items:center;justify-content:center;border-radius:50%;transition:.2s}
 .scan-cam-btn:hover{background:rgba(255,255,255,.2)}
-@media(max-width:768px){.scan-cam-btn{display:inline-flex}#inv-breakdown-cards{grid-template-columns:repeat(2,1fr)!important}}
+@media(max-width:768px){.scan-cam-btn{display:inline-flex}}
 @media(max-width:1200px){#inv-breakdown-cards{grid-template-columns:repeat(3,1fr)!important}}
+@media(min-width:769px){#inv-breakdown-cards{grid-template-columns:repeat(4,1fr)!important}}
 .scan-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;flex-direction:column}
 .scan-modal-overlay.show{display:flex}
 .scan-modal-box{background:#fff;border-radius:16px;width:95vw;max-width:420px;overflow:hidden}
@@ -173,41 +343,102 @@ tr:hover{background:#f8f9ff}
 </head>
 <body>
 
-<div class="header">
-  <h1>Warehouse Manager</h1>
-  <div class="stats">
-    <input type="text" id="global-scan" placeholder="Scan QR..." style="width:180px;padding:6px 12px;border:none;border-radius:20px;font-size:13px;background:rgba(255,255,255,.25);color:#fff;outline:none" autocomplete="off">
-    <button class="scan-cam-btn" onclick="openCameraScanner()" title="Scan with camera">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+<!-- Sidebar Overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h1>Warehouse</h1>
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Collapse">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <span id="stat-products">0 Products</span>
-    <span id="stat-orders">0 Orders</span>
-    <span id="stat-low-stock">0 Low Stock</span>
-    <div class="user-dropdown">
-      <span id="current-user" style="cursor:pointer;background:rgba(255,255,255,.2);padding:4px 12px;border-radius:20px;font-size:13px" onclick="document.getElementById('user-menu').classList.toggle('open')"></span>
-      <div class="user-dropdown-menu" id="user-menu">
-        <a href="#" onclick="openChangePwModal();document.getElementById('user-menu').classList.remove('open')">
-          <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          Change Password
-        </a>
-        <hr>
-        <a href="#" onclick="doLogout()" style="color:#dc3545">
-          <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-          Logout
-        </a>
-      </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-group-title">Main</div>
+    <div class="nav-item active" data-tab="products" onclick="navTo('products')">
+      <svg viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      <span class="nav-label">Products</span>
+    </div>
+    <div class="nav-item" data-tab="orders" onclick="navTo('orders')">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 7h8M8 11h5M8 15h8"/></svg>
+      <span class="nav-label">Orders</span>
+    </div>
+
+    <div class="nav-group-title">Inventory</div>
+    <div class="nav-item nav-parent" onclick="toggleSubMenu(this)">
+      <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <span class="nav-label">Inventory</span>
+      <span class="nav-arrow">&#9654;</span>
+    </div>
+    <div class="nav-sub open">
+      <div class="nav-item" data-tab="inventory" data-inv="overview" onclick="navToInv('overview')"><span class="nav-label">Overview</span></div>
+      <div class="nav-item" data-tab="inventory" data-inv="log" onclick="navToInv('log')"><span class="nav-label">Inventory Log</span></div>
+      <div class="nav-item" data-tab="inventory" data-inv="daily-report" onclick="navToInv('daily-report')"><span class="nav-label">Daily Report</span></div>
+      <div class="nav-item" data-tab="inventory" data-inv="stock-requests" onclick="navToInv('stock-requests')"><span class="nav-label">Stock Requests</span></div>
+    </div>
+
+    <div class="nav-group-title">Operations</div>
+    <div class="nav-item" data-tab="packing" onclick="navTo('packing')">
+      <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/></svg>
+      <span class="nav-label">Packing Station</span>
+    </div>
+    <div class="nav-item" data-tab="customers" onclick="navTo('customers')">
+      <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      <span class="nav-label">Customers</span>
+    </div>
+
+    <div class="nav-group-title">Analytics</div>
+    <div class="nav-item" data-tab="reports" onclick="navTo('reports')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span class="nav-label">Reports</span>
+    </div>
+
+    <div class="nav-group-title" id="nav-admin-title" style="display:none">Admin</div>
+    <div class="nav-item" data-tab="users" id="nav-users" style="display:none" onclick="navTo('users')">
+      <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>
+      <span class="nav-label">Users</span>
+    </div>
+    <div class="nav-item" data-tab="jobs" id="nav-jobs" style="display:none" onclick="navTo('jobs')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span class="nav-label">Jobs</span>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-info" onclick="document.getElementById('user-menu-sidebar').classList.toggle('open')">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="nav-label" id="current-user"></span>
+    </div>
+    <div class="user-dropdown-menu" id="user-menu-sidebar" style="position:absolute;bottom:50px;left:8px;width:200px">
+      <a href="#" onclick="openChangePwModal();document.getElementById('user-menu-sidebar').classList.remove('open')">
+        <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Change Password
+      </a>
+      <hr>
+      <a href="#" onclick="doLogout()" style="color:#dc3545">
+        <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Logout
+      </a>
     </div>
   </div>
 </div>
 
-<div class="tabs">
-  <div class="tab active" data-tab="products">Products</div>
-  <div class="tab" data-tab="orders">Orders</div>
-  <div class="tab" data-tab="inventory">Inventory</div>
-  <div class="tab" data-tab="reports">Reports</div>
-  <a href="/customers" class="tab" style="text-decoration:none;color:inherit">Customers</a>
-  <div class="tab" data-tab="jobs" id="tab-jobs" style="display:none">Jobs</div>
-  <div class="tab" data-tab="users" id="tab-users" style="display:none">Users</div>
+<div class="app-layout">
+<div class="main-content" id="main-content">
+<!-- Topbar -->
+<div class="topbar">
+  <button class="hamburger" onclick="openSidebar()">
+    <svg viewBox="0 0 24 24" fill="none"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <input type="text" class="scan-input" id="global-scan" placeholder="Scan QR..." autocomplete="off">
+  <button class="scan-cam-btn" onclick="openCameraScanner()" title="Scan with camera">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+  </button>
+  <div class="stats-bar">
+    <span id="stat-products">0 Products</span>
+    <span id="stat-orders">0 Orders</span>
+    <span id="stat-low-stock">0 Low Stock</span>
+  </div>
 </div>
 
 <div class="content">
@@ -293,10 +524,12 @@ tr:hover{background:#f8f9ff}
       </div>
     </div>
     <div id="orders-overview" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
     <table>
-      <thead><tr><th style="width:36px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Order #</th><th>Order Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Priority</th><th>Status</th><th>Tracking</th><th>Created</th><th>Last Update</th><th>Actions</th></tr></thead>
+      <thead><tr><th style="width:32px"><input type="checkbox" id="select-all-orders" onchange="toggleAllOrders(this)"></th><th>Name</th><th>Shop</th><th>Customer</th><th>Items</th><th>Total</th><th>Priority</th><th>Status</th><th>Tracking</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody id="orders-body"></tbody>
     </table>
+    </div>
     <div id="orders-pagination" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap"></div>
   </div>
 
@@ -876,6 +1109,16 @@ tr:hover{background:#f8f9ff}
   </div>
 </div>
 
+  <!-- PACKING STATION PANEL (embedded) -->
+  <div class="panel" id="panel-packing" style="padding:0;margin:0">
+    <iframe id="packing-iframe" src="about:blank" style="width:100%;height:calc(100vh - 56px);border:none;display:block"></iframe>
+  </div>
+
+  <!-- CUSTOMERS PANEL (embedded) -->
+  <div class="panel" id="panel-customers" style="padding:0;margin:0">
+    <iframe id="customers-iframe" src="about:blank" style="width:100%;height:calc(100vh - 56px);border:none;display:block"></iframe>
+  </div>
+
 <!-- PRODUCT MODAL -->
 <div class="modal-overlay" id="product-modal">
   <div class="modal">
@@ -1441,18 +1684,57 @@ fetch(API + '/shipping/defaults').then(r => r.ok ? r.json() : null).then(d => {
   }
 }).catch(() => {});
 
-// Tabs
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-    if (tab.dataset.tab === 'reports') loadReports();
-    if (tab.dataset.tab === 'inventory') { loadInventoryOverview(); loadStockRequests(); }
-    if (tab.dataset.tab === 'users') { loadUsers(); loadActivityLogs(); }
-  });
-});
+// --- Sidebar Navigation ---
+function navTo(name) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-tab="${name}"]`);
+  if (navItem) navItem.classList.add('active');
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.classList.add('active');
+  if (name === 'reports') loadReports();
+  if (name === 'inventory') { loadInventoryOverview(); loadStockRequests(); }
+  if (name === 'users') { loadUsers(); loadActivityLogs(); }
+  if (name === 'jobs') loadJobs();
+  // Lazy-load iframes for embedded pages
+  if (name === 'packing') {
+    const iframe = document.getElementById('packing-iframe');
+    if (!iframe.src || !iframe.src.includes('/packing')) iframe.src = '/packing';
+  }
+  if (name === 'customers') {
+    const iframe = document.getElementById('customers-iframe');
+    if (!iframe.src || !iframe.src.includes('/customers')) iframe.src = '/customers';
+  }
+  closeSidebar();
+}
+function navToInv(sub) {
+  navTo('inventory');
+  switchInvTab(sub);
+  document.querySelectorAll('.nav-sub .nav-item').forEach(n => n.classList.remove('active'));
+  const subItem = document.querySelector(`.nav-sub .nav-item[data-inv="${sub}"]`);
+  if (subItem) subItem.classList.add('active');
+}
+function toggleSubMenu(el) {
+  el.classList.toggle('open');
+  const sub = el.nextElementSibling;
+  if (sub && sub.classList.contains('nav-sub')) sub.classList.toggle('open');
+}
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+  document.body.classList.toggle('sidebar-collapsed');
+}
+function openSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.add('mobile-open');
+  document.getElementById('sidebar-overlay').classList.add('show');
+}
+function closeSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
+// Keep old switchTab for backward compat (used by QR scanner etc.)
+function switchTab(name) { navTo(name); }
 
 // Toast
 function toast(msg, type = 'success') {
@@ -1511,13 +1793,13 @@ function renderProducts(list) {
         const imgThumb = p.image_url ? `<img src="${esc(p.image_url)}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #e8e8e8" onerror="this.style.display='none';this.nextElementSibling.style.display=''"><div style="display:none;width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>` : '<div style="width:36px;height:36px;background:#f0f2f5;border-radius:6px;border:1px solid #e8e8e8"></div>';
         return `<tr>
         <td>${imgThumb}</td>
-        <td><strong>${esc(p.sku)}</strong></td>
-        <td>${esc(p.name)}</td>
-        <td>${esc(p.category)}</td>
-        <td>$${p.price.toFixed(2)}</td>
-        <td>${variantInfo}</td>
-        <td class="${totalQty <= 5 ? 'stock-low' : 'stock-ok'}">${totalQty}</td>
-        <td>${esc(p.location)}</td>
+        <td data-label="SKU"><strong>${esc(p.sku)}</strong></td>
+        <td data-label="Name">${esc(p.name)}</td>
+        <td data-label="Category">${esc(p.category)}</td>
+        <td data-label="Price">$${p.price.toFixed(2)}</td>
+        <td data-label="Variants">${variantInfo}</td>
+        <td data-label="Stock" class="${totalQty <= 5 ? 'stock-low' : 'stock-ok'}">${totalQty}</td>
+        <td data-label="Location">${esc(p.location)}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="editProduct('${p.id}')">Edit</button>
           <button class="btn btn-sm btn-primary" onclick="openVariantsModal('${p.id}')">Variants</button>
@@ -2349,20 +2631,18 @@ function renderOrders(list) {
     return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:#fff;background:${colors[p]||colors.normal}">${(p||'normal')}</span>`;
   };
   document.getElementById('orders-body').innerHTML = pageItems.length === 0
-    ? '<tr><td colspan="13" class="empty">No orders found</td></tr>'
+    ? '<tr><td colspan="11" class="empty">No orders found</td></tr>'
     : pageItems.map(o => `<tr>
         <td><input type="checkbox" class="order-check" value="${o.id}" onchange="updateSelectedCount()"></td>
-        <td><strong>${esc(o.order_number)}</strong></td>
-        <td>${esc(o.order_name || '-')}</td>
-        <td>${esc(o.shop_name || '-')}</td>
-        <td>${esc(o.customer_name)}</td>
-        <td>${o.items.length} items</td>
-        <td>$${o.total_price.toFixed(2)}</td>
-        <td>${priorityBadge(o.priority)}</td>
-        <td><span class="badge badge-${o.status}">${o.status}</span></td>
-        <td>${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? '<br><span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px;margin-top:2px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
-        <td>${new Date(o.created_at).toLocaleDateString('en-US')}</td>
-        <td>${o.updated_at ? new Date(o.updated_at).toLocaleDateString('en-US') + ' ' + new Date(o.updated_at).toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+        <td data-label="Name"><strong>${esc(o.order_name || o.order_number)}</strong></td>
+        <td data-label="Shop">${esc(o.shop_name || '-')}</td>
+        <td data-label="Customer">${esc(o.customer_name)}</td>
+        <td data-label="Items">${o.items.length}</td>
+        <td data-label="Total">$${o.total_price.toFixed(2)}</td>
+        <td data-label="Priority">${priorityBadge(o.priority)}</td>
+        <td data-label="Status"><span class="badge badge-${o.status}">${o.status}</span></td>
+        <td data-label="Tracking" style="font-size:12px">${o.tracking_number ? '<a href="'+esc(o.tracking_url)+'" target="_blank">'+esc(o.tracking_number)+'</a>' + (o.tracking_status ? ' <span class="badge badge-'+esc(o.tracking_status)+'" style="font-size:9px">'+esc(o.tracking_status)+'</span>' : '') : '-'}</td>
+        <td data-label="Created" style="font-size:12px">${new Date(o.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
           ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
@@ -3206,17 +3486,17 @@ function renderInventoryOverview(data) {
       const label = r.variant_sku ? (r.variant_sku + ' - ' + r.name + (r.variant_label ? ' (' + r.variant_label + ')' : '')) : (r.sku + ' - ' + r.name);
       const inWh = r.in_warehouse || ((r.available || r.current_stock || 0) + (r.on_hold || 0));
       return `<tr>
-        <td><strong>${esc(r.variant_sku || r.sku)}</strong></td>
-        <td>${esc(r.name)}</td>
-        <td>${r.variant_label ? esc(r.variant_label) : '-'}</td>
-        <td style="color:#1565C0;font-weight:600">${inWh}</td>
-        <td style="color:#856404;font-weight:${r.on_hold ? '600' : '400'}">${r.on_hold || 0}</td>
-        <td class="${r.available <= 5 ? 'stock-low' : 'stock-ok'}">${r.available != null ? r.available : r.current_stock}</td>
-        <td style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
-        <td style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
-        <td style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
-        <td>${esc(r.location)}</td>
-        <td>${(currentUser && currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>` : ''}</td>
+        <td data-label="SKU"><strong>${esc(r.variant_sku || r.sku)}</strong></td>
+        <td data-label="Name">${esc(r.name)}</td>
+        <td data-label="Variant">${r.variant_label ? esc(r.variant_label) : '-'}</td>
+        <td data-label="In Warehouse" style="color:#1565C0;font-weight:600">${inWh}</td>
+        <td data-label="On Hold" style="color:#856404;font-weight:${r.on_hold ? '600' : '400'}">${r.on_hold || 0}</td>
+        <td data-label="Available" class="${r.available <= 5 ? 'stock-low' : 'stock-ok'}">${r.available != null ? r.available : r.current_stock}</td>
+        <td data-label="In Production" style="color:#6c3483;font-weight:${r.in_production ? '600' : '400'}">${r.in_production || 0}</td>
+        <td data-label="Shipped" style="color:#0c5460;font-weight:${r.shipped ? '600' : '400'}">${r.shipped || 0}</td>
+        <td data-label="Pending" style="color:#ff5722;font-weight:${r.pending ? '600' : '400'}">${r.pending || 0}</td>
+        <td data-label="Location">${esc(r.location)}</td>
+        <td class="actions-cell">${(currentUser && currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-warning" onclick="openInventoryModal('${r.product_id}','${r.variant_id || ''}','${escAttr(label)}')">Adjust</button>` : ''}</td>
       </tr>`;
     }).join('');
 }
@@ -3287,6 +3567,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   const badge = document.getElementById('inv-daily-sku-badge');
   if (badge) badge.addEventListener('click', () => setDailySkuFilter(''));
+});
+
+// Mobile: tap row to expand/collapse card
+document.addEventListener('click', function(e) {
+  if (window.innerWidth > 768) return;
+  const tr = e.target.closest('tbody tr');
+  if (!tr) return;
+  // Don't toggle if clicking a button, link, input, or select
+  if (e.target.closest('button,a,input,select,.btn')) return;
+  tr.classList.toggle('m-expanded');
 });
 
 function toggleMetricDropdown() {
@@ -3519,16 +3809,16 @@ function renderInventoryLog() {
       const dt = r.created_at ? new Date(r.created_at) : null;
       const timeStr = dt ? dt.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) + ' ' + dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '-';
       return `<tr>
-        <td style="font-size:13px;color:#666;white-space:nowrap">${timeStr}</td>
-        <td><strong>${esc(r.sku || '')}</strong></td>
-        <td>${esc(r.product_name || '')}</td>
-        <td style="color:${changeColor};font-weight:700;font-size:15px">${changePrefix}${r.change}</td>
-        <td style="font-weight:500">${r.balance_after}</td>
-        <td style="color:${gapColor};font-weight:${gapVal ? '600' : '400'}">${gapVal ? (gapVal > 0 ? '+' : '') + gapVal : '-'}</td>
-        <td>${reasonBadge}</td>
-        <td style="font-size:13px;color:#444">${r.adjusted_by ? esc(r.adjusted_by) : '<span style="color:#ccc">—</span>'}</td>
-        <td style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
-        <td style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>
+        <td data-label="Time" style="font-size:13px;color:#666;white-space:nowrap">${timeStr}</td>
+        <td data-label="SKU"><strong>${esc(r.sku || '')}</strong></td>
+        <td data-label="Product">${esc(r.product_name || '')}</td>
+        <td data-label="Change" style="color:${changeColor};font-weight:700;font-size:15px">${changePrefix}${r.change}</td>
+        <td data-label="Balance" style="font-weight:500">${r.balance_after}</td>
+        <td data-label="Adjustment" style="color:${gapColor};font-weight:${gapVal ? '600' : '400'}">${gapVal ? (gapVal > 0 ? '+' : '') + gapVal : '-'}</td>
+        <td data-label="Reason">${reasonBadge}</td>
+        <td data-label="User" style="font-size:13px;color:#444">${r.adjusted_by ? esc(r.adjusted_by) : '<span style="color:#ccc">—</span>'}</td>
+        <td data-label="Reference" style="font-size:12px;color:#888">${esc(r.reference_id || '-')}</td>
+        <td data-label="Note" style="font-size:13px;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(r.note || '')}">${esc(r.note || '-')}</td>
       </tr>`;
     }).join('');
 
@@ -3566,18 +3856,18 @@ function renderStockRequests(list) {
       const totalRcv = sr.items.reduce((s, i) => s + i.quantity_received, 0);
       const totalBoxes = sr.items.reduce((s, i) => s + (i.box_count || 0), 0);
       return `<tr>
-        <td><strong>${esc(sr.request_number)}</strong></td>
-        <td>${esc(sr.supplier) || '-'}</td>
-        <td>${sr.items.length}</td>
-        <td>${totalReq}</td>
-        <td>${totalRcv}</td>
-        <td>${totalBoxes || '-'}</td>
-        <td><span class="badge badge-${sr.status}">${sr.status}</span></td>
-        <td>${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
+        <td data-label="Request #"><strong>${esc(sr.request_number)}</strong></td>
+        <td data-label="Supplier">${esc(sr.supplier) || '-'}</td>
+        <td data-label="SKUs">${sr.items.length}</td>
+        <td data-label="Requested">${totalReq}</td>
+        <td data-label="Received">${totalRcv}</td>
+        <td data-label="Boxes">${totalBoxes || '-'}</td>
+        <td data-label="Status"><span class="badge badge-${sr.status}">${sr.status}</span></td>
+        <td data-label="Date">${new Date(sr.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewStockRequest('${sr.id}')">View</button>
           ${['approved','receiving'].includes(sr.status) ? `<button class="btn btn-sm btn-outline" onclick="showSrQrCode('${sr.id}','${esc(sr.request_number)}')" title="QR for mobile receiving">QR</button>` : ''}
-          ${['cancelled','pending'].includes(sr.status) ? `<button class="btn btn-sm btn-danger" onclick="deleteStockRequest('${sr.id}','${esc(sr.request_number)}')">Delete</button>` : ''}
+          ${['cancelled','pending'].includes(sr.status) && currentUser && currentUser.role === 'super_admin' ? `<button class="btn btn-sm btn-danger" onclick="deleteStockRequest('${sr.id}','${esc(sr.request_number)}')">Delete</button>` : ''}
         </td>
       </tr>`;
     }).join('');
@@ -4337,6 +4627,9 @@ async function loadCurrentUser() {
       if ((currentUser.role === 'admin' || currentUser.role === 'super_admin')) {
         document.getElementById('tab-users').style.display = '';
         document.getElementById('tab-jobs').style.display = '';
+        document.getElementById('nav-users').style.display = '';
+        document.getElementById('nav-jobs').style.display = '';
+        document.getElementById('nav-admin-title').style.display = '';
       }
     }
   } catch {}
@@ -4647,16 +4940,6 @@ document.addEventListener('keydown', function(e) {
 });
 
 // === GLOBAL QR SCANNER ===
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  const tab = document.querySelector(`.tab[data-tab="${name}"]`);
-  if (tab) tab.classList.add('active');
-  const panel = document.getElementById('panel-' + name);
-  if (panel) panel.classList.add('active');
-  if (name === 'jobs') loadJobs();
-}
-
 async function handleGlobalScan(raw) {
   const code = raw.trim();
   if (!code) return;
@@ -5068,6 +5351,9 @@ function onScanSuccess(decodedText) {
     <div class="scan-result-bar" id="scan-result-text">Point camera at a barcode or QR code</div>
   </div>
 </div>
+
+</div><!-- /main-content -->
+</div><!-- /app-layout -->
 
 </body>
 </html>
