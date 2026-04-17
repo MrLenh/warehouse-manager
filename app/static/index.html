@@ -5289,8 +5289,12 @@ async function viewJobLogs(jobId, jobName) {
         : '<span class="badge badge-cancelled">Error</span>';
       const detailItems = (log.details || []).slice(0, 5);
       const detailHtml = detailItems.length
-        ? detailItems.map(d => `<span style="font-size:11px">${esc(d.order_number||'')} ${esc(d.from||'')}→${esc(d.to||'')}</span>`).join(', ')
-          + (log.details.length > 5 ? ` <span style="color:#888">+${log.details.length - 5} more</span>` : '')
+        ? detailItems.map(d => {
+            if (d.action === 'skipped') return `<span style="font-size:11px;color:#fd7e14">${esc(d.order_number)} skipped: ${esc(d.reason||'').slice(0,60)}</span>`;
+            if (d.action === 'error') return `<span style="font-size:11px;color:#dc3545">${esc(d.order_number)} error: ${esc(d.reason||'').slice(0,60)}</span>`;
+            return `<span style="font-size:11px">${esc(d.order_number||'')} ${esc(d.old_status||'')}→${esc(d.new_status||'')}</span>`;
+          }).join('<br>')
+          + (log.details.length > 5 ? `<br><span style="color:#888">+${log.details.length - 5} more</span>` : '')
         : '<span style="color:#ccc">—</span>';
       html += `<tr>
         <td style="font-size:12px;white-space:nowrap">${timeStr}</td>

@@ -61,6 +61,7 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
     checked = 0
     updated = 0
     errors = 0
+    skipped = 0
     details = []
     revert_snapshots = []
 
@@ -76,14 +77,33 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
             }
 
             # Retrieve tracker from EasyPost
-            if order.easypost_shipment_id:
-                shipment = client.shipment.retrieve(order.easypost_shipment_id)
-                tracker = shipment.tracker if shipment.tracker else None
-            else:
-                tracker = client.tracker.create(
-                    tracking_code=order.tracking_number,
-                    carrier=order.carrier or "USPS",
-                )
+            try:
+                if order.easypost_shipment_id:
+                    shipment = client.shipment.retrieve(order.easypost_shipment_id)
+                    tracker = shipment.tracker if shipment.tracker else None
+                else:
+                    # Try without carrier first (auto-detect), fallback with carrier
+                    try:
+                        tracker = client.tracker.create(
+                            tracking_code=order.tracking_number,
+                        )
+                    except Exception:
+                        tracker = client.tracker.create(
+                            tracking_code=order.tracking_number,
+                            carrier=order.carrier or "USPS",
+                        )
+            except Exception as track_err:
+                err_msg = str(track_err)
+                logger.warning("Tracking lookup skipped for %s: %s", order.order_number, err_msg)
+                details.append({
+                    "order_number": order.order_number,
+                    "tracking": order.tracking_number,
+                    "action": "skipped",
+                    "reason": err_msg[:200],
+                })
+                skipped += 1
+                checked += 1
+                continue
 
             if not tracker:
                 checked += 1
@@ -149,7 +169,14 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
             checked += 1
 
         except Exception as e:
-            logger.error("Custom job '%s' check failed for %s: %s", job.name, order.order_number, e)
+            err_msg = str(e)
+            logger.error("Custom job '%s' check failed for %s: %s", job.name, order.order_number, err_msg)
+            details.append({
+                "order_number": order.order_number,
+                "tracking": order.tracking_number if order else "",
+                "action": "error",
+                "reason": err_msg[:200],
+            })
             errors += 1
             checked += 1
 
@@ -166,14 +193,16 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
         updated=updated,
         errors=errors,
         details=_json.dumps(details, default=str),
+        error_message=f"skipped={skipped}" if skipped > 0 else "",
     )
     db.add(log_entry)
     db.commit()
 
-    logger.info("Custom job '%s' done: checked=%d updated=%d errors=%d", job.name, checked, updated, errors)
+    logger.info("Custom job '%s' done: checked=%d updated=%d skipped=%d errors=%d", job.name, checked, updated, skipped, errors)
     return {
         "checked": checked,
         "updated": updated,
+        "skipped": skipped,
         "errors": errors,
         "details": details,
         "timestamp": datetime.now(timezone.utc).isoformat(),
