@@ -56,7 +56,15 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
 
     if not orders:
         logger.info("Custom job '%s': no orders to check", job.name)
-        return {"checked": 0, "updated": 0}
+        # Still save log entry for no-orders run
+        import json as _json
+        from app.models.custom_job import CustomJobLog
+        db.add(CustomJobLog(job_id=job.id, job_name=job.name, status="success", checked=0, updated=0, errors=0, details="[]"))
+        db.commit()
+        return {"checked": 0, "updated": 0, "skipped": 0, "errors": 0, "details": [], "timestamp": datetime.now(timezone.utc).isoformat(), "revert_snapshots": []}
+
+    logger.info("Custom job '%s': found %d orders to check (source=%s, conditions=%s, target=%s)",
+                job.name, len(orders), source_statuses, tracking_conditions, target_status)
 
     checked = 0
     updated = 0
@@ -67,6 +75,11 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
 
     for order in orders:
         try:
+            logger.info("  [%s] Checking %s (status=%s, tracking=%s, carrier=%s)",
+                        job.name, order.order_number,
+                        order.status.value if hasattr(order.status, 'value') else order.status,
+                        order.tracking_number or 'NONE', order.carrier or 'NONE')
+
             snapshot_before = {
                 "order_id": order.id,
                 "order_number": order.order_number,
@@ -79,15 +92,18 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
             # Retrieve tracker from EasyPost
             try:
                 if order.easypost_shipment_id:
+                    logger.info("    Retrieving shipment %s", order.easypost_shipment_id)
                     shipment = client.shipment.retrieve(order.easypost_shipment_id)
                     tracker = shipment.tracker if shipment.tracker else None
                 else:
                     # Try without carrier first (auto-detect), fallback with carrier
+                    logger.info("    Creating tracker for %s (auto-detect carrier)", order.tracking_number)
                     try:
                         tracker = client.tracker.create(
                             tracking_code=order.tracking_number,
                         )
                     except Exception:
+                        logger.info("    Auto-detect failed, retrying with carrier=%s", order.carrier or "USPS")
                         tracker = client.tracker.create(
                             tracking_code=order.tracking_number,
                             carrier=order.carrier or "USPS",
@@ -106,12 +122,15 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
                 continue
 
             if not tracker:
+                logger.info("    No tracker returned for %s — skipping", order.order_number)
                 checked += 1
                 continue
 
             tracking_status = tracker.status or ""
             status_detail = tracker.status_detail or ""
             public_url = tracker.public_url or ""
+
+            logger.info("    Tracker result: tracking_status=%s, detail=%s", tracking_status, status_detail)
 
             old_tracking = order.tracking_status or ""
             order.tracking_status = tracking_status
@@ -128,6 +147,8 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
                 matches = bool(tracking_status)
 
             if matches:
+                logger.info("    MATCH: tracking_status '%s' matches conditions %s → transitioning to '%s'",
+                            tracking_status, tracking_conditions or 'ANY', target_status)
                 try:
                     new_status = OrderStatus(target_status)
                 except ValueError:
@@ -143,6 +164,12 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
                         f"Custom job '{job.name}': tracking {tracking_status} ({status_detail})",
                     )
                     order_updated = True
+                    logger.info("    ORDER UPDATED: %s %s → %s", order.order_number, current, new_status.value)
+                else:
+                    logger.info("    Already at target status '%s' — no change", current)
+            else:
+                logger.info("    NO MATCH: tracking_status '%s' not in conditions %s — skipping",
+                            tracking_status, tracking_conditions)
 
             if order_updated or old_tracking != tracking_status:
                 updated += 1
