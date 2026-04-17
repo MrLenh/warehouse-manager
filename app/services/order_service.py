@@ -393,33 +393,39 @@ def list_orders(
     search: str | None = None, statuses: list[OrderStatus] | None = None,
     sku: str | None = None, priority: OrderPriority | None = None,
 ) -> dict:
-    q = db.query(Order)
-    if statuses:
-        q = q.filter(Order.status.in_(statuses))
-    elif status:
-        q = q.filter(Order.status == status)
+    from sqlalchemy import func as _func
+
+    # Base query with non-status filters (search, sku, priority)
+    base = db.query(Order)
     if priority:
-        q = q.filter(Order.priority == priority)
+        base = base.filter(Order.priority == priority)
     if search:
         pattern = f"%{search}%"
-        q = q.filter(
+        base = base.filter(
             Order.order_number.ilike(pattern)
             | Order.order_name.ilike(pattern)
             | Order.customer_name.ilike(pattern)
             | Order.tracking_number.ilike(pattern)
         )
     if sku:
-        q = q.filter(
+        base = base.filter(
             Order.items.any(
                 (OrderItem.sku == sku) | (OrderItem.variant_sku == sku)
             )
         )
-    total = q.count()
-    # Status counts for the full filtered set (no pagination)
-    from sqlalchemy import func as _func
-    status_rows = q.with_entities(Order.status, _func.count()).group_by(Order.status).all()
+
+    # Status counts on base query (WITHOUT status filter) so all statuses are counted
+    status_rows = base.with_entities(Order.status, _func.count()).group_by(Order.status).all()
     status_counts = {str(s): c for s, c in status_rows}
 
+    # Apply status filter for the actual results
+    q = base
+    if statuses:
+        q = q.filter(Order.status.in_(statuses))
+    elif status:
+        q = q.filter(Order.status == status)
+
+    total = q.count()
     q = q.order_by(Order.created_at.desc()).offset(skip)
     if limit > 0:
         q = q.limit(limit)
