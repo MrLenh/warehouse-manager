@@ -172,6 +172,10 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
                             tracking_status, tracking_conditions)
 
             if order_updated or old_tracking != tracking_status:
+                # Commit this order's changes immediately
+                db.commit()
+                logger.info("    Committed changes for %s", order.order_number)
+
                 updated += 1
                 details.append({
                     "order_number": order.order_number,
@@ -182,7 +186,7 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
                 })
                 revert_snapshots.append(snapshot_before)
 
-                # Fire webhook
+                # Fire webhook (after commit so data is persisted)
                 try:
                     from app.services.webhook_service import (
                         EVENT_ORDER_STATUS_CHANGED,
@@ -198,6 +202,7 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
         except Exception as e:
             err_msg = str(e)
             logger.error("Custom job '%s' check failed for %s: %s", job.name, order.order_number, err_msg)
+            db.rollback()  # Rollback any partial changes for this order
             details.append({
                 "order_number": order.order_number,
                 "tracking": order.tracking_number if order else "",
@@ -207,7 +212,7 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
             errors += 1
             checked += 1
 
-    db.commit()
+    # Save execution log (no need for bulk commit since each order was committed individually)
 
     # Save execution log
     import json as _json
