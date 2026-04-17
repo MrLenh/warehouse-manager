@@ -331,6 +331,17 @@ def create_order(db: Session, data: OrderCreate) -> Order:
     initial_status = OrderStatus(data.status) if data.status else OrderStatus.CONFIRMED
     _add_status_history(order, initial_status, "Order created" + (" (CSV import)" if data.status else ""))
 
+    # Apply optional label/tracking info (for manual label_purchased orders or CSV sync)
+    if getattr(data, "tracking_number", ""):
+        order.tracking_number = data.tracking_number
+    if getattr(data, "tracking_url", ""):
+        order.tracking_url = data.tracking_url
+    if getattr(data, "label_url", ""):
+        order.label_url = data.label_url
+    if getattr(data, "shipping_cost_override", 0):
+        order.shipping_cost = data.shipping_cost_override
+        order.total_price = items_subtotal + order.processing_fee + data.shipping_cost_override
+
     # Flush items so order.items relationship is available for QR generation
     db.flush()
 

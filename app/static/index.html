@@ -1220,6 +1220,24 @@ tr:hover{background:#f8f9ff}
           <select id="o-service"></select>
         </div>
       </div>
+      <div class="form-group">
+        <label>Order Status</label>
+        <select id="o-status" onchange="onCreateOrderStatusChange()">
+          <option value="confirmed" selected>Confirmed (default)</option>
+          <option value="label_purchased">Label Purchased (manual)</option>
+        </select>
+      </div>
+      <div id="o-lp-fields" style="display:none;padding:12px;background:#f5f3ff;border-radius:8px;border:1px solid #ddd6fe;margin-bottom:12px">
+        <p style="font-size:12px;color:#7c3aed;font-weight:600;margin-bottom:8px">Label Purchased Info</p>
+        <div class="form-row">
+          <div class="form-group"><label>Tracking Number *</label><input type="text" id="o-tracking" placeholder="e.g. 9400111899..."></div>
+          <div class="form-group"><label>Tracking URL</label><input type="text" id="o-tracking-url" placeholder="https://tools.usps.com/..."></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Label URL</label><input type="text" id="o-label-url" placeholder="https://..."></div>
+          <div class="form-group"><label>Shipping Cost ($)</label><input type="number" step="0.01" min="0" id="o-shipping-cost" value="0"></div>
+        </div>
+      </div>
 
       <h3 style="margin:16px 0 8px;font-size:15px">Products</h3>
       <div class="order-items-list" id="order-items-list"></div>
@@ -2897,9 +2915,21 @@ function openOrderModal() {
   document.getElementById('o-notes').value = '';
   document.getElementById('o-carrier').value = defaultCarrier;
   updateServiceOptions('o-carrier', 'o-service');
+  document.getElementById('o-status').value = 'confirmed';
+  document.getElementById('o-tracking').value = '';
+  document.getElementById('o-tracking-url').value = '';
+  document.getElementById('o-label-url').value = '';
+  document.getElementById('o-shipping-cost').value = '0';
+  onCreateOrderStatusChange();
   document.getElementById('order-items-list').innerHTML = '';
   addOrderItemRow();
   document.getElementById('order-modal').classList.add('show');
+}
+
+function onCreateOrderStatusChange() {
+  const status = document.getElementById('o-status').value;
+  const isLP = status === 'label_purchased';
+  document.getElementById('o-lp-fields').style.display = isLP ? '' : 'none';
 }
 
 function addOrderItemRow() {
@@ -2988,6 +3018,11 @@ function onProductSearchSelect(row, variants) {
 }
 
 async function saveOrder() {
+  const status = document.getElementById('o-status').value;
+  const isLP = status === 'label_purchased';
+  const tracking = document.getElementById('o-tracking').value.trim();
+  if (isLP && !tracking) { toast('Tracking number is required for Label Purchased', 'error'); return; }
+
   const rows = document.querySelectorAll('.order-item-row');
   const items = Array.from(rows).map(r => {
     const pid = r.querySelector('.oi-product-id');
@@ -3020,7 +3055,14 @@ async function saveOrder() {
     carrier: document.getElementById('o-carrier').value,
     service: document.getElementById('o-service').value,
     notes: document.getElementById('o-notes').value,
+    status: status,
   };
+  if (isLP) {
+    body.tracking_number = tracking;
+    body.tracking_url = document.getElementById('o-tracking-url').value.trim();
+    body.label_url = document.getElementById('o-label-url').value.trim();
+    body.shipping_cost_override = parseFloat(document.getElementById('o-shipping-cost').value) || 0;
+  }
   const res = await fetch(API + '/orders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (res.ok) { toast('Order created'); closeModal('order-modal'); loadOrders(); }
   else { const e = await res.json(); toast(e.detail || 'Error creating order', 'error'); }

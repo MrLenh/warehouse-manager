@@ -55,6 +55,11 @@ class OrderCreate(BaseModel):
     notes: str = ""
     priority: Optional[str] = None  # low, normal, high, urgent
     status: Optional[str] = None  # override initial status (for CSV sync)
+    # Label purchased info (optional — used when creating with status=label_purchased)
+    tracking_number: str = ""
+    tracking_url: str = ""
+    label_url: str = ""
+    shipping_cost_override: float = 0.0
 
 
 class OrderStatusUpdate(BaseModel):
