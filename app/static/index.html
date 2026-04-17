@@ -2666,7 +2666,10 @@ function renderOrders(pageItems) {
         <td data-label="Created" style="font-size:12px">${new Date(o.created_at).toLocaleDateString('en-US')}</td>
         <td class="actions-cell">
           <button class="btn btn-sm btn-outline" onclick="viewOrder('${o.id}')">View</button>
-          ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
+          ${o.status === 'drop_off' ? `<button class="btn btn-sm btn-success" onclick="event.stopPropagation();markShipped('${o.id}')">Shipped</button>` : ''}
+          ${['drop_off','shipped','in_transit','delivered'].includes(o.status) ? `<button class="btn btn-sm btn-warning" onclick="event.stopPropagation();refundOrder('${o.id}','${esc(o.order_number)}')">Refund</button>` : ''}
+          ${['drop_off','shipped','in_transit','delivered'].includes(o.status) ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();reshipOrder('${o.id}')">Re-Ship</button>` : ''}
+          ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin') && !['drop_off','shipped','in_transit','delivered'].includes(o.status) ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteOrder('${o.id}','${esc(o.order_number)}')">Delete</button>` : ''}
         </td>
       </tr>`).join('');
 
@@ -3334,6 +3337,75 @@ async function deleteOrder(id, orderNumber) {
   const res = await fetch(API + '/orders/' + id, { method: 'DELETE' });
   if (res.ok) { toast('Order deleted'); closeModal('order-detail-modal'); loadOrders(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function markShipped(orderId) {
+  if (!confirm('Mark this order as Shipped?')) return;
+  try {
+    const res = await fetch(API + '/orders/' + orderId + '/status', {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({status: 'shipped', note: 'Marked shipped from order list'}),
+    });
+    if (res.ok) { toast('Order marked as Shipped'); loadOrders(); }
+    else { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); }
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function refundOrder(orderId, orderNumber) {
+  if (!confirm('Mark order ' + orderNumber + ' as Cancelled (refund)?')) return;
+  try {
+    const res = await fetch(API + '/orders/' + orderId + '/cancel', { method: 'POST' });
+    if (res.ok) { toast('Order cancelled (refund)'); loadOrders(); }
+    else { const e = await res.json().catch(() => ({})); toast(e.detail || 'Error', 'error'); }
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function reshipOrder(orderId) {
+  try {
+    const res = await fetch(API + '/orders/' + orderId);
+    if (!res.ok) { toast('Cannot load order', 'error'); return; }
+    const o = await res.json();
+    // Pre-fill Create Order modal with data from this order
+    document.getElementById('o-order-name').value = (o.order_name || '') + ' (Re-Ship)';
+    document.getElementById('o-shop-name').value = o.shop_name || '';
+    document.getElementById('o-name').value = o.customer_name || '';
+    document.getElementById('o-email').value = o.customer_email || '';
+    document.getElementById('o-phone').value = o.customer_phone || '';
+    document.getElementById('o-ship-name').value = o.ship_to_name || '';
+    document.getElementById('o-street1').value = o.ship_to_street1 || '';
+    document.getElementById('o-street2').value = o.ship_to_street2 || '';
+    document.getElementById('o-city').value = o.ship_to_city || '';
+    document.getElementById('o-state').value = o.ship_to_state || '';
+    document.getElementById('o-zip').value = o.ship_to_zip || '';
+    document.getElementById('o-notes').value = 'Re-ship of ' + (o.order_number || '');
+    document.getElementById('o-carrier').value = o.carrier || 'USPS';
+    updateServiceOptions('o-carrier', 'o-service');
+    document.getElementById('o-service').value = o.service || '';
+    document.getElementById('o-status').value = 'confirmed';
+    onCreateOrderStatusChange();
+    // Add items
+    document.getElementById('order-items-list').innerHTML = '';
+    for (const item of (o.items || [])) {
+      addOrderItemRow();
+      const rows = document.querySelectorAll('.order-item-row');
+      const lastRow = rows[rows.length - 1];
+      const pidInput = lastRow.querySelector('.oi-product-id');
+      const searchInput = lastRow.querySelector('.oi-search');
+      const qtyInput = lastRow.querySelector('.oi-qty');
+      if (pidInput) pidInput.value = item.product_id;
+      if (searchInput) searchInput.value = item.sku + ' - ' + (item.product_name || '');
+      if (qtyInput) qtyInput.value = item.quantity;
+      if (item.variant_id) {
+        const varSel = lastRow.querySelector('.oi-variant');
+        if (varSel) {
+          varSel.innerHTML = `<option value="${item.variant_id}" selected>${item.variant_sku || item.variant_label || item.variant_id}</option>`;
+          varSel.style.display = '';
+        }
+      }
+    }
+    document.getElementById('order-modal').classList.add('show');
+    toast('Order copied for re-ship. Review and Create.');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 // GET RATES
