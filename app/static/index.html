@@ -2616,6 +2616,7 @@ async function loadSkuOptions() {
 let ordersPerPage = 50;
 let currentOrderPage = 1;
 let ordersTotalCount = 0;
+let ordersStatusCounts = {};
 let _searchDebounce = null;
 
 async function loadOrders() {
@@ -2638,6 +2639,7 @@ async function loadOrders() {
     const data = await res.json();
     allOrders = data.orders || data;
     ordersTotalCount = data.total || allOrders.length;
+    ordersStatusCounts = data.status_counts || {};
     renderOrders(allOrders);
     document.getElementById('stat-orders').textContent = ordersTotalCount + ' Orders';
   } catch(e) { toast('Server connection error: ' + e.message, 'error'); }
@@ -2691,18 +2693,22 @@ function renderOrders(pageItems) {
   }
   document.getElementById('orders-pagination').innerHTML = pagHtml;
 
-  // Overview stats
-  const counts = {};
-  pageItems.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
+  // Overview stats — from server-side counts (all filtered orders, not just current page)
+  const c = ordersStatusCounts;
   const stats = [
     { label: 'Total', value: ordersTotalCount, bg: '#f0f2f5', color: '#333' },
-    { label: 'Pending', value: counts['pending'] || 0, bg: '#fff3cd', color: '#856404' },
-    { label: 'Processing', value: counts['processing'] || 0, bg: '#cce5ff', color: '#004085' },
-    { label: 'Packing', value: counts['packing'] || 0, bg: '#e8daef', color: '#6c3483' },
-    { label: 'Packed', value: counts['packed'] || 0, bg: '#d4edda', color: '#155724' },
-    { label: 'Label', value: counts['label_purchased'] || 0, bg: '#d1ecf1', color: '#0c5460' },
-    { label: 'Drop Off', value: counts['drop_off'] || 0, bg: '#d6d8db', color: '#383d41' },
-    { label: 'Shipped', value: counts['shipped'] || 0, bg: '#c3e6cb', color: '#155724' },
+    { label: 'Confirmed', value: c['confirmed'] || 0, bg: '#cce5ff', color: '#004085' },
+    { label: 'Processing', value: c['processing'] || 0, bg: '#cce5ff', color: '#004085' },
+    { label: 'Packing', value: c['packing'] || 0, bg: '#e8daef', color: '#6c3483' },
+    { label: 'Packed', value: c['packed'] || 0, bg: '#d4edda', color: '#155724' },
+    { label: 'Label', value: c['label_purchased'] || 0, bg: '#d1ecf1', color: '#0c5460' },
+    { label: 'Drop Off', value: c['drop_off'] || 0, bg: '#d6d8db', color: '#383d41' },
+    { label: 'Shipped', value: c['shipped'] || 0, bg: '#c3e6cb', color: '#155724' },
+    { label: 'In Transit', value: c['in_transit'] || 0, bg: '#d1ecf1', color: '#0c5460' },
+    { label: 'Delivered', value: c['delivered'] || 0, bg: '#28a745', color: '#fff' },
+    { label: 'Cancelled', value: c['cancelled'] || 0, bg: '#f8d7da', color: '#721c24' },
+    { label: 'Pending', value: c['pending'] || 0, bg: '#fff3cd', color: '#856404' },
+    { label: 'On Hold', value: c['on_hold'] || 0, bg: '#fff3cd', color: '#856404' },
   ];
   document.getElementById('orders-overview').innerHTML = stats
     .filter(s => s.value > 0 || s.label === 'Total')

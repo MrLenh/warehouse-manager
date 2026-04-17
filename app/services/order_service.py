@@ -415,10 +415,15 @@ def list_orders(
             )
         )
     total = q.count()
+    # Status counts for the full filtered set (no pagination)
+    from sqlalchemy import func as _func
+    status_rows = q.with_entities(Order.status, _func.count()).group_by(Order.status).all()
+    status_counts = {str(s): c for s, c in status_rows}
+
     q = q.order_by(Order.created_at.desc()).offset(skip)
     if limit > 0:
         q = q.limit(limit)
-    return {"total": total, "orders": q.all()}
+    return {"total": total, "status_counts": status_counts, "orders": q.all()}
 
 
 def update_order_status(db: Session, order_id: str, data: OrderStatusUpdate) -> Order | None:
