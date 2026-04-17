@@ -4673,8 +4673,6 @@ async function loadCurrentUser() {
       currentUser = await res.json();
       document.getElementById('current-user').textContent = currentUser.display_name || currentUser.username;
       if ((currentUser.role === 'admin' || currentUser.role === 'super_admin')) {
-        document.getElementById('tab-users').style.display = '';
-        document.getElementById('tab-jobs').style.display = '';
         document.getElementById('nav-users').style.display = '';
         document.getElementById('nav-jobs').style.display = '';
         document.getElementById('nav-admin-title').style.display = '';
