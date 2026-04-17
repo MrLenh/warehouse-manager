@@ -97,6 +97,7 @@ def list_orders(skip: int = 0, limit: int = 50, status: str | None = None, searc
         result = order_service.list_orders(db, skip=skip, limit=limit, status=single_status, search=search, sku=sku, priority=parsed_priority)
     return {
         "total": result["total"],
+        "status_counts": result.get("status_counts", {}),
         "orders": [OrderOut.model_validate(o).model_dump() for o in result["orders"]],
     }
 
