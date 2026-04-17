@@ -5258,12 +5258,52 @@ function renderCustomJobs() {
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
             <button class="btn btn-primary btn-sm" onclick="runCustomJobNow('${j.id}')">Run Now</button>
+            <button class="btn btn-outline btn-sm" onclick="viewJobLogs('${j.id}','${esc(j.name)}')">Logs</button>
             <button class="btn btn-outline btn-sm" onclick="editCustomJob('${j.id}')">Edit</button>
             <button class="btn btn-danger btn-sm" onclick="deleteCustomJob('${j.id}')">Delete</button>
           </div>
         </td>
       </tr>`;
-    }).join('') + '</tbody></table>';
+    }).join('') + '</tbody></table><div id="job-logs-panel"></div>';
+}
+
+async function viewJobLogs(jobId, jobName) {
+  const panel = document.getElementById('job-logs-panel');
+  panel.innerHTML = '<p style="padding:12px;color:#888">Loading logs...</p>';
+  try {
+    const res = await fetch(API + '/jobs/custom/' + jobId + '/logs?limit=20');
+    if (!res.ok) { panel.innerHTML = '<p style="color:red;padding:12px">Error loading logs</p>'; return; }
+    const logs = await res.json();
+    if (!logs.length) { panel.innerHTML = '<p style="padding:12px;color:#888">No execution logs yet for this job.</p>'; return; }
+    let html = `<div style="margin-top:16px;padding:16px;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="font-size:15px;margin:0">Logs — ${esc(jobName)}</h3>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('job-logs-panel').innerHTML=''">Close</button>
+      </div>
+      <table><thead><tr><th>Time</th><th>Status</th><th>Checked</th><th>Updated</th><th>Errors</th><th>Details</th></tr></thead><tbody>`;
+    for (const log of logs) {
+      const dt = log.created_at ? new Date(log.created_at) : null;
+      const timeStr = dt ? dt.toLocaleDateString('en-GB', {day:'2-digit',month:'short'}) + ' ' + dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '-';
+      const statusBadge = log.status === 'success'
+        ? '<span class="badge badge-delivered">OK</span>'
+        : '<span class="badge badge-cancelled">Error</span>';
+      const detailItems = (log.details || []).slice(0, 5);
+      const detailHtml = detailItems.length
+        ? detailItems.map(d => `<span style="font-size:11px">${esc(d.order_number||'')} ${esc(d.from||'')}→${esc(d.to||'')}</span>`).join(', ')
+          + (log.details.length > 5 ? ` <span style="color:#888">+${log.details.length - 5} more</span>` : '')
+        : '<span style="color:#ccc">—</span>';
+      html += `<tr>
+        <td style="font-size:12px;white-space:nowrap">${timeStr}</td>
+        <td>${statusBadge}</td>
+        <td style="text-align:center">${log.checked}</td>
+        <td style="text-align:center;font-weight:600;color:${log.updated > 0 ? '#28a745' : '#888'}">${log.updated}</td>
+        <td style="text-align:center;color:${log.errors > 0 ? '#dc3545' : '#888'}">${log.errors}</td>
+        <td style="font-size:12px">${detailHtml}</td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    panel.innerHTML = html;
+  } catch (e) { panel.innerHTML = '<p style="color:red;padding:12px">' + esc(e.message) + '</p>'; }
 }
 
 async function startJobPrompt(jobId) {

@@ -163,3 +163,31 @@ def run_custom_job_endpoint(job_id: str, db: Session = Depends(get_db)):
     result = execute_custom_job(db, job)
     _last_results[f"custom_{job_id}"] = result
     return {"id": job_id, "status": "completed", "result": result}
+
+
+@router.get("/custom/{job_id}/logs")
+def get_custom_job_logs(job_id: str, limit: int = 20, db: Session = Depends(get_db)):
+    """Get execution logs for a custom job."""
+    import json as _json
+    from app.models.custom_job import CustomJobLog
+    logs = (
+        db.query(CustomJobLog)
+        .filter(CustomJobLog.job_id == job_id)
+        .order_by(CustomJobLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": log.id,
+            "job_name": log.job_name,
+            "status": log.status,
+            "checked": log.checked,
+            "updated": log.updated,
+            "errors": log.errors,
+            "details": _json.loads(log.details) if log.details else [],
+            "error_message": log.error_message,
+            "created_at": log.created_at.isoformat() if log.created_at else "",
+        }
+        for log in logs
+    ]
