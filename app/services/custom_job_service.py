@@ -155,6 +155,21 @@ def execute_custom_job(db: Session, job: CustomJob) -> dict:
 
     db.commit()
 
+    # Save execution log
+    import json as _json
+    from app.models.custom_job import CustomJobLog
+    log_entry = CustomJobLog(
+        job_id=job.id,
+        job_name=job.name,
+        status="success" if errors == 0 else "error",
+        checked=checked,
+        updated=updated,
+        errors=errors,
+        details=_json.dumps(details, default=str),
+    )
+    db.add(log_entry)
+    db.commit()
+
     logger.info("Custom job '%s' done: checked=%d updated=%d errors=%d", job.name, checked, updated, errors)
     return {
         "checked": checked,
