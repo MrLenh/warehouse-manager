@@ -288,7 +288,7 @@ def import_orders(
             row_num = item["row"]
             variant = product_service.get_variant_by_sku(db, sku_val)
             if variant:
-                resolved_items.append({"product_id": variant.product_id, "variant_id": variant.id, "quantity": item["quantity"], "item_name": item.get("item_name", "")})
+                resolved_items.append({"product_id": variant.product_id, "variant_id": variant.id, "quantity": item["quantity"], "name": item.get("name", ""), "item_name": item.get("item_name", "")})
                 continue
             product = product_service.get_product_by_sku(db, sku_val)
             if product:
@@ -296,7 +296,7 @@ def import_orders(
                     errors.append({"row": row_num, "sku": sku_val, "error": f"Product '{sku_val}' has variants. Use variant_sku."})
                     has_error = True
                     break
-                resolved_items.append({"product_id": product.id, "variant_id": "", "quantity": item["quantity"], "item_name": item.get("item_name", "")})
+                resolved_items.append({"product_id": product.id, "variant_id": "", "quantity": item["quantity"], "name": item.get("name", ""), "item_name": item.get("item_name", "")})
                 continue
             errors.append({"row": row_num, "sku": sku_val, "error": f"SKU '{sku_val}' not found"})
             has_error = True
