@@ -1,10 +1,13 @@
 import base64
 import io
+import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.api.auth import get_current_user
 from app.database import get_db
@@ -721,6 +724,8 @@ def upload_manifest(
     db: Session = Depends(get_db),
 ):
     """Upload or replace a manifest PDF for a picking list (batch)."""
+    import os
+    from app.config import settings
     from app.models.picking import PickingList
 
     pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
@@ -730,25 +735,49 @@ def upload_manifest(
         raise HTTPException(400, "Only PDF files are supported")
 
     content = file.file.read()
+
+    # Save to file
+    manifest_dir = os.path.join(getattr(settings, "UPLOAD_DIR", "uploads"), "manifests")
+    os.makedirs(manifest_dir, exist_ok=True)
+    safe_name = f"manifest-{pl.picking_number}.pdf"
+    filepath = os.path.join(manifest_dir, safe_name)
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # Also store in DB as base64 backup
     pl.manifest_data = base64.b64encode(content).decode("ascii")
     pl.manifest_filename = file.filename
     db.commit()
+    logger.info("Manifest uploaded for %s: %s (%d bytes)", pl.picking_number, file.filename, len(content))
     return {"message": "Manifest uploaded", "filename": file.filename}
 
 
 @router.get("/{picking_list_id}/manifest")
 def download_manifest(picking_list_id: str, db: Session = Depends(get_db)):
     """Download the manifest PDF for a picking list."""
+    import os
+    from app.config import settings
     from app.models.picking import PickingList
 
     pl = db.query(PickingList).filter(PickingList.id == picking_list_id).first()
     if not pl:
         raise HTTPException(404, "Picking list not found")
-    if not pl.manifest_data:
+    if not pl.manifest_filename:
         raise HTTPException(404, "No manifest uploaded for this batch")
 
-    pdf_bytes = base64.b64decode(pl.manifest_data)
-    filename = pl.manifest_filename or f"manifest-{pl.picking_number}.pdf"
+    # Try file first
+    manifest_dir = os.path.join(getattr(settings, "UPLOAD_DIR", "uploads"), "manifests")
+    safe_name = f"manifest-{pl.picking_number}.pdf"
+    filepath = os.path.join(manifest_dir, safe_name)
+    if os.path.exists(filepath):
+        with open(filepath, "rb") as f:
+            pdf_bytes = f.read()
+    elif pl.manifest_data:
+        pdf_bytes = base64.b64decode(pl.manifest_data)
+    else:
+        raise HTTPException(404, "Manifest file not found")
+
+    filename = pl.manifest_filename or safe_name
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
