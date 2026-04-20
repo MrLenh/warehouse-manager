@@ -416,7 +416,7 @@ def list_orders(
 
     # Status counts on base query (WITHOUT status filter) so all statuses are counted
     status_rows = base.with_entities(Order.status, _func.count()).group_by(Order.status).all()
-    status_counts = {str(s): c for s, c in status_rows}
+    status_counts = {(s.value if hasattr(s, 'value') else str(s)): c for s, c in status_rows}
 
     # Apply status filter for the actual results
     q = base
