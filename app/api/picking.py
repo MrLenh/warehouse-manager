@@ -30,6 +30,7 @@ def _to_picking_list_out(pl) -> dict:
         "status": pl.status,
         "priority": pl.priority or "normal",
         "assigned_to": pl.assigned_to,
+        "manifest_filename": getattr(pl, "manifest_filename", "") or "",
         "created_at": pl.created_at,
         "updated_at": pl.updated_at,
         "items": pl.items,
