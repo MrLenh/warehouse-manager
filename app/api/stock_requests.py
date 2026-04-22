@@ -113,6 +113,61 @@ def update_tracking(sr_id: str, data: StockRequestTrackingUpdate, db: Session = 
     return sr
 
 
+@router.patch("/{sr_id}/items/{item_id}/cost")
+def update_item_cost(
+    sr_id: str,
+    item_id: str,
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update unit_cost for a stock request item + propagate to StockBatch
+    and recalculate product weighted-average price. Super admin only."""
+    if user.role != "super_admin":
+        raise HTTPException(403, "Super admin only")
+
+    from app.models.stock_request import StockRequestItem
+    from app.models.stock_batch import StockBatch
+    from app.services.order_service import _recalculate_price_from_batches
+
+    try:
+        new_cost = float(body.get("unit_cost"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "unit_cost must be a number")
+    if new_cost < 0:
+        raise HTTPException(400, "unit_cost cannot be negative")
+
+    item = db.query(StockRequestItem).filter(
+        StockRequestItem.id == item_id,
+        StockRequestItem.stock_request_id == sr_id,
+    ).first()
+    if not item:
+        raise HTTPException(404, "Stock request item not found")
+
+    old_cost = item.unit_cost
+    item.unit_cost = new_cost
+
+    # Update StockBatches linked to this stock request for the same product/variant
+    batches = db.query(StockBatch).filter(
+        StockBatch.stock_request_id == sr_id,
+        StockBatch.product_id == item.product_id,
+        StockBatch.variant_id == (item.variant_id or ""),
+    ).all()
+    for b in batches:
+        b.unit_cost = new_cost
+
+    # Recalculate weighted-average product price
+    _recalculate_price_from_batches(db, item.product_id, item.variant_id or "")
+    db.commit()
+
+    return {
+        "success": True,
+        "old_cost": old_cost,
+        "new_cost": new_cost,
+        "batches_updated": len(batches),
+    }
+
+
 @router.get("/{sr_id}/checklist", response_class=HTMLResponse)
 def print_checklist(sr_id: str, db: Session = Depends(get_db)):
     """Generate a printable product check list for a stock request."""
