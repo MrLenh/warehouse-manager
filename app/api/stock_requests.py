@@ -168,6 +168,86 @@ def update_item_cost(
     }
 
 
+@router.patch("/{sr_id}/items/{item_id}/received")
+def update_item_received(
+    sr_id: str,
+    item_id: str,
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update quantity_received for a completed stock request item.
+    Adjusts StockBatch + product inventory accordingly. Super admin only."""
+    if user.role != "super_admin":
+        raise HTTPException(403, "Super admin only")
+
+    from app.models.stock_request import StockRequest, StockRequestItem
+    from app.models.stock_batch import StockBatch
+    from app.models.product import Product, Variant
+    from app.models.inventory_log import InventoryLog
+    from app.services.order_service import _recalculate_price_from_batches
+
+    try:
+        new_qty = int(body.get("quantity_received"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "quantity_received must be an integer")
+    if new_qty < 0:
+        raise HTTPException(400, "quantity_received cannot be negative")
+
+    sr = db.query(StockRequest).filter(StockRequest.id == sr_id).first()
+    if not sr:
+        raise HTTPException(404, "Stock request not found")
+
+    item = db.query(StockRequestItem).filter(
+        StockRequestItem.id == item_id,
+        StockRequestItem.stock_request_id == sr_id,
+    ).first()
+    if not item:
+        raise HTTPException(404, "Stock request item not found")
+
+    old_qty = item.quantity_received
+    diff = new_qty - old_qty
+    if diff == 0:
+        return {"success": True, "message": "No change"}
+
+    item.quantity_received = new_qty
+
+    # Adjust StockBatch
+    batch = db.query(StockBatch).filter(
+        StockBatch.stock_request_id == sr_id,
+        StockBatch.product_id == item.product_id,
+        StockBatch.variant_id == (item.variant_id or ""),
+    ).first()
+    if batch:
+        batch.quantity_received += diff
+        batch.quantity_remaining += diff
+
+    # Adjust product/variant inventory
+    if item.variant_id:
+        variant = db.query(Variant).filter(Variant.id == item.variant_id).first()
+        if variant:
+            variant.quantity += diff
+            db.add(InventoryLog(
+                product_id=item.product_id, change=diff, reason="sr_correction",
+                balance_after=variant.quantity, adjusted_by=user.username,
+                note=f"[Variant {variant.variant_sku}] SR {sr.request_number} received correction: {old_qty} → {new_qty}",
+            ))
+    else:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if product:
+            product.quantity += diff
+            db.add(InventoryLog(
+                product_id=item.product_id, change=diff, reason="sr_correction",
+                balance_after=product.quantity, adjusted_by=user.username,
+                note=f"SR {sr.request_number} received correction: {old_qty} → {new_qty}",
+            ))
+
+    _recalculate_price_from_batches(db, item.product_id, item.variant_id or "")
+    db.commit()
+
+    return {"success": True, "old_qty": old_qty, "new_qty": new_qty, "diff": diff}
+
+
 @router.get("/{sr_id}/checklist", response_class=HTMLResponse)
 def print_checklist(sr_id: str, db: Session = Depends(get_db)):
     """Generate a printable product check list for a stock request."""

@@ -4187,7 +4187,9 @@ async function viewStockRequest(id) {
       <td>${i.quantity_requested}</td>
       <td>${isReceiving
         ? '<input type="number" class="rcv-qty" data-item-id="'+i.id+'" value="'+i.quantity_received+'" min="0" style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
-        : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : '')}</td>
+        : (currentUser && currentUser.role === 'super_admin' && sr.status === 'completed'
+            ? '<input type="number" value="'+i.quantity_received+'" min="0" style="width:80px;padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="updateSrItemReceived(\''+sr.id+'\',\''+i.id+'\',this)" title="Edit received qty">'
+            : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : ''))}</td>
       <td>${isReceiving
         ? '<input type="number" class="rcv-cost" data-item-id="'+i.id+'" value="'+i.unit_cost.toFixed(2)+'" step="0.01" min="0" style="width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
         : (currentUser && currentUser.role === 'super_admin'
@@ -4296,6 +4298,29 @@ async function approveStockRequest(id) {
   const res = await fetch(API + '/stock-requests/' + id + '/approve', { method: 'POST' });
   if (res.ok) { toast('Request approved'); closeModal('sr-detail-modal'); loadStockRequests(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function updateSrItemReceived(srId, itemId, input) {
+  const newQty = parseInt(input.value);
+  if (isNaN(newQty) || newQty < 0) { toast('Invalid quantity', 'error'); return; }
+  input.style.borderColor = '#667eea';
+  try {
+    const res = await fetch(API + '/stock-requests/' + srId + '/items/' + itemId + '/received', {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({quantity_received: newQty}),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      input.style.borderColor = '#28a745';
+      toast(`Received updated (${data.old_qty} → ${data.new_qty}, diff: ${data.diff > 0 ? '+' : ''}${data.diff})`);
+      setTimeout(() => { input.style.borderColor = '#ddd'; }, 2000);
+      loadProducts();
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error', 'error');
+      input.style.borderColor = '#dc3545';
+    }
+  } catch (e) { toast(e.message, 'error'); input.style.borderColor = '#dc3545'; }
 }
 
 async function updateSrItemCost(srId, itemId, input) {
