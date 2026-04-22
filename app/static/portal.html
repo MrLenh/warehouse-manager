@@ -267,6 +267,7 @@ a.track-link:hover{text-decoration:underline}
         <div class="form-group"><label>Ship To Name *</label><input id="co-ship-name" required></div>
       </div>
       <div class="form-group"><label>Street *</label><input id="co-ship-street1" required></div>
+      <div class="form-group"><label>Address Line 2</label><input id="co-ship-street2" placeholder="Apt, Suite, Unit..."></div>
       <div class="form-row-3">
         <div class="form-group"><label>City *</label><input id="co-ship-city" required></div>
         <div class="form-group"><label>State *</label><input id="co-ship-state" required></div>
@@ -484,6 +485,7 @@ async function openCreateOrderModal() {
   document.getElementById('co-carrier-sel').value = 'USPS';
   document.getElementById('co-ship-name').value = '';
   document.getElementById('co-ship-street1').value = '';
+  document.getElementById('co-ship-street2').value = '';
   document.getElementById('co-ship-city').value = '';
   document.getElementById('co-ship-state').value = '';
   document.getElementById('co-ship-zip').value = '';
@@ -570,6 +572,7 @@ async function submitOrder() {
 
   const shipName = document.getElementById('co-ship-name').value.trim();
   const street1 = document.getElementById('co-ship-street1').value.trim();
+  const street2 = document.getElementById('co-ship-street2').value.trim();
   const city = document.getElementById('co-ship-city').value.trim();
   const state = document.getElementById('co-ship-state').value.trim();
   const zip = document.getElementById('co-ship-zip').value.trim();
@@ -592,7 +595,7 @@ async function submitOrder() {
     order_name: document.getElementById('co-name').value.trim(),
     shop_name: document.getElementById('co-shop-name').value.trim(),
     customer_name: '', // will be overridden by backend
-    ship_to: { name: shipName, street1, city, state, zip, country: 'US' },
+    ship_to: { name: shipName, street1, street2, city, state, zip, country: 'US' },
     items,
     notes: document.getElementById('co-notes').value.trim(),
     status,
