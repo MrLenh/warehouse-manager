@@ -4190,7 +4190,9 @@ async function viewStockRequest(id) {
         : i.quantity_received + (diff > 0 ? ' <span class="stock-low" style="font-size:11px">(short ' + diff + ')</span>' : '')}</td>
       <td>${isReceiving
         ? '<input type="number" class="rcv-cost" data-item-id="'+i.id+'" value="'+i.unit_cost.toFixed(2)+'" step="0.01" min="0" style="width:90px;padding:6px 8px;border:1px solid #ddd;border-radius:6px">'
-        : '$' + i.unit_cost.toFixed(2)}</td>
+        : (currentUser && currentUser.role === 'super_admin'
+            ? '<input type="number" value="'+i.unit_cost.toFixed(2)+'" step="0.01" min="0" style="width:90px;padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="updateSrItemCost(\''+sr.id+'\',\''+i.id+'\',this)" title="Click to edit cost">'
+            : '$' + i.unit_cost.toFixed(2))}</td>
       <td style="text-align:center">${i.box_count > 0 ? boxesReceived + '/' + i.box_count : '-'}</td>
     </tr>`;
   }).join('');
@@ -4294,6 +4296,32 @@ async function approveStockRequest(id) {
   const res = await fetch(API + '/stock-requests/' + id + '/approve', { method: 'POST' });
   if (res.ok) { toast('Request approved'); closeModal('sr-detail-modal'); loadStockRequests(); }
   else { const e = await res.json(); toast(e.detail || 'Error', 'error'); }
+}
+
+async function updateSrItemCost(srId, itemId, input) {
+  const newCost = parseFloat(input.value);
+  if (isNaN(newCost) || newCost < 0) { toast('Invalid cost', 'error'); return; }
+  input.style.borderColor = '#667eea';
+  try {
+    const res = await fetch(API + '/stock-requests/' + srId + '/items/' + itemId + '/cost', {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({unit_cost: newCost}),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      input.style.borderColor = '#28a745';
+      toast(`Cost updated ($${data.old_cost.toFixed(2)} → $${data.new_cost.toFixed(2)}). ${data.batches_updated} batch(es) updated.`);
+      setTimeout(() => { input.style.borderColor = '#ddd'; }, 2000);
+      loadProducts();  // refresh to reflect new weighted avg
+    } else {
+      const e = await res.json().catch(() => ({}));
+      toast(e.detail || 'Error updating cost', 'error');
+      input.style.borderColor = '#dc3545';
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+    input.style.borderColor = '#dc3545';
+  }
 }
 
 async function receiveStockRequest(id) {
