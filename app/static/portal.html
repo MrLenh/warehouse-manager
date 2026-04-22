@@ -97,11 +97,21 @@ tr:hover td{background:#f8f9ff}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 
-.order-item-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px}
+.order-item-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;padding:10px;background:#f8f9fa;border-radius:8px;position:relative}
 .order-item-row select,.order-item-row input{padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none}
-.order-item-row select{flex:1}
-.order-item-row input{width:60px}
+.order-item-row select{flex:1;min-width:0}
+.order-item-row input[type="number"]{width:60px}
+.order-item-row input[type="text"]{flex:1;min-width:120px}
 .remove-item{background:none;border:none;color:#dc3545;font-size:18px;cursor:pointer;padding:0 4px}
+.sku-search-wrap{position:relative;flex:1;min-width:200px}
+.sku-search-wrap input{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none}
+.sku-search-wrap input:focus{border-color:#667eea}
+.sku-dropdown{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:6px;max-height:200px;overflow-y:auto;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.sku-dropdown.show{display:block}
+.sku-opt{padding:8px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0}
+.sku-opt:hover{background:#eef2ff}
+.sku-opt .sku-code{font-weight:600;font-family:monospace;color:#333}
+.sku-opt .sku-name{color:#666;font-size:12px}
 
 .toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;z-index:300;opacity:0;transition:opacity .3s}
 .toast.show{opacity:1}
@@ -245,11 +255,18 @@ a.track-link:hover{text-decoration:underline}
           <div class="form-group"><label>Carrier</label><input id="co-carrier" placeholder="e.g. USPS"></div>
         </div>
       </div>
-      <h3 style="font-size:14px;margin:16px 0 8px;color:#555">Ship To</h3>
+      <h3 style="font-size:14px;margin:16px 0 8px;color:#555">Shipping</h3>
       <div class="form-row">
-        <div class="form-group"><label>Name *</label><input id="co-ship-name" required></div>
-        <div class="form-group"><label>Street *</label><input id="co-ship-street1" required></div>
+        <div class="form-group"><label>Carrier</label>
+          <select id="co-carrier-sel" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+            <option value="USPS" selected>USPS</option>
+            <option value="UPS">UPS</option>
+            <option value="FedEx">FedEx</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Ship To Name *</label><input id="co-ship-name" required></div>
       </div>
+      <div class="form-group"><label>Street *</label><input id="co-ship-street1" required></div>
       <div class="form-row-3">
         <div class="form-group"><label>City *</label><input id="co-ship-city" required></div>
         <div class="form-group"><label>State *</label><input id="co-ship-state" required></div>
@@ -464,6 +481,7 @@ async function openCreateOrderModal() {
   document.getElementById('co-label-url').value = '';
   document.getElementById('co-shipping-cost').value = '0';
   document.getElementById('co-carrier').value = '';
+  document.getElementById('co-carrier-sel').value = 'USPS';
   document.getElementById('co-ship-name').value = '';
   document.getElementById('co-ship-street1').value = '';
   document.getElementById('co-ship-city').value = '';
@@ -485,11 +503,62 @@ function onCreateOrderStatusChange() {
 }
 
 function addOrderItem() {
-  const opts = buildProductOptions();
   const row = document.createElement('div');
   row.className = 'order-item-row';
-  row.innerHTML = `<select>${opts}</select><input type="number" min="1" value="1" placeholder="Qty"><button class="remove-item" onclick="this.parentElement.remove()">&times;</button>`;
+  row.innerHTML = `
+    <div class="sku-search-wrap">
+      <input type="text" class="co-sku-search" placeholder="Search SKU or product name..." autocomplete="off" oninput="filterSkuDropdown(this)">
+      <input type="hidden" class="co-product-id">
+      <input type="hidden" class="co-variant-id">
+      <div class="sku-dropdown"></div>
+    </div>
+    <input type="number" min="1" value="1" placeholder="Qty" style="width:60px">
+    <input type="text" class="co-item-name" placeholder="Item name (optional)" style="flex:1;min-width:100px">
+    <button class="remove-item" onclick="this.parentElement.remove()">&times;</button>
+  `;
   document.getElementById('co-items').appendChild(row);
+  const searchInput = row.querySelector('.co-sku-search');
+  searchInput.addEventListener('focus', () => filterSkuDropdown(searchInput));
+  document.addEventListener('click', (e) => {
+    if (!row.contains(e.target)) row.querySelector('.sku-dropdown').classList.remove('show');
+  });
+}
+
+function filterSkuDropdown(input) {
+  const q = input.value.toLowerCase();
+  const dd = input.parentElement.querySelector('.sku-dropdown');
+  let html = '';
+  let count = 0;
+  for (const p of productsCache) {
+    if (p.variants && p.variants.length) {
+      for (const v of p.variants) {
+        let attrs = '';
+        try { const a = typeof v.attributes === 'string' ? JSON.parse(v.attributes) : v.attributes; attrs = Object.values(a).join('/'); } catch {}
+        const label = `${v.variant_sku} — ${p.name} ${attrs}`;
+        if (q && !label.toLowerCase().includes(q) && !v.variant_sku.toLowerCase().includes(q)) continue;
+        html += `<div class="sku-opt" onclick="selectSkuOption(this,'${p.id}','${v.id}','${esc(v.variant_sku)} — ${esc(p.name)} ${esc(attrs)}')">
+          <span class="sku-code">${esc(v.variant_sku)}</span> <span class="sku-name">${esc(p.name)} ${esc(attrs)} (${v.quantity})</span></div>`;
+        if (++count >= 20) break;
+      }
+    } else {
+      const label = `${p.sku} — ${p.name}`;
+      if (q && !label.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) continue;
+      html += `<div class="sku-opt" onclick="selectSkuOption(this,'${p.id}','','${esc(p.sku)} — ${esc(p.name)}')">
+        <span class="sku-code">${esc(p.sku)}</span> <span class="sku-name">${esc(p.name)} (${p.quantity})</span></div>`;
+      if (++count >= 20) break;
+    }
+    if (count >= 20) break;
+  }
+  dd.innerHTML = html || '<div class="sku-opt" style="color:#888">No products found</div>';
+  dd.classList.add('show');
+}
+
+function selectSkuOption(el, productId, variantId, label) {
+  const row = el.closest('.order-item-row');
+  row.querySelector('.co-sku-search').value = label;
+  row.querySelector('.co-product-id').value = productId;
+  row.querySelector('.co-variant-id').value = variantId;
+  row.querySelector('.sku-dropdown').classList.remove('show');
 }
 
 async function submitOrder() {
@@ -509,14 +578,16 @@ async function submitOrder() {
   const itemRows = document.getElementById('co-items').querySelectorAll('.order-item-row');
   const items = [];
   for (const row of itemRows) {
-    const val = row.querySelector('select').value;
-    const qty = parseInt(row.querySelector('input').value) || 1;
-    if (!val) continue;
-    const [productId, variantId] = val.split('|');
-    items.push({ product_id: productId, variant_id: variantId || '', quantity: qty });
+    const productId = row.querySelector('.co-product-id')?.value;
+    const variantId = row.querySelector('.co-variant-id')?.value || '';
+    const qty = parseInt(row.querySelector('input[type="number"]').value) || 1;
+    const itemName = row.querySelector('.co-item-name')?.value?.trim() || '';
+    if (!productId) continue;
+    items.push({ product_id: productId, variant_id: variantId, quantity: qty, name: itemName });
   }
   if (!items.length) { toast('Add at least one item', 'error'); return; }
 
+  const carrier = document.getElementById('co-carrier-sel').value;
   const body = {
     order_name: document.getElementById('co-name').value.trim(),
     shop_name: document.getElementById('co-shop-name').value.trim(),
@@ -525,7 +596,7 @@ async function submitOrder() {
     items,
     notes: document.getElementById('co-notes').value.trim(),
     status,
-    carrier: document.getElementById('co-carrier').value.trim(),
+    carrier: isLP ? (document.getElementById('co-carrier').value.trim() || carrier) : carrier,
     tracking_number: isLP ? trackingNumber : '',
     label_url: isLP ? document.getElementById('co-label-url').value.trim() : '',
     shipping_cost_override: isLP ? (parseFloat(document.getElementById('co-shipping-cost').value) || 0) : 0,
