@@ -1193,15 +1193,22 @@ tr:hover{background:#f8f9ff}
         <div class="form-group"><label>Order Name</label><input type="text" id="o-order-name" placeholder="e.g. Order #1, Shopee Feb 2025..."></div>
         <div class="form-group"><label>Shop Name</label><input type="text" id="o-shop-name" placeholder="e.g. Shopee, Lazada, TikTok Shop..."></div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label>Customer Name *</label><input type="text" id="o-name" placeholder="John Smith"></div>
-        <div class="form-group"><label>Email</label><input type="email" id="o-email" placeholder="email@example.com"></div>
+      <div class="form-group">
+        <label>Customer *</label>
+        <select id="o-customer" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px" onchange="onCustomerSelect()">
+          <option value="">-- Select Customer --</option>
+        </select>
       </div>
-      <div class="form-group"><label>Phone</label><input type="text" id="o-phone" placeholder="555-1234"></div>
 
       <h3 style="margin:16px 0 8px;font-size:15px">Shipping Address</h3>
-      <div class="form-group"><label>Recipient Name *</label><input type="text" id="o-ship-name" placeholder="John Smith"></div>
-      <div class="form-group"><label>Address Line 1 *</label><input type="text" id="o-street1" placeholder="123 Main St"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Recipient Name *</label><input type="text" id="o-ship-name" placeholder="John Smith"></div>
+        <div class="form-group"><label>Email</label><input type="email" id="o-email" placeholder="email@example.com"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Phone</label><input type="text" id="o-phone" placeholder="555-1234"></div>
+        <div class="form-group"><label>Address Line 1 *</label><input type="text" id="o-street1" placeholder="123 Main St"></div>
+      </div>
       <div class="form-group"><label>Address Line 2</label><input type="text" id="o-street2" placeholder="Apt 4B"></div>
       <div class="form-row-3">
         <div class="form-group"><label>City *</label><input type="text" id="o-city" placeholder="New York"></div>
@@ -2909,10 +2916,9 @@ function selectBuyRate(idx) {
   if (row) row.style.background = '#e8f5e9';
 }
 
-function openOrderModal() {
+async function openOrderModal() {
   document.getElementById('o-order-name').value = '';
   document.getElementById('o-shop-name').value = '';
-  document.getElementById('o-name').value = '';
   document.getElementById('o-email').value = '';
   document.getElementById('o-phone').value = '';
   document.getElementById('o-ship-name').value = '';
@@ -2932,7 +2938,29 @@ function openOrderModal() {
   onCreateOrderStatusChange();
   document.getElementById('order-items-list').innerHTML = '';
   addOrderItemRow();
+  // Load customer list
+  const custSel = document.getElementById('o-customer');
+  custSel.innerHTML = '<option value="">-- Select Customer --</option>';
+  try {
+    const res = await fetch(API + '/customers?limit=500');
+    if (res.ok) {
+      const data = await res.json();
+      (data.customers || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id + '|' + c.name;
+        opt.textContent = c.name + (c.company ? ` (${c.company})` : '');
+        custSel.appendChild(opt);
+      });
+    }
+  } catch {}
   document.getElementById('order-modal').classList.add('show');
+}
+
+function onCustomerSelect() {
+  const val = document.getElementById('o-customer').value;
+  if (!val) return;
+  const name = val.split('|').slice(1).join('|');
+  document.getElementById('o-ship-name').value = name;
 }
 
 function onCreateOrderStatusChange() {
@@ -2953,7 +2981,8 @@ function addOrderItemRow() {
       <div class="ps-dropdown"></div>
     </div>
     <select class="oi-variant" style="display:none"></select>
-    <input type="number" class="oi-qty" value="1" min="1" style="max-width:80px" placeholder="SL">
+    <input type="number" class="oi-qty" value="1" min="1" style="max-width:80px" placeholder="Qty">
+    <input type="text" class="oi-item-name" placeholder="Item name (optional)" style="flex:1;min-width:120px;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px">
     <button class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">X</button>
   `;
   document.getElementById('order-items-list').appendChild(div);
@@ -3032,12 +3061,17 @@ async function saveOrder() {
   const tracking = document.getElementById('o-tracking').value.trim();
   if (isLP && !tracking) { toast('Tracking number is required for Label Purchased', 'error'); return; }
 
-  const rows = document.querySelectorAll('.order-item-row');
+  const custVal = document.getElementById('o-customer').value;
+  if (!custVal) { toast('Please select a customer', 'error'); return; }
+  const customerName = custVal.split('|').slice(1).join('|');
+
+  const rows = document.querySelectorAll('#order-items-list .order-item-row');
   const items = Array.from(rows).map(r => {
     const pid = r.querySelector('.oi-product-id');
     const item = {
       product_id: pid ? pid.value : '',
       quantity: parseInt(r.querySelector('.oi-qty').value) || 1,
+      name: r.querySelector('.oi-item-name')?.value?.trim() || '',
     };
     const variantSel = r.querySelector('.oi-variant');
     if (variantSel && variantSel.style.display !== 'none' && variantSel.value) {
@@ -3049,7 +3083,7 @@ async function saveOrder() {
   const body = {
     order_name: document.getElementById('o-order-name').value,
     shop_name: document.getElementById('o-shop-name').value,
-    customer_name: document.getElementById('o-name').value,
+    customer_name: customerName,
     customer_email: document.getElementById('o-email').value,
     customer_phone: document.getElementById('o-phone').value,
     ship_to: {
@@ -3366,9 +3400,14 @@ async function reshipOrder(orderId) {
     if (!res.ok) { toast('Cannot load order', 'error'); return; }
     const o = await res.json();
     // Pre-fill Create Order modal with data from this order
+    await openOrderModal();
     document.getElementById('o-order-name').value = (o.order_name || '') + ' (Re-Ship)';
     document.getElementById('o-shop-name').value = o.shop_name || '';
-    document.getElementById('o-name').value = o.customer_name || '';
+    // Try to select matching customer in dropdown
+    const custSel = document.getElementById('o-customer');
+    for (const opt of custSel.options) {
+      if (opt.value && opt.value.split('|').slice(1).join('|') === (o.customer_name || '')) { custSel.value = opt.value; break; }
+    }
     document.getElementById('o-email').value = o.customer_email || '';
     document.getElementById('o-phone').value = o.customer_phone || '';
     document.getElementById('o-ship-name').value = o.ship_to_name || '';
